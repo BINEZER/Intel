@@ -1,0 +1,45 @@
+# Deploys Firestore rules and indexes. Dev on every merge to main; prod only
+# when a human runs it manually, so a bad rule can never reach live data
+# without an explicit decision.
+name: Deploy Firestore config
+
+on:
+  push:
+    branches: [main]
+    paths: ['firestore.rules', 'firestore.indexes.json']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which project to deploy to
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - run: npm i -g firebase-tools@13
+
+      - name: Deploy rules and indexes
+        env:
+          # A service-account JSON with the "Firebase Rules Admin" and
+          # "Cloud Datastore Index Admin" roles. Stored per-environment so the
+          # prod credential is unreachable from a dev deploy.
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa.json
+        run: |
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
+          firebase deploy \
+            --only firestore:rules,firestore:indexes \
+            --project '${{ secrets.FIREBASE_PROJECT_ID }}' \
+            --non-interactive
+          rm -f sa.json

@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.next/
+coverage/
+
+# Firebase — never commit project linkage or service-account keys
+.firebaserc
+*-service-account*.json
+serviceAccountKey.json
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/
+
+# Env
+.env
+.env.*
+!.env.example
+
+.DS_Store

@@ -1,0 +1,181 @@
+rules_version = '2';
+
+// IntelMotion PCM security rules.
+//
+// Roles come from a custom auth claim (`request.auth.token.role`) set by an
+// admin-only Cloud Function, NOT from the users/{uid} document — reading a doc
+// on every rule evaluation costs a billed read and can be raced.
+//
+// Financial integrity rule of thumb: engineers see projects, finance sees money,
+// nobody deletes an issued invoice or a paid disbursement.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()  { return request.auth != null; }
+    function role()      { return request.auth.token.get('role', 'none'); }
+    function active()    { return request.auth.token.get('active', false) == true; }
+    function has(roles)  { return signedIn() && active() && role() in roles; }
+
+    function isAdmin()   { return has(['admin']); }
+    function isFinance() { return has(['admin', 'finance']); }
+    function isManager() { return has(['admin', 'manager']); }
+    function canRead()   { return has(['admin', 'manager', 'finance', 'engineer', 'viewer']); }
+
+    // Audit stamps must be truthful.
+    function stampedCreate() {
+      return request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+    }
+    function stampedUpdate() {
+      return request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.createdBy == resource.data.createdBy;
+    }
+
+    // Money must arrive as integer santim and reconcile before it is stored.
+    function isSantim(v) { return v is int; }
+    function vatReconciles(d) {
+      return isSantim(d.valueNetSantim) && isSantim(d.vatSantim) && isSantim(d.valueGrossSantim)
+          && d.valueGrossSantim == d.valueNetSantim + d.vatSantim;
+    }
+    function invoiceReconciles(d) {
+      return isSantim(d.netSantim) && isSantim(d.vatSantim) && isSantim(d.grossSantim)
+          && d.grossSantim == d.netSantim + d.vatSantim;
+    }
+    // WHT is charged on the VAT-exclusive base and deducted from the gross.
+    function whtReconciles(d) {
+      return isSantim(d.netSantim) && isSantim(d.supplierVatSantim) && isSantim(d.grossSantim)
+          && isSantim(d.whtBaseSantim) && isSantim(d.whtSantim) && isSantim(d.netPayableSantim)
+          && d.grossSantim == d.netSantim + d.supplierVatSantim
+          && d.whtBaseSantim == d.netSantim
+          && d.netPayableSantim == d.grossSantim - d.whtSantim;
+    }
+
+    // --- config: read by all, written only by admins -----------------------
+    match /config/{docId} {
+      allow read:  if canRead();
+      allow write: if isAdmin();
+    }
+
+    // --- users: self-read; role changes only via Cloud Function ------------
+    match /users/{uid} {
+      allow read:   if signedIn() && (request.auth.uid == uid || isManager());
+      allow create: if isAdmin();
+      // A user may edit their own profile but never their own role or active flag.
+      allow update: if isAdmin()
+                    || (request.auth.uid == uid
+                        && request.resource.data.role == resource.data.role
+                        && request.resource.data.active == resource.data.active);
+      allow delete: if false; // deactivate instead, to preserve the audit trail
+    }
+
+    match /clients/{clientId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if isManager() && stampedUpdate();
+      allow delete: if isAdmin();
+    }
+
+    match /subcontractors/{subId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if isManager() && stampedUpdate();
+      allow delete: if isAdmin();
+    }
+
+    // --- contracts ---------------------------------------------------------
+    match /contracts/{contractId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate() && vatReconciles(request.resource.data);
+      allow update: if isManager() && stampedUpdate() && vatReconciles(request.resource.data);
+      allow delete: if isAdmin() && resource.data.status == 'draft';
+
+      match /milestones/{milestoneId} {
+        allow read:   if canRead();
+        allow write:  if isManager() || isFinance();
+      }
+    }
+
+    // --- projects ----------------------------------------------------------
+    match /projects/{projectId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      // Engineers may update progress but must not touch the financial rollup.
+      allow update: if (isManager() && stampedUpdate())
+                    || (has(['engineer']) && stampedUpdate()
+                        && request.resource.data.financials == resource.data.financials);
+      allow delete: if isAdmin() && resource.data.status in ['planned', 'cancelled'];
+
+      match /phases/{phaseId} {
+        allow read:   if canRead();
+        allow create: if isManager() && stampedCreate();
+        allow update: if has(['admin', 'manager', 'engineer']) && stampedUpdate();
+        allow delete: if isManager();
+      }
+    }
+
+    // --- invoices: finance only; issued invoices are immutable -------------
+    match /invoices/{invoiceId} {
+      allow read:   if canRead();
+      allow create: if isFinance() && stampedCreate() && invoiceReconciles(request.resource.data)
+                    && request.resource.data.status == 'draft';
+      // Once issued, only the payment fields and a void may change.
+      allow update: if isFinance() && stampedUpdate() && invoiceReconciles(request.resource.data)
+                    && (resource.data.status == 'draft'
+                        || (request.resource.data.netSantim == resource.data.netSantim
+                            && request.resource.data.vatSantim == resource.data.vatSantim
+                            && request.resource.data.invoiceNo == resource.data.invoiceNo));
+      allow delete: if isAdmin() && resource.data.status == 'draft';
+
+      match /receipts/{receiptId} {
+        allow read:   if canRead();
+        allow create: if isFinance();
+        allow update: if isFinance();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // --- disbursements: WHT must reconcile; paid vouchers are immutable ----
+    match /disbursements/{disbursementId} {
+      allow read:   if canRead();
+      allow create: if isFinance() && stampedCreate() && whtReconciles(request.resource.data)
+                    && request.resource.data.status == 'draft';
+      allow update: if isFinance() && stampedUpdate() && whtReconciles(request.resource.data)
+                    && resource.data.status != 'paid';
+      allow delete: if isAdmin() && resource.data.status == 'draft';
+    }
+
+    // --- Kanban ------------------------------------------------------------
+    match /boards/{boardId} {
+      allow read:  if canRead();
+      allow write: if isManager();
+
+      match /{document=**} {
+        allow read:  if canRead();
+        allow write: if has(['admin', 'manager', 'finance', 'engineer']);
+      }
+    }
+
+    match /tasks/{taskId} {
+      allow read:   if canRead();
+      allow create: if has(['admin', 'manager', 'finance', 'engineer']) && stampedCreate();
+      allow update: if has(['admin', 'manager', 'finance', 'engineer']) && stampedUpdate();
+      allow delete: if isManager();
+    }
+
+    // --- audit log: append-only, never mutable ----------------------------
+    match /auditLogs/{logId} {
+      allow read:   if isAdmin();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Anything not matched above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

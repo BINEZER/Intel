@@ -1,0 +1,18 @@
+{
+  "name": "intelmotion-pcm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Project, Contract & Task Management for an Ethiopian elevator company (ETB, 15% VAT, WHT, dual GC/EC calendar).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "rules:test": "firebase emulators:exec --only firestore \"vitest run src/lib/__tests__/rules.test.ts\""
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

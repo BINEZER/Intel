@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "intelmotion-pcm-dev",
+    "dev": "intelmotion-pcm-dev",
+    "prod": "intelmotion-pcm-prod"
+  }
+}
