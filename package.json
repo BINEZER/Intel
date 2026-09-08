@@ -4,15 +4,34 @@
   "private": true,
   "description": "Project, Contract & Task Management for an Ethiopian elevator company (ETB, 15% VAT, WHT, dual GC/EC calendar).",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "rules:test": "firebase emulators:exec --only firestore \"vitest run src/lib/__tests__/rules.test.ts\""
+    "emulators": "firebase emulators:start --only firestore,auth"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "firebase-admin": "^14.3.0",
+    "jsdom": "^28.0.0",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.8"
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "firebase": "^12.4.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.4"
   }
 }

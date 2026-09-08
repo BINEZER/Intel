@@ -13,7 +13,7 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | Firestore schema, security rules, composite indexes |
 | ✅ | One-time setup checklist and bootstrap scripts |
 | ✅ | CI + automated-PR workflows |
-| ⬜ | Module 1 — Auth, roles, app shell, dual-calendar date picker |
+| ✅ | **Module 1** — Auth, roles, app shell, dual-calendar date picker |
 | ⬜ | Module 2 — Clients, contracts, milestones, renewal alerts |
 | ⬜ | Module 3 — Projects, elevator phases, certification tracking |
 | ⬜ | Module 4 — Invoices, disbursements, VAT/WHT returns |
@@ -29,8 +29,26 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 
 ```bash
 npm ci
-npm test        # 33 tests: calendar anchors, round-trips, VAT, WHT, margins
+npm test          # 60 tests
 npm run typecheck
+```
+
+### Running the app locally
+
+```bash
+cp .env.example .env.local        # fill from the Firebase console
+npm run emulators                 # Firestore :8080, Auth :9099, UI :4000
+npm run dev                       # http://localhost:5173
+```
+
+Create your first user in the Auth emulator UI, then grant them a role — a new
+user has **no role and no access** until you do:
+
+```bash
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+GCLOUD_PROJECT=intelmotion-pcm-dev \
+node scripts/set-user-role.mjs you@example.com admin
 ```
 
 ## The rules this codebase runs on
@@ -40,6 +58,9 @@ npm run typecheck
 - **Firestore stores Gregorian UTC.** The Ethiopian calendar is a display and
   reporting projection, never the source of truth.
 - **WHT is charged on the VAT-exclusive base**, and deducted from the gross.
+- **Roles come from custom auth claims**, not a Firestore document — so the
+  security rules can check them without a billed read on every evaluation.
+- **Route guards are UX, not security.** The Firestore rules are the boundary.
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -47,13 +68,24 @@ Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
 ```
 docs/                   setup checklist, schema reference
-scripts/                bootstrap-github.sh, bootstrap-firebase.sh
+scripts/                bootstrap-github.sh, bootstrap-firebase.sh, set-user-role.mjs
 src/lib/
   ethiopic.ts           GC ↔ EC conversion, fiscal year, dual formatting
   money.ts              santim, VAT, WHT, project rollup
+  date-input.ts         picker parsing and validation, free of React
   dual-date.ts          the only sanctioned way to build a DualDate
   schema.ts             typed Firestore schema
+src/auth/               AuthProvider, role model, route guards
+src/components/
+  DualDateInput.tsx     the dual-calendar picker
+  AppShell.tsx          role-filtered navigation
+src/pages/              SignIn, Dashboard
 firestore.rules         role-based access + money-reconciliation enforcement
 firestore.indexes.json  composite indexes
 .github/workflows/      CI, Claude Code automation, Firestore deploy
 ```
+
+### Known follow-ups
+
+- The bundle is ~720 kB (mostly the Firebase SDK); code-split before launch.
+- `users/{uid}` documents are not yet written on sign-up — module 2.
