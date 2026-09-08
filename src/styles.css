@@ -124,3 +124,56 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
 .ec-fields { display: flex; gap: .5rem; flex-wrap: wrap; }
 .preview { margin: .6rem 0 0; }
 .dual-text .sep { opacity: .5; }
+
+/* --- KPI tiles --- */
+.section-heading { margin: 1.5rem 0 .5rem; }
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: .75rem;
+  margin-top: 1rem;
+}
+
+.kpi {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  padding: .75rem .9rem;
+  background: #fff;
+}
+.kpi h3 { margin-bottom: .35rem; }
+.kpi-value {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.kpi-detail { margin: .3rem 0 0; font-size: .82rem; }
+
+/* Grading. `unknown` stays neutral on purpose: no data is not a failure. */
+.kpi-good { border-left-color: #12805c; }
+.kpi-warn { border-left-color: #b5691a; }
+.kpi-bad  { border-left-color: var(--danger); }
+.kpi-good .kpi-value { color: #12805c; }
+.kpi-warn .kpi-value { color: #b5691a; }
+.kpi-bad  .kpi-value { color: var(--danger); }
+.kpi-unknown .kpi-value { color: var(--muted); }
+
+/* --- progress against plan --- */
+.progress {
+  position: relative;
+  height: 12px;
+  background: #eef1f4;
+  border-radius: 999px;
+  overflow: visible;
+  margin: .75rem 0 .5rem;
+}
+.progress-fill { height: 100%; border-radius: 999px; }
+.progress-fill.ahead  { background: #12805c; }
+.progress-fill.behind { background: #b5691a; }
+.progress-marker {
+  position: absolute; top: -3px; width: 2px; height: 18px;
+  background: var(--text); border-radius: 1px;
+}

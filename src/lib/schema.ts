@@ -431,3 +431,230 @@ export interface AuditLog {
   /** Field-level before/after for financial documents only. */
   changes?: Record<string, { from: unknown; to: unknown }>;
 }
+
+// ===========================================================================
+// technicians/{technicianId}
+// ===========================================================================
+
+/**
+ * Field staff. Separate from `users` because not every technician has a login
+ * (and subcontractor crews never will), while every technician needs a KPI
+ * record. `uid` links the two when the person does sign in.
+ */
+export interface Technician extends AuditFields {
+  employeeNo: string;
+  name: string;
+  nameAm?: string;
+  /** Firebase Auth uid, when this technician also uses the app. */
+  uid: string | null;
+  /** Set when the technician belongs to a subcontractor rather than to us. */
+  subcontractorId: string | null;
+  phone: string;
+  trades: string[];
+  /**
+   * Licences and competency cards. Elevator work is certified work — an expired
+   * card is a compliance problem, so expiry is a tracked KPI, not a note.
+   */
+  certifications: Array<{
+    name: string;
+    number: string;
+    issuedDate: DualDate;
+    expiryDate: DualDate;
+    storagePath?: string;
+  }>;
+  /** Working minutes available per week, for the utilisation KPI. */
+  contractedMinutesPerWeek: number;
+  status: 'active' | 'on_leave' | 'inactive';
+}
+
+// ===========================================================================
+// callouts/{calloutId} — reactive service, the core of technician SLA metrics
+// ===========================================================================
+
+export type CalloutCategory = 'breakdown' | 'entrapment' | 'callback' | 'damage' | 'other';
+export type CalloutResolution = 'fixed' | 'temporary_fix' | 'parts_required' | 'referred' | 'no_fault_found';
+
+export interface Callout extends AuditFields {
+  calloutNo: string;
+  contractId: string;
+  clientId: string;
+  clientName: string;
+  projectId: string | null;
+  /** Which lift, e.g. "LIFT-01". Repeat-callout detection keys on this. */
+  unitTag: string;
+  siteName: string;
+
+  category: CalloutCategory;
+  /** Passengers trapped. Drives priority and is reported separately to the authority. */
+  entrapment: boolean;
+  description: string;
+
+  technicianId: string | null;
+  technicianName: string | null;
+
+  // --- the timestamps every SLA metric derives from ---
+  reportedAt: Timestamp;
+  assignedAt: Timestamp | null;
+  /** Technician on site. reportedAt -> arrivedAt is the response time. */
+  arrivedAt: Timestamp | null;
+  /** Lift back in service. arrivedAt -> resolvedAt is the repair time (MTTR). */
+  resolvedAt: Timestamp | null;
+
+  /**
+   * SLA snapshotted from the contract when the call was logged, so a later
+   * contract renegotiation cannot retroactively rewrite whether we breached.
+   */
+  slaResponseMinutes: number | null;
+  slaResolutionMinutes: number | null;
+
+  /** Denormalized on close so reports never recompute. Whole minutes. */
+  responseMinutes: number | null;
+  repairMinutes: number | null;
+  breachedResponse: boolean | null;
+  breachedResolution: boolean | null;
+
+  resolution: CalloutResolution | null;
+  /** Closed on the first visit with no follow-up needed. */
+  firstTimeFix: boolean | null;
+  /** Set by the repeat-callout pass: an earlier callout on this unit within the window. */
+  repeatOfCalloutId: string | null;
+
+  partsUsed: Array<{ description: string; qty: number; costNetSantim: number }>;
+  status: 'open' | 'assigned' | 'on_site' | 'resolved' | 'cancelled';
+
+  /** Period keys for monthly KPI rollups, from reportedAt. */
+  periodEc: string;
+  periodGc: string;
+}
+
+// ===========================================================================
+// maintenanceVisits/{visitId} — planned preventive maintenance
+// ===========================================================================
+
+export interface MaintenanceVisit extends AuditFields {
+  contractId: string;
+  clientId: string;
+  unitTag: string;
+  siteName: string;
+  technicianId: string | null;
+  technicianName: string | null;
+
+  /** The visit the contract promised. PM compliance measures against this. */
+  scheduledDate: DualDate;
+  completedDate: DualDate | null;
+  status: 'scheduled' | 'completed' | 'missed' | 'rescheduled' | 'cancelled';
+
+  /** Share of the checklist actually signed off, in bps. */
+  checklistCompleteBps: number;
+  findings: Array<{ note: string; severity: 'info' | 'defect' | 'safety'; raisedCalloutId?: string }>;
+  durationMinutes: number | null;
+  nextVisitDue: DualDate | null;
+
+  periodEc: string;
+  periodGc: string;
+}
+
+// ===========================================================================
+// KPI snapshots
+// ===========================================================================
+
+/**
+ * A KPI rate. `null` means NO DATA, which is not the same as 0% — a technician
+ * with no callouts this month must not be shown as 0% SLA compliance.
+ */
+export type RateBps = number | null;
+
+/** Written onto `projects/{id}.kpi` by a Cloud Function. */
+export interface ProjectKpi {
+  asOf: Timestamp;
+
+  // --- schedule ---
+  progressBps: number;
+  /** Share of the planned duration already elapsed. */
+  expectedProgressBps: number;
+  /** progress − expected. Negative means behind schedule. */
+  scheduleVarianceBps: number;
+  /** Calendar days late; negative is early. Null while the end date is unknowable. */
+  scheduleVarianceDays: number | null;
+  daysToPlannedEnd: number | null;
+  overdue: boolean;
+
+  // --- cost and billing ---
+  contractNetSantim: number;
+  subcontractCostNetSantim: number;
+  grossMarginSantim: number;
+  grossMarginBps: RateBps;
+  /** Share of contract value invoiced so far. */
+  invoicedBps: RateBps;
+  /** Share of invoiced value collected. */
+  collectionRateBps: RateBps;
+  /**
+   * progress − invoiced. Positive means we have built more than we have billed:
+   * work in progress that is not yet earning cash.
+   */
+  underBillingBps: number | null;
+  /** Mean days from invoice issue to full settlement, weighted by amount. */
+  avgCollectionDays: number | null;
+
+  // --- delivery quality ---
+  phasesCompleted: number;
+  phasesTotal: number;
+  /** Inspections passed without a rework cycle. */
+  inspectionFirstPass: boolean | null;
+  inspectionAttempts: number;
+  /** Days each completed phase actually took, keyed by phase key. */
+  phaseDurationDays: Record<string, number>;
+}
+
+/** Written to `technicians/{id}/kpiSnapshots/{periodEc}`. */
+export interface TechnicianKpi {
+  technicianId: string;
+  /** `EC-2018-04`, or `EC-2018` for an annual roll-up. */
+  periodEc: string;
+  asOf: Timestamp;
+
+  // --- reactive service ---
+  calloutsHandled: number;
+  entrapments: number;
+  /** Mean is skewed by one bad night; median is the honest number. Both are kept. */
+  avgResponseMinutes: number | null;
+  medianResponseMinutes: number | null;
+  /** Mean time to repair: arrival to back in service. */
+  avgRepairMinutes: number | null;
+  slaResponseComplianceBps: RateBps;
+  slaResolutionComplianceBps: RateBps;
+  firstTimeFixBps: RateBps;
+  /** Share of this technician's callouts that were a repeat on a unit they had recently attended. */
+  repeatCalloutBps: RateBps;
+
+  // --- preventive maintenance ---
+  pmVisitsScheduled: number;
+  pmVisitsCompleted: number;
+  pmComplianceBps: RateBps;
+  /** Completed on or before the scheduled date. */
+  pmOnTimeBps: RateBps;
+
+  // --- capacity and compliance ---
+  loggedMinutes: number;
+  utilisationBps: RateBps;
+  certificationsExpiringSoon: number;
+  certificationsExpired: number;
+}
+
+/** `config/kpiTargets` — the thresholds the dashboard grades against. */
+export interface KpiTargets {
+  slaResponseComplianceBps: number;
+  slaResolutionComplianceBps: number;
+  firstTimeFixBps: number;
+  repeatCalloutBps: number;
+  pmComplianceBps: number;
+  pmOnTimeBps: number;
+  utilisationBps: number;
+  grossMarginBps: number;
+  /** How far behind schedule is tolerated before a project grades amber. */
+  scheduleVarianceBps: number;
+  /** A callout on the same unit within this many days counts as a repeat. */
+  repeatCalloutWindowDays: number;
+  /** A certification expiring within this many days is "expiring soon". */
+  certificationWarningDays: number;
+}

@@ -148,6 +148,57 @@ service cloud.firestore {
       allow delete: if isAdmin() && resource.data.status == 'draft';
     }
 
+    // --- technicians -------------------------------------------------------
+    match /technicians/{technicianId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if isManager() && stampedUpdate();
+      allow delete: if false; // deactivate — KPI history must survive
+
+      // KPI snapshots are computed server-side; nobody edits their own numbers.
+      match /kpiSnapshots/{periodId} {
+        allow read:  if canRead();
+        allow write: if false;
+      }
+    }
+
+    // --- callouts ----------------------------------------------------------
+    // Response and repair times drive technician SLA metrics, so the timestamps
+    // they derive from must not be rewritten after the fact.
+    function calloutTimesImmutable() {
+      return request.resource.data.reportedAt == resource.data.reportedAt
+          && (resource.data.arrivedAt == null
+              || request.resource.data.arrivedAt == resource.data.arrivedAt)
+          && (resource.data.resolvedAt == null
+              || request.resource.data.resolvedAt == resource.data.resolvedAt);
+    }
+
+    match /callouts/{calloutId} {
+      allow read:   if canRead();
+      allow create: if has(['admin', 'manager', 'engineer']) && stampedCreate();
+      // An engineer may progress a callout they are assigned; a manager, any.
+      allow update: if stampedUpdate() && calloutTimesImmutable()
+                    && (isManager()
+                        || (has(['engineer'])
+                            && resource.data.technicianId == request.auth.uid
+                            && resource.data.status != 'resolved'));
+      allow delete: if isAdmin() && resource.data.status == 'open';
+    }
+
+    // --- maintenance visits ------------------------------------------------
+    match /maintenanceVisits/{visitId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if stampedUpdate()
+                    && (isManager()
+                        || (has(['engineer'])
+                            && resource.data.technicianId == request.auth.uid
+                            // The promised date is the yardstick for PM
+                            // compliance — a technician cannot move it.
+                            && request.resource.data.scheduledDate == resource.data.scheduledDate));
+      allow delete: if isManager() && resource.data.status == 'scheduled';
+    }
+
     // --- Kanban ------------------------------------------------------------
     match /boards/{boardId} {
       allow read:  if canRead();

@@ -9,6 +9,15 @@ import { can } from '../auth/roles.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
 import { addVat, computeDisbursement, formatETB, birrToSantim } from '../lib/money.js';
 import { ethiopianFiscalYear, utcDateToEthiopian } from '../lib/ethiopic.js';
+import {
+  computeProjectKpis,
+  computeTechnicianKpis,
+  flagRepeatCallouts,
+  DEFAULT_KPI_TARGETS,
+} from '../lib/kpi.js';
+import { ProjectKpiPanel } from './ProjectKpis.js';
+import { TechnicianKpiPanel } from './TechnicianKpis.js';
+import { SAMPLE_PROJECT, SAMPLE_CALLOUTS, SAMPLE_VISITS, SAMPLE_CERTS } from './sample-kpi-data.js';
 import type { DualDate } from '../lib/schema.js';
 
 export function Dashboard() {
@@ -27,6 +36,18 @@ export function Dashboard() {
     supplierVatRegistered: true,
     supplierHasTin: true,
   });
+
+  // Worked figures until the collections are populated in later modules. The
+  // computation is the real engine — only the inputs are placeholders.
+  const asOf = utcToday;
+  const projectKpi = computeProjectKpis(SAMPLE_PROJECT, asOf);
+  const technicianKpi = computeTechnicianKpis(
+    flagRepeatCallouts(SAMPLE_CALLOUTS, DEFAULT_KPI_TARGETS.repeatCalloutWindowDays),
+    SAMPLE_VISITS,
+    SAMPLE_CERTS,
+    asOf,
+    { availableMinutes: 40 * 60 * 4, certificationWarningDays: DEFAULT_KPI_TARGETS.certificationWarningDays },
+  );
 
   return (
     <>
@@ -54,6 +75,16 @@ export function Dashboard() {
             </p>
           </article>
         </section>
+      )}
+
+      {can(role, 'read') && (
+        <>
+          <h2 className="section-heading">Project — Bole Tower, LIFT-01</h2>
+          <ProjectKpiPanel kpi={projectKpi} />
+
+          <h2 className="section-heading">Technician performance</h2>
+          <TechnicianKpiPanel name="Sample technician" kpi={technicianKpi} />
+        </>
       )}
 
       <section className="card">

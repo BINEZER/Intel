@@ -14,6 +14,7 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | One-time setup checklist and bootstrap scripts |
 | ✅ | CI + automated-PR workflows |
 | ✅ | **Module 1** — Auth, roles, app shell, dual-calendar date picker |
+| ✅ | **KPI engine** — project and technician metrics, graded against targets |
 | ⬜ | Module 2 — Clients, contracts, milestones, renewal alerts |
 | ⬜ | Module 3 — Projects, elevator phases, certification tracking |
 | ⬜ | Module 4 — Invoices, disbursements, VAT/WHT returns |
@@ -26,10 +27,12 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
    environment handshake. Do this first; it is the only manual step.
 2. **[docs/01-firestore-schema.md](docs/01-firestore-schema.md)** — the data
    model and the reasoning behind it.
+3. **[docs/02-kpis.md](docs/02-kpis.md)** — every KPI definition, and why each is
+   measured the way it is.
 
 ```bash
 npm ci
-npm test          # 60 tests
+npm test          # 105 tests
 npm run typecheck
 ```
 
@@ -61,6 +64,8 @@ node scripts/set-user-role.mjs you@example.com admin
 - **Roles come from custom auth claims**, not a Firestore document — so the
   security rules can check them without a billed read on every evaluation.
 - **Route guards are UX, not security.** The Firestore rules are the boundary.
+- **A KPI with no data is `null`, never 0%.** A technician with no callouts is
+  unmeasured, not failing.
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -73,13 +78,14 @@ src/lib/
   ethiopic.ts           GC ↔ EC conversion, fiscal year, dual formatting
   money.ts              santim, VAT, WHT, project rollup
   date-input.ts         picker parsing and validation, free of React
+  kpi.ts                project and technician KPIs, grading, formatting
   dual-date.ts          the only sanctioned way to build a DualDate
   schema.ts             typed Firestore schema
 src/auth/               AuthProvider, role model, route guards
 src/components/
   DualDateInput.tsx     the dual-calendar picker
   AppShell.tsx          role-filtered navigation
-src/pages/              SignIn, Dashboard
+src/pages/              SignIn, Dashboard, ProjectKpis, TechnicianKpis
 firestore.rules         role-based access + money-reconciliation enforcement
 firestore.indexes.json  composite indexes
 .github/workflows/      CI, Claude Code automation, Firestore deploy
@@ -89,3 +95,5 @@ firestore.indexes.json  composite indexes
 
 - The bundle is ~720 kB (mostly the Firebase SDK); code-split before launch.
 - `users/{uid}` documents are not yet written on sign-up — module 2.
+- `src/pages/sample-kpi-data.ts` is scaffolding so the KPI engine can be seen
+  working; delete it when the dashboard reads live data.
