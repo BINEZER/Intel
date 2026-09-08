@@ -16,6 +16,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', capability: 'read' },
+  { to: '/priority', label: 'Priority', capability: 'read' },
   { to: '/projects', label: 'Projects', capability: 'read' },
   { to: '/contracts', label: 'Contracts', capability: 'read' },
   { to: '/finance', label: 'Finance', capability: 'viewFinancials' },

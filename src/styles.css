@@ -177,3 +177,56 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
   position: absolute; top: -3px; width: 2px; height: 18px;
   background: var(--text); border-radius: 1px;
 }
+
+/* --- risk --- */
+.risk-badge {
+  display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+  font-size: .78rem; font-weight: 550; white-space: nowrap;
+}
+.risk-none     { background: #e6f4ef; color: #12805c; }
+.risk-low      { background: #eef1f4; color: var(--muted); }
+.risk-medium   { background: #fdf1e3; color: #b5691a; }
+.risk-high     { background: #fdeceb; color: #b42318; }
+.risk-critical { background: #b42318; color: #fff; }
+
+.risk-list { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .4rem; }
+.risk-item {
+  display: flex; gap: .6rem; align-items: baseline;
+  padding: .5rem .7rem; border-radius: var(--radius);
+  border-left: 3px solid var(--border); background: #fafbfc;
+}
+.risk-item.risk-critical { border-left-color: #b42318; background: #fdeceb; color: var(--text); }
+.risk-item.risk-high     { border-left-color: #b42318; }
+.risk-item.risk-medium   { border-left-color: #b5691a; }
+.risk-sev {
+  flex-shrink: 0; font-size: .72rem; font-weight: 650;
+  text-transform: uppercase; letter-spacing: .04em; min-width: 4.5rem;
+}
+
+.banner { padding: .9rem 1.1rem; border-radius: var(--radius); margin-bottom: 1rem; }
+.banner ul { margin: .5rem 0 0; padding-left: 1.1rem; }
+.banner li { margin-bottom: .2rem; }
+.banner-ok     { background: #e6f4ef; color: #0d6247; }
+.banner-danger { background: #fdeceb; color: #7a1c14; border-left: 4px solid #b42318; }
+
+/* --- priority table --- */
+.table-scroll { overflow-x: auto; margin-bottom: 1rem; }
+.priority-table {
+  width: 100%; border-collapse: collapse;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.priority-table th, .priority-table td {
+  padding: .6rem .75rem; text-align: left; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.priority-table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.priority-table tbody tr:last-child td { border-bottom: none; }
+.priority-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.priority-table .strong { font-weight: 650; }
+.priority-table .row-danger { background: #fffaf9; }
+.danger-text { color: var(--danger); font-weight: 550; }
+
+.driver-list { list-style: none; margin: .5rem 0 1rem; padding: 0; display: grid; gap: .35rem; }
+.driver-list li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.driver-label { font-weight: 550; min-width: 12rem; }
+.driver-amount { font-variant-numeric: tabular-nums; font-weight: 650; }

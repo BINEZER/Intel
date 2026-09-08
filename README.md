@@ -15,6 +15,7 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | CI + automated-PR workflows |
 | ✅ | **Module 1** — Auth, roles, app shell, dual-calendar date picker |
 | ✅ | **KPI engine** — project and technician metrics, graded against targets |
+| ✅ | **Priority, scorecards & risk** — receivables ranking, weighted KPIs, in-danger alerts |
 | ⬜ | Module 2 — Clients, contracts, milestones, renewal alerts |
 | ⬜ | Module 3 — Projects, elevator phases, certification tracking |
 | ⬜ | Module 4 — Invoices, disbursements, VAT/WHT returns |
@@ -29,10 +30,13 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
    model and the reasoning behind it.
 3. **[docs/02-kpis.md](docs/02-kpis.md)** — every KPI definition, and why each is
    measured the way it is.
+4. **[docs/03-priority-and-risk.md](docs/03-priority-and-risk.md)** — how projects
+   are ranked by reachable cash, how weighted scorecards work, and what triggers
+   an in-danger alert.
 
 ```bash
 npm ci
-npm test          # 105 tests
+npm test          # 176 tests
 npm run typecheck
 ```
 
@@ -65,7 +69,10 @@ node scripts/set-user-role.mjs you@example.com admin
   security rules can check them without a billed read on every evaluation.
 - **Route guards are UX, not security.** The Firestore rules are the boundary.
 - **A KPI with no data is `null`, never 0%.** A technician with no callouts is
-  unmeasured, not failing.
+  unmeasured, not failing. In a weighted scorecard its weight is redistributed,
+  never scored as zero.
+- **Every ranking and alert explains itself.** A number a manager cannot audit is
+  a number they will override.
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -79,13 +86,16 @@ src/lib/
   money.ts              santim, VAT, WHT, project rollup
   date-input.ts         picker parsing and validation, free of React
   kpi.ts                project and technician KPIs, grading, formatting
+  scorecard.ts          weighted composites, team inheritance by allocation
+  risk.ts               in-danger rules and alert severity
+  priority.ts           receivables ranking by reachable cash
   dual-date.ts          the only sanctioned way to build a DualDate
   schema.ts             typed Firestore schema
 src/auth/               AuthProvider, role model, route guards
 src/components/
   DualDateInput.tsx     the dual-calendar picker
   AppShell.tsx          role-filtered navigation
-src/pages/              SignIn, Dashboard, ProjectKpis, TechnicianKpis
+src/pages/              SignIn, Dashboard, Priority, ProjectKpis, TechnicianKpis
 firestore.rules         role-based access + money-reconciliation enforcement
 firestore.indexes.json  composite indexes
 .github/workflows/      CI, Claude Code automation, Firestore deploy

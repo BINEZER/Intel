@@ -162,6 +162,16 @@ service cloud.firestore {
       }
     }
 
+    // --- project assignments -----------------------------------------------
+    // Allocation drives how much of a project's team score each technician
+    // carries, so only managers may set it.
+    match /projectAssignments/{assignmentId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if isManager() && stampedUpdate();
+      allow delete: if isManager();
+    }
+
     // --- callouts ----------------------------------------------------------
     // Response and repair times drive technician SLA metrics, so the timestamps
     // they derive from must not be rewritten after the fact.

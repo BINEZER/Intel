@@ -658,3 +658,138 @@ export interface KpiTargets {
   /** A certification expiring within this many days is "expiring soon". */
   certificationWarningDays: number;
 }
+
+// ===========================================================================
+// projectAssignments/{assignmentId} — ties technicians to projects
+// ===========================================================================
+
+/**
+ * Who is working on what, and how much of them.
+ *
+ * `allocationBps` is the share of that technician's capacity committed to this
+ * project. It is the weight used when a project inherits a team-performance
+ * score from its crew: a lead at 60% carries more of the project's service
+ * score than a helper at 10%.
+ */
+export interface ProjectAssignment extends AuditFields {
+  projectId: string;
+  technicianId: string;
+  technicianName: string;
+  role: 'lead' | 'technician' | 'helper' | 'supervisor';
+  /** Share of the technician's capacity on this project, 0-10000. */
+  allocationBps: number;
+  /** Optional narrowing to specific phases. Empty means the whole project. */
+  phaseIds: string[];
+  startDate: DualDate;
+  endDate: DualDate | null;
+  active: boolean;
+}
+
+// ===========================================================================
+// config/kpiWeights — how the composite scorecard is built
+// ===========================================================================
+
+/**
+ * Weights for the project scorecard, in basis points. MUST sum to 10000.
+ *
+ * A component with no data is dropped and its weight redistributed across the
+ * rest, so a project is never marked down for a metric it cannot yet have.
+ */
+export interface ProjectKpiWeights {
+  schedule: number;
+  margin: number;
+  billing: number;
+  collection: number;
+  quality: number;
+  /** Inherited from the assigned technicians' service performance. */
+  team: number;
+}
+
+/** Weights for the technician scorecard. MUST sum to 10000. */
+export interface TechnicianKpiWeights {
+  firstTimeFix: number;
+  repeatCallouts: number;
+  responseSla: number;
+  resolutionSla: number;
+  pmCompliance: number;
+  pmOnTime: number;
+  utilisation: number;
+}
+
+// ===========================================================================
+// Risk and priority
+// ===========================================================================
+
+export type RiskSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+export type RiskCode =
+  | 'schedule_slip'
+  | 'overdue_delivery'
+  | 'overdue_receivable'
+  | 'severe_under_billing'
+  | 'margin_erosion'
+  | 'margin_negative'
+  | 'inspection_failed'
+  | 'poor_collection'
+  | 'no_team_assigned'
+  | 'expired_certification'
+  | 'repeat_callouts'
+  | 'stalled_progress';
+
+export interface RiskFlag {
+  code: RiskCode;
+  severity: RiskSeverity;
+  /** One sentence a manager can act on, with the number that triggered it. */
+  message: string;
+  /** ETB at stake, where the flag is financial. */
+  amountSantim?: number;
+}
+
+export interface RiskAssessment {
+  level: RiskSeverity | 'none';
+  /** True when the project needs attention this week. */
+  inDanger: boolean;
+  flags: RiskFlag[];
+  /** 0-10000; higher is worse. Used to break ties in the priority ranking. */
+  riskScoreBps: number;
+}
+
+/** Written onto `projects/{id}.priority` by the nightly rollup. */
+export interface ProjectPriority {
+  projectId: string;
+  rank: number;
+  /**
+   * The headline: ETB reasonably reachable within the horizon, combining money
+   * already earned but uncollected with milestones close enough to bill.
+   */
+  expectedReceivableSantim: number;
+  /** Invoiced, unpaid and past due — earned money awaiting collection. */
+  overdueReceivableSantim: number;
+  /** Invoiced and unpaid but not yet due. */
+  currentReceivableSantim: number;
+  /** Upcoming milestones discounted by attainability and time. */
+  nearTermBillableSantim: number;
+  /** Contract value not yet invoiced at all. */
+  unbilledContractSantim: number;
+  /** Ranking key, 0-10000. */
+  impactScoreBps: number;
+  drivers: Array<{ label: string; amountSantim: number; note: string }>;
+  risk: RiskAssessment;
+  computedAt: Timestamp;
+}
+
+/** `config/priority` — tunables for the ranking. */
+export interface PriorityConfig {
+  /** How far ahead upcoming milestones are considered, in days. */
+  horizonDays: number;
+  /** Weight on money already earned but uncollected. */
+  overdueWeightBps: number;
+  /** Weight on invoiced, not yet due. */
+  currentWeightBps: number;
+  /** Weight on milestones not yet invoiced. */
+  upcomingWeightBps: number;
+  /** How much a project's risk score lifts it up the ranking. */
+  riskBoostBps: number;
+  /** AR older than this counts as a critical overdue receivable. */
+  criticalOverdueDays: number;
+}

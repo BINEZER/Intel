@@ -87,3 +87,136 @@ export const SAMPLE_VISITS: VisitKpiInput[] = [
 ];
 
 export const SAMPLE_CERTS = [{ expiryDate: utc(2026, 7, 1) }, { expiryDate: utc(2025, 10, 20) }];
+
+// ---------------------------------------------------------------------------
+// Priority board scaffolding
+// ---------------------------------------------------------------------------
+
+import type { PriorityInput } from '../lib/priority.js';
+import type { RiskInput } from '../lib/risk.js';
+
+const invoice = (
+  grossSantim: number,
+  dueDate: Date,
+  paidGrossSantim = 0,
+): { grossSantim: number; paidGrossSantim: number; dueDate: Date; status: 'issued' | 'partially_paid' } => ({
+  grossSantim,
+  paidGrossSantim,
+  dueDate,
+  status: paidGrossSantim > 0 ? 'partially_paid' : 'issued',
+});
+
+export interface SampleProject {
+  priority: Omit<PriorityInput, 'risk'>;
+  risk: Omit<RiskInput, 'kpi'>;
+  kpiOverrides: Partial<import('../lib/kpi.js').ProjectKpiResult>;
+}
+
+/** Four projects with deliberately different pressures, to show the ranking working. */
+export const SAMPLE_PORTFOLIO: SampleProject[] = [
+  {
+    priority: {
+      projectId: 'p-bole',
+      title: 'Bole Tower — 3 units',
+      clientName: 'Bole Development PLC',
+      contractNetSantim: ETB(4_200_000),
+      contractGrossSantim: ETB(4_830_000),
+      invoicedGrossSantim: ETB(2_415_000),
+      invoices: [invoice(ETB(1_035_000), utc(2025, 6, 30)), invoice(ETB(1_380_000), utc(2025, 10, 15))],
+      milestones: [
+        { name: 'Cab assembly complete', grossSantim: ETB(1_207_500), status: 'pending', dueDate: utc(2025, 10, 20), gatingPhaseProgressBps: 7500 },
+        { name: 'Handover', grossSantim: ETB(1_207_500), status: 'pending', dueDate: utc(2026, 1, 30), gatingPhaseProgressBps: 0 },
+      ],
+    },
+    risk: {
+      status: 'in_progress',
+      overdueReceivableSantim: ETB(1_035_000),
+      oldestOverdueDays: 73,
+      assignedTechnicians: 3,
+      expiredCertifications: 0,
+      teamRepeatCalloutBps: 1600,
+      daysSinceProgressChange: 5,
+    },
+    kpiOverrides: {},
+  },
+  {
+    priority: {
+      projectId: 'p-kazanchis',
+      title: 'Kazanchis Retail — 1 unit',
+      clientName: 'Habesha Retail',
+      contractNetSantim: ETB(1_800_000),
+      contractGrossSantim: ETB(2_070_000),
+      invoicedGrossSantim: ETB(2_070_000),
+      invoices: [invoice(ETB(1_500_000), utc(2025, 4, 10)), invoice(ETB(570_000), utc(2025, 7, 1))],
+      milestones: [],
+    },
+    risk: {
+      status: 'in_progress',
+      overdueReceivableSantim: ETB(2_070_000),
+      oldestOverdueDays: 154,
+      assignedTechnicians: 0,
+      expiredCertifications: 0,
+      teamRepeatCalloutBps: null,
+      daysSinceProgressChange: 38,
+    },
+    kpiOverrides: {
+      progressBps: 9200,
+      expectedProgressBps: 10_000,
+      scheduleVarianceBps: -800,
+      overdue: true,
+      daysToPlannedEnd: -52,
+      grossMarginBps: 900,
+      underBillingBps: -800,
+      collectionRateBps: 0,
+      invoicedBps: 10_000,
+    },
+  },
+  {
+    priority: {
+      projectId: 'p-cmc',
+      title: 'CMC Residences — 2 units',
+      clientName: 'CMC Housing',
+      contractNetSantim: ETB(3_100_000),
+      contractGrossSantim: ETB(3_565_000),
+      invoicedGrossSantim: ETB(890_000),
+      invoices: [invoice(ETB(890_000), utc(2025, 9, 30))],
+      milestones: [
+        { name: 'Rail installation complete', grossSantim: ETB(1_070_000), status: 'ready_to_invoice', dueDate: utc(2025, 9, 15), gatingPhaseProgressBps: 10_000 },
+      ],
+    },
+    risk: {
+      status: 'in_progress',
+      overdueReceivableSantim: 0,
+      oldestOverdueDays: null,
+      assignedTechnicians: 2,
+      expiredCertifications: 1,
+      teamRepeatCalloutBps: 900,
+      daysSinceProgressChange: 2,
+    },
+    kpiOverrides: { progressBps: 4800, expectedProgressBps: 4500, scheduleVarianceBps: 300, underBillingBps: 2300 },
+  },
+  {
+    priority: {
+      projectId: 'p-megenagna',
+      title: 'Megenagna Office — 4 units',
+      clientName: 'Zenith Properties',
+      contractNetSantim: ETB(6_400_000),
+      contractGrossSantim: ETB(7_360_000),
+      invoicedGrossSantim: ETB(1_472_000),
+      invoices: [invoice(ETB(1_472_000), utc(2025, 11, 1))],
+      milestones: [
+        { name: 'Shaft prep complete', grossSantim: ETB(1_472_000), status: 'pending', dueDate: utc(2026, 3, 1), gatingPhaseProgressBps: 3000 },
+      ],
+    },
+    risk: {
+      status: 'in_progress',
+      overdueReceivableSantim: 0,
+      oldestOverdueDays: null,
+      assignedTechnicians: 4,
+      expiredCertifications: 0,
+      teamRepeatCalloutBps: 600,
+      daysSinceProgressChange: 1,
+    },
+    kpiOverrides: { progressBps: 2200, expectedProgressBps: 2000, scheduleVarianceBps: 200, underBillingBps: 200, grossMarginBps: 3100 },
+  },
+];

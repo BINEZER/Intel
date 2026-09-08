@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthProvider.js';
 import { RequireAuth, RequireCapability } from './auth/RequireAuth.js';
 import { AppShell } from './components/AppShell.js';
 import { ComingSoon, Dashboard } from './pages/Dashboard.js';
+import { Priority } from './pages/Priority.js';
 import { SignIn } from './pages/SignIn.js';
 
 export function App() {
@@ -20,6 +21,7 @@ export function App() {
             }
           >
             <Route index element={<Dashboard />} />
+            <Route path="priority" element={<Priority />} />
             <Route path="projects" element={<ComingSoon title="Projects" module="module 3" />} />
             <Route path="contracts" element={<ComingSoon title="Contracts" module="module 2" />} />
             <Route
