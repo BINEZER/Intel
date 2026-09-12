@@ -17,7 +17,7 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | **KPI engine** — project and technician metrics, graded against targets |
 | ✅ | **Priority, scorecards & risk** — receivables ranking, weighted KPIs, in-danger alerts |
 | ✅ | **Module 2** — Clients, contracts, milestones, renewal alerts, security-rules tests |
-| ⬜ | Module 3 — Projects, elevator phases, certification tracking |
+| ✅ | **Module 3** — Projects, elevator phases, certification, team assignments |
 | ⬜ | Module 4 — Invoices, disbursements, VAT/WHT returns |
 | ⬜ | Module 5 — Financial reporting |
 | ⬜ | Module 6 — Kanban boards |
@@ -35,11 +35,13 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
    an in-danger alert.
 5. **[docs/04-module-2-contracts.md](docs/04-module-2-contracts.md)** — contracts,
    milestone allocation, renewal alerts, and the security-rules test suite.
+6. **[docs/05-module-3-projects.md](docs/05-module-3-projects.md)** — phases,
+   weighted progress roll-up, certification, and team assignments.
 
 ```bash
 npm ci
-npm test          # 219 tests
-npm run test:rules  # 31 security-rules tests against the emulator
+npm test          # 252 tests
+npm run test:rules  # 39 security-rules tests against the emulator
 npm run typecheck
 ```
 
@@ -78,6 +80,8 @@ node scripts/set-user-role.mjs you@example.com admin
   a number they will override.
 - **Milestone amounts sum to the contract exactly.** Largest-remainder
   allocation, never independent rounding.
+- **Project progress is a weighted roll-up of phases**, never a number someone
+  types.
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -97,6 +101,7 @@ src/lib/
   dual-date.ts          the only sanctioned way to build a DualDate
   milestones.ts         exact largest-remainder payment allocation
   renewal.ts            renewal windows, SLA snapshots
+  phases.ts             elevator template, progress roll-up, certification
   schema.ts             typed Firestore schema
 src/auth/               AuthProvider, role model, route guards
 src/data/               Firestore repositories, audit stamping, React bindings
@@ -104,7 +109,8 @@ src/rules-tests/        security rules behaviour tests (emulator)
 src/components/
   DualDateInput.tsx     the dual-calendar picker
   AppShell.tsx          role-filtered navigation
-src/pages/              SignIn, Dashboard, Priority, ProjectKpis, TechnicianKpis
+src/pages/              SignIn, Dashboard, Priority, Clients, Contracts,
+                        Projects, ProjectDetail, KPI panels
 firestore.rules         role-based access + money-reconciliation enforcement
 firestore.indexes.json  composite indexes
 .github/workflows/      CI, Claude Code automation, Firestore deploy

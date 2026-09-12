@@ -293,3 +293,28 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
 .milestone-table .total-ok td { color: #12805c; }
 .milestone-table .total-bad td { color: var(--danger); }
 .milestone-actions { display: flex; gap: .6rem; margin-top: .75rem; }
+
+/* --- phases --- */
+.phase-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .75rem; }
+.phase-row { border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; }
+.phase-row.is-blocked { border-left-color: #b5691a; background: #fffdf9; }
+.phase-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.phase-progress { display: flex; align-items: center; gap: .75rem; margin: .6rem 0 .3rem; flex-wrap: wrap; }
+.phase-progress input[type="range"] { flex: 1; min-width: 140px; }
+.phase-progress .primary { margin-top: 0; }
+.phase-pct { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 3rem; text-align: right; }
+.phase-dates { font-size: .85rem; margin: 0; }
+.warn-text { color: #b5691a; margin: .3rem 0; }
+
+.chip-active { background: #e7f0fd; color: #0b5fff; }
+.chip-blocked { background: #fdf1e3; color: #b5691a; }
+
+.cert-status { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin: .5rem 0 1rem; }
+
+.project-cards { display: grid; gap: 1rem; }
+.project-card h2 { margin: 0 0 .2rem; font-size: 1.15rem; }
+.project-card h2 a { color: inherit; text-decoration: none; }
+.project-card h2 a:hover { text-decoration: underline; }
+.kv.compact { margin-top: .75rem; gap: .2rem 1rem; font-size: .9rem; }
+.assign-row { align-items: end; margin-top: 1rem; }
+.assign-row .primary { margin-top: 0; }

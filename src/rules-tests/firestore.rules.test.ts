@@ -326,6 +326,95 @@ describe('callout timestamps are immutable', () => {
   });
 });
 
+describe('project phases', () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'projects/p1/phases/ph1'), {
+        seq: 1, key: 'shaft_prep', name: 'Shaft preparation', weightBps: 2000,
+        progressBps: 0, status: 'not_started',
+        createdAt: new Date(), updatedAt: new Date(), createdBy: 'mgr', updatedBy: 'mgr',
+      });
+    });
+  });
+
+  it('lets an engineer move phase progress', async () => {
+    const db = ctx('eng', 'engineer');
+    await assertSucceeds(
+      updateDoc(doc(db, 'projects/p1/phases/ph1'), {
+        progressBps: 5000, status: 'in_progress',
+        updatedAt: serverTimestamp(), updatedBy: 'eng',
+      }),
+    );
+  });
+
+  it('stops a viewer touching phase progress', async () => {
+    const db = ctx('v', 'viewer');
+    await assertFails(
+      updateDoc(doc(db, 'projects/p1/phases/ph1'), {
+        progressBps: 5000, updatedAt: serverTimestamp(), updatedBy: 'v',
+      }),
+    );
+  });
+
+  it('stops an engineer creating or deleting phases', async () => {
+    const db = ctx('eng', 'engineer');
+    await assertFails(
+      setDoc(doc(db, 'projects/p1/phases/ph2'), {
+        seq: 2, key: 'rail_installation', name: 'Rails', weightBps: 2500,
+        progressBps: 0, status: 'not_started', ...stamped('eng'),
+      }),
+    );
+    await assertFails(deleteDoc(doc(db, 'projects/p1/phases/ph1')));
+  });
+
+  it('refuses a phase update whose audit stamp names someone else', async () => {
+    const db = ctx('eng', 'engineer');
+    await assertFails(
+      updateDoc(doc(db, 'projects/p1/phases/ph1'), {
+        progressBps: 5000, updatedAt: serverTimestamp(), updatedBy: 'mgr',
+      }),
+    );
+  });
+});
+
+describe('project assignments', () => {
+  const ASSIGNMENT = {
+    projectId: 'p1', technicianId: 't1', technicianName: 'Abel',
+    role: 'lead', allocationBps: 6000, phaseIds: [], endDate: null, active: true,
+  };
+
+  it('lets a manager assign a technician', async () => {
+    const db = ctx('mgr', 'manager');
+    await assertSucceeds(setDoc(doc(db, 'projectAssignments/a1'), { ...ASSIGNMENT, ...stamped('mgr') }));
+  });
+
+  it('stops an engineer assigning themselves', async () => {
+    // Allocation weights the project's team score, so only managers set it.
+    const db = ctx('eng', 'engineer');
+    await assertFails(setDoc(doc(db, 'projectAssignments/a2'), { ...ASSIGNMENT, ...stamped('eng') }));
+  });
+
+  it('lets anyone with read access see the crew', async () => {
+    const db = ctx('v', 'viewer');
+    await assertSucceeds(getDoc(doc(db, 'projectAssignments/a1')));
+  });
+});
+
+describe('technicians', () => {
+  it('lets a manager create one but never delete it', async () => {
+    const db = ctx('mgr', 'manager');
+    await assertSucceeds(
+      setDoc(doc(db, 'technicians/t1'), {
+        employeeNo: 'E-1', name: 'Abel', uid: null, subcontractorId: null,
+        phone: '0911', trades: [], certifications: [],
+        contractedMinutesPerWeek: 2400, status: 'active', ...stamped('mgr'),
+      }),
+    );
+    // KPI history must survive; deactivate instead.
+    await assertFails(deleteDoc(doc(db, 'technicians/t1')));
+  });
+});
+
 describe('KPI snapshots and audit logs cannot be tampered with', () => {
   it('refuses every client write to a KPI snapshot', async () => {
     for (const role of ['admin', 'manager', 'engineer']) {

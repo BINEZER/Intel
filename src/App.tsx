@@ -4,6 +4,8 @@ import { RequireAuth, RequireCapability } from './auth/RequireAuth.js';
 import { AppShell } from './components/AppShell.js';
 import { ComingSoon, Dashboard } from './pages/Dashboard.js';
 import { Clients } from './pages/Clients.js';
+import { ProjectDetail } from './pages/ProjectDetail.js';
+import { Projects } from './pages/Projects.js';
 import { Contracts } from './pages/Contracts.js';
 import { Priority } from './pages/Priority.js';
 import { SignIn } from './pages/SignIn.js';
@@ -24,7 +26,22 @@ export function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="priority" element={<Priority />} />
-            <Route path="projects" element={<ComingSoon title="Projects" module="module 3" />} />
+            <Route
+              path="projects"
+              element={
+                <RequireCapability capability="read">
+                  <Projects />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="projects/:projectId"
+              element={
+                <RequireCapability capability="read">
+                  <ProjectDetail />
+                </RequireCapability>
+              }
+            />
             <Route
               path="clients"
               element={

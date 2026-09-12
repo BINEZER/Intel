@@ -245,6 +245,12 @@ export interface ProjectPhase extends AuditFields {
     applicationDate: DualDate | null;
     inspectionDate: DualDate | null;
     result: 'pending' | 'passed' | 'failed_rework' | 'not_applicable';
+    /**
+     * How many times the authority has inspected. First-pass rate is derived
+     * from this, so it increments only on a real verdict — never on a re-save
+     * of a pending record.
+     */
+    attempts: number;
     certificateNo?: string;
     certificateIssuedDate: DualDate | null;
     certificateExpiryDate: DualDate | null;
