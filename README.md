@@ -16,7 +16,7 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | **Module 1** — Auth, roles, app shell, dual-calendar date picker |
 | ✅ | **KPI engine** — project and technician metrics, graded against targets |
 | ✅ | **Priority, scorecards & risk** — receivables ranking, weighted KPIs, in-danger alerts |
-| ⬜ | Module 2 — Clients, contracts, milestones, renewal alerts |
+| ✅ | **Module 2** — Clients, contracts, milestones, renewal alerts, security-rules tests |
 | ⬜ | Module 3 — Projects, elevator phases, certification tracking |
 | ⬜ | Module 4 — Invoices, disbursements, VAT/WHT returns |
 | ⬜ | Module 5 — Financial reporting |
@@ -33,10 +33,13 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 4. **[docs/03-priority-and-risk.md](docs/03-priority-and-risk.md)** — how projects
    are ranked by reachable cash, how weighted scorecards work, and what triggers
    an in-danger alert.
+5. **[docs/04-module-2-contracts.md](docs/04-module-2-contracts.md)** — contracts,
+   milestone allocation, renewal alerts, and the security-rules test suite.
 
 ```bash
 npm ci
-npm test          # 176 tests
+npm test          # 219 tests
+npm run test:rules  # 31 security-rules tests against the emulator
 npm run typecheck
 ```
 
@@ -73,6 +76,8 @@ node scripts/set-user-role.mjs you@example.com admin
   never scored as zero.
 - **Every ranking and alert explains itself.** A number a manager cannot audit is
   a number they will override.
+- **Milestone amounts sum to the contract exactly.** Largest-remainder
+  allocation, never independent rounding.
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -90,8 +95,12 @@ src/lib/
   risk.ts               in-danger rules and alert severity
   priority.ts           receivables ranking by reachable cash
   dual-date.ts          the only sanctioned way to build a DualDate
+  milestones.ts         exact largest-remainder payment allocation
+  renewal.ts            renewal windows, SLA snapshots
   schema.ts             typed Firestore schema
 src/auth/               AuthProvider, role model, route guards
+src/data/               Firestore repositories, audit stamping, React bindings
+src/rules-tests/        security rules behaviour tests (emulator)
 src/components/
   DualDateInput.tsx     the dual-calendar picker
   AppShell.tsx          role-filtered navigation
@@ -104,6 +113,5 @@ firestore.indexes.json  composite indexes
 ### Known follow-ups
 
 - The bundle is ~720 kB (mostly the Firebase SDK); code-split before launch.
-- `users/{uid}` documents are not yet written on sign-up — module 2.
 - `src/pages/sample-kpi-data.ts` is scaffolding so the KPI engine can be seen
   working; delete it when the dashboard reads live data.

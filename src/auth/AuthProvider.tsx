@@ -23,6 +23,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from '../firebase.js';
+import { ensureProfile } from '../data/users.js';
 import { isRole, type Role } from './roles.js';
 
 export interface AuthState {
@@ -62,6 +63,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole(claims.role);
         setActive(claims.active);
         setLoading(false);
+
+        // Create the directory entry on first sign-in, so an administrator has
+        // a record to act on rather than a uid they must be told by phone.
+        // Deliberately non-fatal: a user holding a valid claim must still be
+        // able to work if this write is refused.
+        if (next !== null) {
+          try {
+            await ensureProfile(next);
+          } catch (error) {
+            console.warn('[auth] could not write user profile', error);
+          }
+        }
       })();
     });
     return unsubscribe;

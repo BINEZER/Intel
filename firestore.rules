@@ -62,8 +62,22 @@ service cloud.firestore {
 
     // --- users: self-read; role changes only via Cloud Function ------------
     match /users/{uid} {
-      allow read:   if signedIn() && (request.auth.uid == uid || isManager());
-      allow create: if isAdmin();
+      allow read: if signedIn() && (request.auth.uid == uid || isManager());
+
+      // Self-provisioning on first sign-in. A new user has no role claim at all,
+      // so requiring isAdmin() here would make the first profile uncreatable —
+      // an admin cannot pre-create a document for a uid that does not exist yet.
+      //
+      // This is safe because the ROLE CLAIM is authoritative, not this document:
+      // a self-created profile must claim no privileges, and grants nothing on
+      // its own. An admin then activates the account and sets the real claim.
+      allow create: if isAdmin()
+                    || (signedIn()
+                        && request.auth.uid == uid
+                        && request.resource.data.role == 'viewer'
+                        && request.resource.data.active == false
+                        && request.resource.data.email == request.auth.token.email);
+
       // A user may edit their own profile but never their own role or active flag.
       allow update: if isAdmin()
                     || (request.auth.uid == uid

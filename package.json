@@ -14,9 +14,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "emulators": "firebase emulators:start --only firestore,auth"
+    "emulators": "firebase emulators:start --only firestore,auth",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-intelmotion-rules \"vitest run --config vitest.rules.config.ts\""
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.0",

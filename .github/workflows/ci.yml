@@ -41,8 +41,10 @@ jobs:
           VITE_FIREBASE_APP_ID: ci-placeholder
         run: npx vite build
 
-      - name: Validate Firestore rules and indexes parse
+      - name: Validate index definitions
+        run: node -e "JSON.parse(require('fs').readFileSync('firestore.indexes.json','utf8'))"
+
+      - name: Security rules tests
         run: |
           npm i -g firebase-tools@13
-          node -e "JSON.parse(require('fs').readFileSync('firestore.indexes.json','utf8'))"
-          firebase emulators:exec --only firestore --project demo-ci "echo 'rules compiled'"
+          npm run test:rules

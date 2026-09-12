@@ -10,5 +10,9 @@ export default defineConfig({
     // Component tests opt in with a `// @vitest-environment jsdom` docblock.
     environment: 'node',
     globals: true,
+    // Rules tests need a running Firestore emulator, so they are excluded from
+    // the default run here rather than by a CLI flag a caller can forget.
+    // `npm run test:rules` starts the emulator and points vitest at them.
+    exclude: ['**/node_modules/**', '**/dist/**', 'src/rules-tests/**'],
   },
 });
