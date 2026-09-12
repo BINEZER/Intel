@@ -18,7 +18,7 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | **Priority, scorecards & risk** — receivables ranking, weighted KPIs, in-danger alerts |
 | ✅ | **Module 2** — Clients, contracts, milestones, renewal alerts, security-rules tests |
 | ✅ | **Module 3** — Projects, elevator phases, certification, team assignments |
-| ⬜ | Module 4 — Invoices, disbursements, VAT/WHT returns |
+| ✅ | **Module 4** — Invoices, disbursements, VAT & WHT returns, financial roll-up |
 | ⬜ | Module 5 — Financial reporting |
 | ⬜ | Module 6 — Kanban boards |
 
@@ -37,11 +37,13 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
    milestone allocation, renewal alerts, and the security-rules test suite.
 6. **[docs/05-module-3-projects.md](docs/05-module-3-projects.md)** — phases,
    weighted progress roll-up, certification, and team assignments.
+7. **[docs/06-module-4-finance.md](docs/06-module-4-finance.md)** — invoicing,
+   disbursements, the monthly VAT and WHT returns, and the financial roll-up.
 
 ```bash
 npm ci
-npm test          # 252 tests
-npm run test:rules  # 39 security-rules tests against the emulator
+npm test          # 301 tests
+npm run test:rules  # 48 security-rules tests against the emulator
 npm run typecheck
 ```
 
@@ -82,6 +84,9 @@ node scripts/set-user-role.mjs you@example.com admin
   allocation, never independent rounding.
 - **Project progress is a weighted roll-up of phases**, never a number someone
   types.
+- **VAT is summed per line**, never applied to an invoice total — zero-rated
+  lines sit alongside standard-rated ones.
+- **An invoice paid net of client withholding is settled, not part paid.**
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -102,6 +107,9 @@ src/lib/
   milestones.ts         exact largest-remainder payment allocation
   renewal.ts            renewal windows, SLA snapshots
   phases.ts             elevator template, progress roll-up, certification
+  invoicing.ts          line totals, settlement, ageing, numbering
+  returns.ts            monthly VAT and WHT returns
+  rollup.ts             project financial roll-up (pure)
   schema.ts             typed Firestore schema
 src/auth/               AuthProvider, role model, route guards
 src/data/               Firestore repositories, audit stamping, React bindings

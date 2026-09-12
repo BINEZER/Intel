@@ -86,6 +86,20 @@ service cloud.firestore {
       allow delete: if false; // deactivate instead, to preserve the audit trail
     }
 
+    // --- counters: sequential document numbering ---------------------------
+    // Invoice numbers must be sequential and gapless, so the sequence is bumped
+    // inside a transaction. Finance and managers may consume a number; nobody
+    // may set one to an arbitrary value, because rewinding the counter would
+    // reuse an invoice number — a finding in any audit.
+    match /counters/{counterId} {
+      allow read:   if canRead();
+      allow create: if (isFinance() || isManager()) && request.resource.data.value == 1;
+      allow update: if (isFinance() || isManager())
+                    && request.resource.data.value is int
+                    && request.resource.data.value == resource.data.value + 1;
+      allow delete: if false;
+    }
+
     match /clients/{clientId} {
       allow read:   if canRead();
       allow create: if isManager() && stampedCreate();

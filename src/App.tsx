@@ -4,6 +4,7 @@ import { RequireAuth, RequireCapability } from './auth/RequireAuth.js';
 import { AppShell } from './components/AppShell.js';
 import { ComingSoon, Dashboard } from './pages/Dashboard.js';
 import { Clients } from './pages/Clients.js';
+import { Finance } from './pages/Finance.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
 import { Projects } from './pages/Projects.js';
 import { Contracts } from './pages/Contracts.js';
@@ -59,10 +60,10 @@ export function App() {
               }
             />
             <Route
-              path="finance"
+              path="finance/*"
               element={
                 <RequireCapability capability="viewFinancials">
-                  <ComingSoon title="Finance" module="modules 4-5" />
+                  <Finance />
                 </RequireCapability>
               }
             />

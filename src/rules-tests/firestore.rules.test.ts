@@ -415,6 +415,109 @@ describe('technicians', () => {
   });
 });
 
+describe('invoice sequence counters', () => {
+  it('lets finance consume the next number', async () => {
+    const db = ctx('fin', 'finance');
+    await assertSucceeds(setDoc(doc(db, 'counters/invoice'), { value: 1, updatedAt: new Date() }));
+    await assertSucceeds(
+      setDoc(doc(db, 'counters/invoice'), { value: 2, updatedAt: new Date() }, { merge: true }),
+    );
+  });
+
+  it('REFUSES rewinding a counter, which would reuse an invoice number', async () => {
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'counters/invoice'), { value: 50 });
+    });
+    const db = ctx('fin', 'finance');
+    await assertFails(setDoc(doc(db, 'counters/invoice'), { value: 10 }, { merge: true }));
+    await assertFails(setDoc(doc(db, 'counters/invoice'), { value: 50 }, { merge: true }));
+  });
+
+  it('REFUSES skipping ahead, which would leave an unexplained gap', async () => {
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'counters/invoice'), { value: 50 });
+    });
+    const db = ctx('fin', 'finance');
+    await assertFails(setDoc(doc(db, 'counters/invoice'), { value: 99 }, { merge: true }));
+  });
+
+  it('stops a viewer or engineer consuming numbers, and nobody may delete one', async () => {
+    await assertFails(setDoc(doc(ctx('v', 'viewer'), 'counters/invoice'), { value: 1 }));
+    await assertFails(setDoc(doc(ctx('eng', 'engineer'), 'counters/invoice'), { value: 1 }));
+    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'counters/invoice')));
+  });
+});
+
+describe('issued invoices are tax documents', () => {
+  const INVOICE = {
+    invoiceNo: 'INV-00001', clientId: 'cl1', clientName: 'Acme', clientTin: '001',
+    contractId: null, projectId: null, milestoneId: null, currency: 'ETB',
+    lines: [], netSantim: 100_000_00, vatRateBps: 1500, vatSantim: 15_000_00,
+    grossSantim: 115_000_00, paidGrossSantim: 0, balanceGrossSantim: 115_000_00,
+    status: 'draft', vatPeriodEc: 'EC-2018-01', vatPeriodGc: '2025-09',
+  };
+
+  it('REFUSES an invoice whose VAT does not reconcile', async () => {
+    const db = ctx('fin', 'finance');
+    await assertFails(
+      setDoc(doc(db, 'invoices/i1'), { ...INVOICE, grossSantim: 999_999_00, ...stamped('fin') }),
+    );
+  });
+
+  it('refuses to create an invoice that is already issued', async () => {
+    // Numbers come from the counter at issue time, never at creation.
+    const db = ctx('fin', 'finance');
+    await assertFails(
+      setDoc(doc(db, 'invoices/i2'), { ...INVOICE, status: 'issued', ...stamped('fin') }),
+    );
+  });
+
+  it('freezes the number, net and VAT once issued', async () => {
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'invoices/i3'), {
+        ...INVOICE, status: 'issued',
+        createdAt: new Date(), updatedAt: new Date(), createdBy: 'fin', updatedBy: 'fin',
+      });
+    });
+    const db = ctx('fin', 'finance');
+
+    // Payment fields may move.
+    await assertSucceeds(
+      updateDoc(doc(db, 'invoices/i3'), {
+        paidGrossSantim: 115_000_00, balanceGrossSantim: 0, status: 'paid',
+        updatedAt: serverTimestamp(), updatedBy: 'fin',
+      }),
+    );
+    // The tax figures may not.
+    await assertFails(
+      updateDoc(doc(db, 'invoices/i3'), {
+        netSantim: 1, grossSantim: 1_15, vatSantim: 15,
+        updatedAt: serverTimestamp(), updatedBy: 'fin',
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'invoices/i3'), {
+        invoiceNo: 'INV-99999', updatedAt: serverTimestamp(), updatedBy: 'fin',
+      }),
+    );
+  });
+
+  it('stops an issued invoice being deleted, so the sequence stays explicable', async () => {
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'invoices/i4'), {
+        ...INVOICE, status: 'issued',
+        createdAt: new Date(), updatedAt: new Date(), createdBy: 'fin', updatedBy: 'fin',
+      });
+    });
+    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'invoices/i4')));
+  });
+
+  it('stops a manager writing invoices at all', async () => {
+    const db = ctx('mgr', 'manager');
+    await assertFails(setDoc(doc(db, 'invoices/i5'), { ...INVOICE, ...stamped('mgr') }));
+  });
+});
+
 describe('KPI snapshots and audit logs cannot be tampered with', () => {
   it('refuses every client write to a KPI snapshot', async () => {
     for (const role of ['admin', 'manager', 'engineer']) {
