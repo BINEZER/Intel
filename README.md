@@ -20,7 +20,8 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | **Module 3** — Projects, elevator phases, certification, team assignments |
 | ✅ | **Module 4** — Invoices, disbursements, VAT & WHT returns, financial roll-up |
 | ✅ | **Module 5** — Financial reporting, trend chart, cash-flow outlook, CSV export |
-| ⬜ | Module 6 — Kanban boards |
+| ✅ | **Module 6** — Kanban boards with sparse ordering |
+| ✅ | **Multi-currency** — USD alongside ETB, with snapshotted FX rates |
 
 ## Start here
 
@@ -41,11 +42,13 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
    disbursements, the monthly VAT and WHT returns, and the financial roll-up.
 8. **[docs/07-module-5-reporting.md](docs/07-module-5-reporting.md)** — project
    statements, the fiscal-year boundary, cash-flow outlook, and CSV export.
+9. **[docs/08-currency-and-boards.md](docs/08-currency-and-boards.md)** — USD
+   support with snapshotted exchange rates, and the Kanban boards.
 
 ```bash
 npm ci
-npm test          # 342 tests
-npm run test:rules  # 48 security-rules tests against the emulator
+npm test          # 389 tests
+npm run test:rules  # 53 security-rules tests against the emulator
 npm run typecheck
 ```
 
@@ -93,6 +96,9 @@ node scripts/set-user-role.mjs you@example.com admin
   the annual filing uses.
 - **Exported CSV cells are neutralised against formula injection** before they
   reach a spreadsheet.
+- **Foreign-currency documents snapshot their exchange rate.** The birr floats;
+  a filed return must stay reproducible.
+- **A board reorder writes one document**, never the whole column.
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -118,6 +124,8 @@ src/lib/
   rollup.ts             project financial roll-up (pure)
   reporting.ts          statements, fiscal year, period series, cash flow
   csv.ts                export with formula-injection and encoding handling
+  currency.ts           USD/ETB, snapshotted rates, exchange differences
+  ordering.ts           sparse integer ordering for drag-and-drop
   schema.ts             typed Firestore schema
 src/auth/               AuthProvider, role model, route guards
 src/data/               Firestore repositories, audit stamping, React bindings

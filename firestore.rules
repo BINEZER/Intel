@@ -238,14 +238,18 @@ service cloud.firestore {
     }
 
     // --- Kanban ------------------------------------------------------------
+    // Board documents themselves are manager-only: columns and WIP limits are
+    // the board's structure, and everyone works inside it.
+    //
+    // There is deliberately NO `match /{document=**}` here. A recursive
+    // wildcard matches ZERO or more segments, so a nested one intended for
+    // subcollections also matches the board document — and because rules are a
+    // permissive union, that silently handed every engineer write access to
+    // the board itself. Cards live in the top-level `tasks` collection; any
+    // future subcollection gets its own explicit match.
     match /boards/{boardId} {
       allow read:  if canRead();
       allow write: if isManager();
-
-      match /{document=**} {
-        allow read:  if canRead();
-        allow write: if has(['admin', 'manager', 'finance', 'engineer']);
-      }
     }
 
     match /tasks/{taskId} {

@@ -41,6 +41,31 @@ export interface DualDate {
   enteredIn: CalendarSystem;
 }
 
+/**
+ * Foreign-currency provenance.
+ *
+ * Attached to any document that may be raised in a currency other than ETB.
+ * The document's `...Santim` fields remain the ETB figures and stay the source
+ * of truth for VAT, WHT and every return — this block records what was actually
+ * invoiced and the rate that produced the ETB equivalent.
+ *
+ * The rate is snapshotted here and never looked up at read time: the birr
+ * floats, and a report that re-converted at today's rate would silently rewrite
+ * a return that has already been filed.
+ */
+export interface ForeignAmount {
+  /** 'ETB' when the document is native; then `amount` equals the ETB figure. */
+  currency: 'ETB' | 'USD';
+  /** Integer minor units in `currency` — cents for USD. */
+  amount: number;
+  /** ETB per 1 unit of `currency`, in micros. Exactly 1_000_000 for ETB. */
+  rateMicros: number;
+  /** The day the rate applied, so the ETB figure is reproducible. */
+  rateDate: Timestamp;
+  /** e.g. "NBE daily", "Commercial Bank of Ethiopia", "contract rate". */
+  rateSource: string;
+}
+
 export interface AuditFields {
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -100,8 +125,11 @@ export interface Contract extends AuditFields {
   projectId?: string;
   title: string;
 
+  /** Always 'ETB' — the figures below are the ETB amounts tax is computed on. */
   currency: 'ETB';
-  /** VAT-exclusive contract value. */
+  /** Present when the contract was priced in a foreign currency. */
+  foreign?: ForeignAmount;
+  /** VAT-exclusive contract value, in ETB. */
   valueNetSantim: number;
   vatRateBps: number;
   vatSantim: number;
@@ -276,7 +304,10 @@ export interface Invoice extends AuditFields {
   issueDate: DualDate;
   dueDate: DualDate;
 
+  /** Always 'ETB'. A VAT invoice is declared in ETB whatever was quoted. */
   currency: 'ETB';
+  /** Present when the client was quoted in a foreign currency. */
+  foreign?: ForeignAmount;
   lines: Array<{
     description: string;
     qty: number;
@@ -352,8 +383,15 @@ export interface Disbursement extends AuditFields {
   supplierInvoiceDate: DualDate;
   paymentDate: DualDate | null;
 
+  /** Always 'ETB' — WHT and input VAT are computed on the ETB figures. */
   currency: 'ETB';
-  /** VAT-exclusive base. WHT is computed on this, never on the gross. */
+  /**
+   * Present when the subcontractor or supplier invoiced in a foreign currency —
+   * the usual case for imported equipment. `netSantim` below is its ETB
+   * equivalent at `foreign.rateMicros`, and that is what WHT is charged on.
+   */
+  foreign?: ForeignAmount;
+  /** VAT-exclusive base in ETB. WHT is computed on this, never on the gross. */
   netSantim: number;
   vatRateBps: number;
   /** Input VAT, reclaimable. Zero when the subcontractor is not VAT-registered. */
@@ -645,6 +683,20 @@ export interface TechnicianKpi {
   utilisationBps: RateBps;
   certificationsExpiringSoon: number;
   certificationsExpired: number;
+}
+
+/**
+ * `config/fxRates` — the working rates the UI offers as a default.
+ *
+ * A default only. The rate that matters is the one snapshotted onto each
+ * document, and finance may override it per transaction: the rate on the day a
+ * shipment cleared is not necessarily today's.
+ */
+export interface FxRates {
+  /** ETB per 1 USD, in micros. */
+  usdMicros: number;
+  rateDate: DualDate;
+  source: string;
 }
 
 /** `config/kpiTargets` — the thresholds the dashboard grades against. */

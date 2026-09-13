@@ -24,7 +24,8 @@ import { formatBps } from '../lib/kpi.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
-import { MoneyInput } from '../components/MoneyInput.js';
+import { CurrencyAmountInput, emptyAmount, type CurrencyAmount } from '../components/CurrencyAmountInput.js';
+import { formatConverted, RATE_SCALE } from '../lib/currency.js';
 import type { Disbursement, DualDate, Project, Subcontractor } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
@@ -120,7 +121,14 @@ function VoucherRow({
         )}
       </td>
       <td>{voucher.phaseName}</td>
-      <td className="num">{formatETB(voucher.netSantim, { withSymbol: false })}</td>
+      <td className="num">
+        {formatETB(voucher.netSantim, { withSymbol: false })}
+        {voucher.foreign !== undefined && (
+          <><br /><span className="muted">
+            {voucher.foreign.currency} {(voucher.foreign.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </span></>
+        )}
+      </td>
       <td className="num muted">{formatETB(voucher.supplierVatSantim, { withSymbol: false })}</td>
       <td className="num">{formatETB(voucher.grossSantim, { withSymbol: false })}</td>
       <td className="num">
@@ -190,8 +198,11 @@ function DisbursementForm({
   const [phaseName, setPhaseName] = useState('');
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState('');
   const [invoiceDate, setInvoiceDate] = useState<DualDate | null>(null);
-  const [netSantim, setNetSantim] = useState(0);
+  // Imported equipment is usually invoiced in USD; the ETB equivalent inside
+  // this value is what every tax figure is computed from.
+  const [amount, setAmount] = useState<CurrencyAmount>(() => emptyAmount('ETB'));
   const [category, setCategory] = useState<WhtCategory>('services');
+  const netSantim = amount.baseAmountSantim;
   const { busy, error, run } = useAsyncAction('create this voucher');
 
   const subcontractor = subcontractors.find((s) => s.id === subcontractorId);
@@ -228,6 +239,16 @@ function DisbursementForm({
           supplierInvoiceDate: invoiceDate as DualDate,
           netSantim,
           whtCategory: category,
+          ...(amount.currency === 'ETB'
+            ? {}
+            : {
+                foreign: {
+                  currency: amount.currency,
+                  amount: amount.amount,
+                  rateMicros: amount.rateMicros,
+                  rateSource: 'NBE daily',
+                },
+              }),
         },
         uid,
       ),
@@ -269,8 +290,14 @@ function DisbursementForm({
           <input id="d-inv" value={supplierInvoiceNo} onChange={(e) => setSupplierInvoiceNo(e.target.value)} />
         </div>
 
-        <MoneyInput label="Invoice amount (excluding VAT)" value={netSantim} onChange={setNetSantim} required
-          hint="The VAT-exclusive base. Withholding is charged on this, never on the VAT-inclusive total." />
+        <CurrencyAmountInput
+          label="Invoice amount (excluding VAT)"
+          value={amount}
+          onChange={setAmount}
+          defaultRateMicros={RATE_SCALE}
+          hint="The VAT-exclusive base. Withholding is charged on this, never on the VAT-inclusive total."
+          required
+        />
 
         <div className="field">
           <label htmlFor="d-cat">Withholding category</label>
@@ -286,7 +313,22 @@ function DisbursementForm({
 
       {breakdown !== null && (
         <div className="vat-summary">
-          <div><span className="muted">Their net</span><strong>{formatETB(breakdown.netSantim)}</strong></div>
+          <div>
+            <span className="muted">Their net</span>
+            <strong>{formatETB(breakdown.netSantim)}</strong>
+            {amount.currency !== 'ETB' && (
+              <span className="muted">
+                invoiced {formatConverted({
+                  currency: amount.currency,
+                  amount: amount.amount,
+                  baseAmountSantim: amount.baseAmountSantim,
+                  rateMicros: amount.rateMicros,
+                  rateDate: new Date(),
+                  rateSource: 'NBE daily',
+                })}
+              </span>
+            )}
+          </div>
           <div><span className="muted">Their VAT</span><strong>{formatETB(breakdown.supplierVatSantim)}</strong></div>
           <div><span className="muted">Their invoice</span><strong>{formatETB(breakdown.grossSantim)}</strong></div>
           <div>

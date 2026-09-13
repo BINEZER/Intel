@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthProvider.js';
 import { RequireAuth, RequireCapability } from './auth/RequireAuth.js';
 import { AppShell } from './components/AppShell.js';
 import { ComingSoon, Dashboard } from './pages/Dashboard.js';
+import { Boards } from './pages/Boards.js';
 import { Clients } from './pages/Clients.js';
 import { Finance } from './pages/Finance.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
@@ -71,7 +72,7 @@ export function App() {
               path="boards"
               element={
                 <RequireCapability capability="useBoards">
-                  <ComingSoon title="Boards" module="module 6" />
+                  <Boards />
                 </RequireCapability>
               }
             />

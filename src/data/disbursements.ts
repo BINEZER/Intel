@@ -30,6 +30,13 @@ export interface CreateDisbursementInput {
   /** VAT-exclusive base from the subcontractor's invoice. */
   netSantim: number;
   whtCategory: WhtCategory;
+  /**
+   * Set when the supplier invoiced in a foreign currency. `netSantim` above is
+   * already its ETB equivalent — this records what was actually billed and the
+   * rate that produced the ETB figure, so the conversion stays reproducible
+   * after the birr moves.
+   */
+  foreign?: { currency: 'ETB' | 'USD'; amount: number; rateMicros: number; rateSource: string };
   /** Override the statutory rate when the subcontract sets one. */
   overrideWhtRateBps?: number;
   vatRateBps?: number;
@@ -119,6 +126,9 @@ export async function createDisbursement(
     whtSantim: breakdown.whtSantim,
     netPayableSantim: breakdown.netPayableSantim,
     ...(breakdown.whtExemptReason === undefined ? {} : { whtExemptReason: breakdown.whtExemptReason }),
+    ...(input.foreign === undefined
+      ? {}
+      : { foreign: { ...input.foreign, rateDate: input.supplierInvoiceDate.at } }),
     whtRemittedDate: null,
     status: 'draft',
     whtPeriodEc: periodKeyFor(invoiceDate),

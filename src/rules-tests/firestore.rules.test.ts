@@ -543,6 +543,57 @@ describe('KPI snapshots and audit logs cannot be tampered with', () => {
   });
 });
 
+describe('boards and tasks', () => {
+  const TASK = {
+    boardId: 'b1', columnId: 'col-1', order: 1024, title: 'Chase the permit',
+    assigneeUid: null, dueDate: null, priority: 'medium', labels: [],
+    checklist: [], completedAt: null, archived: false,
+  };
+
+  it('lets an engineer create and reorder a card', async () => {
+    // Boards are the one place non-managers get to write freely.
+    const db = ctx('eng', 'engineer');
+    await assertSucceeds(setDoc(doc(db, 'tasks/t1'), { ...TASK, ...stamped('eng') }));
+    await assertSucceeds(
+      updateDoc(doc(db, 'tasks/t1'), { order: 1536, updatedAt: serverTimestamp(), updatedBy: 'eng' }),
+    );
+  });
+
+  it('stops a viewer writing cards', async () => {
+    const db = ctx('v', 'viewer');
+    await assertFails(setDoc(doc(db, 'tasks/t2'), { ...TASK, ...stamped('v') }));
+    await assertSucceeds(getDoc(doc(db, 'tasks/t1')));
+  });
+
+  it('lets only a manager delete a card, so an engineer archives instead', async () => {
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'tasks/t3'), {
+        ...TASK, createdAt: new Date(), updatedAt: new Date(), createdBy: 'eng', updatedBy: 'eng',
+      });
+    });
+    await assertFails(deleteDoc(doc(ctx('eng', 'engineer'), 'tasks/t3')));
+    await assertSucceeds(
+      updateDoc(doc(ctx('eng', 'engineer'), 'tasks/t3'), {
+        archived: true, updatedAt: serverTimestamp(), updatedBy: 'eng',
+      }),
+    );
+    await assertSucceeds(deleteDoc(doc(ctx('mgr', 'manager'), 'tasks/t3')));
+  });
+
+  it('lets only a manager create a board', async () => {
+    const BOARD = { name: 'Admin', scope: 'admin', columns: [], archived: false };
+    await assertSucceeds(setDoc(doc(ctx('mgr', 'manager'), 'boards/b1'), { ...BOARD, ...stamped('mgr') }));
+    await assertFails(setDoc(doc(ctx('eng', 'engineer'), 'boards/b2'), { ...BOARD, ...stamped('eng') }));
+  });
+
+  it('refuses a card update stamped with someone else', async () => {
+    const db = ctx('eng', 'engineer');
+    await assertFails(
+      updateDoc(doc(db, 'tasks/t1'), { order: 2048, updatedAt: serverTimestamp(), updatedBy: 'mgr' }),
+    );
+  });
+});
+
 describe('config is admin-only', () => {
   it('lets anyone read tax config but only admins write it', async () => {
     const viewer = ctx('u1', 'viewer');
