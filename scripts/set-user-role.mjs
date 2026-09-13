@@ -54,10 +54,26 @@ const user = await (looksLikeUid ? auth.getUser(identifier) : auth.getUserByEmai
   () => null,
 );
 if (user === null) {
-  console.error(
-    `No user matching '${identifier}' in project ${projectId}. ` +
-      `Create the account in Authentication > Users first.`,
-  );
+  console.error(`No user matching '${identifier}' in project ${projectId}.\n`);
+
+  // Listing what DOES exist turns a dead end into a diagnosis. The usual cause
+  // is an account created while the console was pointed at a different project,
+  // and seeing an empty list says that immediately.
+  const { users } = await auth.listUsers(20);
+  if (users.length === 0) {
+    console.error(
+      `This project has NO user accounts at all.\n` +
+        `Create one at:\n` +
+        `  https://console.firebase.google.com/project/${projectId}/authentication/users\n` +
+        `Check the project name shown in the console matches '${projectId}'.`,
+    );
+  } else {
+    console.error(`Accounts that do exist in ${projectId}:`);
+    for (const existing of users) {
+      console.error(`  ${existing.uid}  ${existing.email ?? '(no email)'}`);
+    }
+    console.error(`\nRe-run with one of the values above.`);
+  }
   process.exit(1);
 }
 
