@@ -69,7 +69,7 @@ user has **no role and no access** until you do:
 ```bash
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
-GCLOUD_PROJECT=intelmotion-pcm-dev \
+GCLOUD_PROJECT=intel-afc60 \
 node scripts/set-user-role.mjs you@example.com admin
 ```
 

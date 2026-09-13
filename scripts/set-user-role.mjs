@@ -9,12 +9,12 @@
  * Against the emulator (no credentials needed):
  *   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
  *   FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
- *   GCLOUD_PROJECT=intelmotion-pcm-dev \
+ *   GCLOUD_PROJECT=intel-afc60 \
  *   node scripts/set-user-role.mjs someone@example.com admin
  *
  * Against a real project:
  *   GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa.json \
- *   GCLOUD_PROJECT=intelmotion-pcm-dev \
+ *   GCLOUD_PROJECT=intel-afc60 \
  *   node scripts/set-user-role.mjs someone@example.com admin
  */
 

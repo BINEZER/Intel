@@ -24,7 +24,7 @@ a feature.
 ## Step 1 — Enable Hosting on both projects
 
 In the [Firebase console](https://console.firebase.google.com), for **each** of
-`intelmotion-pcm-dev` and `intelmotion-pcm-prod`:
+`intel-afc60` (a production project comes later):
 
 **Build → Hosting → Get started.** Click through the CLI instructions without
 running them — this repo already carries the config. You only need Hosting
@@ -63,14 +63,14 @@ REPO=BINEZER/Intel
 
 # dev
 gh variable set VITE_FIREBASE_API_KEY             --env dev --repo $REPO --body "AIza…"
-gh variable set VITE_FIREBASE_AUTH_DOMAIN         --env dev --repo $REPO --body "intelmotion-pcm-dev.firebaseapp.com"
-gh variable set VITE_FIREBASE_PROJECT_ID          --env dev --repo $REPO --body "intelmotion-pcm-dev"
-gh variable set VITE_FIREBASE_STORAGE_BUCKET      --env dev --repo $REPO --body "intelmotion-pcm-dev.appspot.com"
+gh variable set VITE_FIREBASE_AUTH_DOMAIN         --env dev --repo $REPO --body "intel-afc60.firebaseapp.com"
+gh variable set VITE_FIREBASE_PROJECT_ID          --env dev --repo $REPO --body "intel-afc60"
+gh variable set VITE_FIREBASE_STORAGE_BUCKET      --env dev --repo $REPO --body "intel-afc60.firebasestorage.app"
 gh variable set VITE_FIREBASE_MESSAGING_SENDER_ID --env dev --repo $REPO --body "…"
 gh variable set VITE_FIREBASE_APP_ID              --env dev --repo $REPO --body "1:…:web:…"
 
 # prod — same six, with the prod project's values
-gh variable set VITE_FIREBASE_PROJECT_ID --env prod --repo $REPO --body "intelmotion-pcm-prod"
+gh variable set VITE_FIREBASE_PROJECT_ID --env prod --repo $REPO --body "<production project id>"
 # …and the rest
 ```
 
@@ -86,12 +86,12 @@ channel is a new domain each time.
 **Firebase console → Authentication → Settings → Authorized domains → Add
 domain**, for each project:
 
-- `intelmotion-pcm-dev.web.app`
-- `intelmotion-pcm-dev.firebaseapp.com`
+- `intel-afc60.web.app`
+- `intel-afc60.firebaseapp.com`
 - your production domain, when you have one
 
 > Preview channels get URLs like
-> `intelmotion-pcm-dev--pr-7-abc123.web.app`. Firebase authorises
+> `intel-afc60--pr-7-abc123.web.app`. Firebase authorises
 > `*.web.app` subdomains of your own project automatically, so previews work
 > without adding each one. If a preview ever shows `auth/unauthorized-domain`,
 > add that exact host.
@@ -117,7 +117,7 @@ A production deploy now pauses for a human, every time.
    comment** and a green `build-and-test` check.
 2. Open the preview URL, sign in, confirm the dashboard loads.
 3. Merge. Watch **Actions → Deploy app** turn green.
-4. Visit `https://intelmotion-pcm-dev.web.app` and confirm your change is live.
+4. Visit `https://intel-afc60.web.app` and confirm your change is live.
 
 If step 2 fails with `auth/unauthorized-domain`, revisit step 4.
 
