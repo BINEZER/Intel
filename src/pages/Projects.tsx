@@ -12,6 +12,7 @@ import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
 import { formatETB } from '../lib/money.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
+import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
 import { ProgressBar } from '../components/KpiTile.js';
 import { expectedProgressBps } from '../lib/kpi.js';
 import type { Client, DualDate, Project } from '../lib/schema.js';
@@ -142,7 +143,9 @@ function ProjectForm({
     <section className="card">
       <h2>New project</h2>
       <p className="muted">
-        The five standard elevator phases are created automatically, weighted by effort.
+        The full project lifecycle is created automatically — fourteen stages from
+        site inspection to handover. You can adjust weights, dates and the stage
+        list on the project itself once it exists.
       </p>
       <form onSubmit={(e) => void submit(e)}>
         <div className="form-grid">
@@ -181,6 +184,35 @@ function ProjectForm({
           <DualDateInput label="Planned start" value={plannedStart} onChange={setPlannedStart} required />
           <DualDateInput label="Planned end" value={plannedEnd} onChange={setPlannedEnd} required />
         </div>
+
+        <details className="stage-preview">
+          <summary>
+            Stages that will be created ({ELEVATOR_STAGE_TEMPLATE.length})
+          </summary>
+          <p className="hint">
+            Each stage records who has to move for it to finish. A project stalled in
+            customs and one stalled because the crew has not mobilised need different
+            interventions, so they are tracked apart. Payment milestones are attached
+            to stages on the contract's payment schedule.
+          </p>
+          <ol className="stage-list">
+            {ELEVATOR_STAGE_TEMPLATE.map((stage) => (
+              <li key={stage.key}>
+                <div>
+                  <strong>{stage.name}</strong>
+                  <span className="muted"> · {(stage.weightBps / 100).toFixed(0)}%</span>
+                  {stage.commonlyGatesPayment && (
+                    <span className="chip chip-ok stage-pay">payment</span>
+                  )}
+                </div>
+                <p className="muted">{stage.description}</p>
+                <span className={`chip owner-${stage.owner}`}>
+                  {stage.owner === 'us' ? 'our crew' : stage.owner}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </details>
 
         {error && <p className="error" role="alert">{error}</p>}
 

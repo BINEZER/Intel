@@ -500,3 +500,16 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
   background: #eef1f4; border: 1px solid var(--border); border-left: none;
   border-radius: 0 var(--radius) var(--radius) 0; color: var(--muted);
 }
+
+/* --- stage preview in the project form --- */
+.stage-preview { margin: 1rem 0; border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem 1rem; }
+.stage-preview summary { cursor: pointer; font-weight: 550; }
+.stage-list { margin: .75rem 0 0; padding-left: 1.4rem; display: grid; gap: .7rem; }
+.stage-list li { padding-bottom: .6rem; border-bottom: 1px solid var(--border); }
+.stage-list li:last-child { border-bottom: none; }
+.stage-list p { margin: .15rem 0 .35rem; font-size: .87rem; }
+.stage-pay { margin-left: .5rem; font-size: .72rem; }
+.owner-us { background: #e7f0fd; color: #0b5fff; }
+.owner-client { background: #fdf1e3; color: #b5691a; }
+.owner-supplier { background: #f3eefd; color: #4a3aa7; }
+.owner-authority { background: #fdeceb; color: #b42318; }
