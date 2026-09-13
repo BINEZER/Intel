@@ -189,6 +189,12 @@ confirm it responds. Once it does, the handshake is complete.
 
 ---
 
+## Next: continuous deployment
+
+[docs/09-continuous-deployment.md](09-continuous-deployment.md) turns this into a
+pipeline — every pull request gets a live preview URL, and merging puts the
+change on dev automatically.
+
 ## What is now automatic
 
 | Action | Trigger | Auth used |
@@ -197,6 +203,9 @@ confirm it responds. Once it does, the handshake is complete.
 | Typecheck, tests, rules compile | Every PR | `GITHUB_TOKEN` |
 | Deploy rules/indexes to dev | Merge to `main` touching those files | `dev` environment secret |
 | Deploy rules/indexes to prod | Manual dispatch + reviewer approval | `prod` environment secret |
+| Live preview URL on every PR | Opening a PR | `dev` environment secret |
+| Deploy the app to dev | Merge to `main` | `dev` environment secret |
+| Deploy the app to prod | Manual dispatch + reviewer approval | `prod` environment secret |
 
 ## Standing safety rails
 

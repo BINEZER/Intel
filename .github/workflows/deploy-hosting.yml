@@ -1,0 +1,72 @@
+# Deploys the app itself.
+#
+#   merge to main        -> dev, automatically
+#   manual dispatch      -> dev or prod, with prod gated on a reviewer
+#
+# Prod is never automatic. An elevator company's finance system going live on
+# every merge is not a feature.
+name: Deploy app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which project to deploy to
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
+
+# One deploy at a time per target. Two overlapping deploys can land in either
+# order, so the last one to finish wins rather than the last one merged.
+concurrency:
+  group: hosting-${{ inputs.target || 'dev' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # Never deploy a build that has not passed. The PR gate can be bypassed by
+      # an admin merge, so the checks run again here.
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Build
+        env:
+          # Firebase web config is PUBLIC by design — it ships inside the client
+          # bundle and identifies the project, it does not authorise anything.
+          # Access is controlled by the security rules. These are therefore
+          # repository VARIABLES, not secrets.
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_USE_FIREBASE_EMULATORS: 'false'
+        run: npx vite build
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          channelId: live

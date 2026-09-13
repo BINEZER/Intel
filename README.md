@@ -27,22 +27,25 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 
 1. **[docs/00-one-time-setup.md](docs/00-one-time-setup.md)** — the one-time
    environment handshake. Do this first; it is the only manual step.
-2. **[docs/01-firestore-schema.md](docs/01-firestore-schema.md)** — the data
+2. **[docs/09-continuous-deployment.md](docs/09-continuous-deployment.md)** —
+   wiring GitHub to Firebase so merging puts a change live and every pull
+   request gets a preview URL.
+3. **[docs/01-firestore-schema.md](docs/01-firestore-schema.md)** — the data
    model and the reasoning behind it.
-3. **[docs/02-kpis.md](docs/02-kpis.md)** — every KPI definition, and why each is
+4. **[docs/02-kpis.md](docs/02-kpis.md)** — every KPI definition, and why each is
    measured the way it is.
-4. **[docs/03-priority-and-risk.md](docs/03-priority-and-risk.md)** — how projects
+5. **[docs/03-priority-and-risk.md](docs/03-priority-and-risk.md)** — how projects
    are ranked by reachable cash, how weighted scorecards work, and what triggers
    an in-danger alert.
-5. **[docs/04-module-2-contracts.md](docs/04-module-2-contracts.md)** — contracts,
+6. **[docs/04-module-2-contracts.md](docs/04-module-2-contracts.md)** — contracts,
    milestone allocation, renewal alerts, and the security-rules test suite.
-6. **[docs/05-module-3-projects.md](docs/05-module-3-projects.md)** — phases,
+7. **[docs/05-module-3-projects.md](docs/05-module-3-projects.md)** — phases,
    weighted progress roll-up, certification, and team assignments.
-7. **[docs/06-module-4-finance.md](docs/06-module-4-finance.md)** — invoicing,
+8. **[docs/06-module-4-finance.md](docs/06-module-4-finance.md)** — invoicing,
    disbursements, the monthly VAT and WHT returns, and the financial roll-up.
-8. **[docs/07-module-5-reporting.md](docs/07-module-5-reporting.md)** — project
+9. **[docs/07-module-5-reporting.md](docs/07-module-5-reporting.md)** — project
    statements, the fiscal-year boundary, cash-flow outlook, and CSV export.
-9. **[docs/08-currency-and-boards.md](docs/08-currency-and-boards.md)** — USD
+10. **[docs/08-currency-and-boards.md](docs/08-currency-and-boards.md)** — USD
    support with snapshotted exchange rates, and the Kanban boards.
 
 ```bash
@@ -139,6 +142,13 @@ firestore.rules         role-based access + money-reconciliation enforcement
 firestore.indexes.json  composite indexes
 .github/workflows/      CI, Claude Code automation, Firestore deploy
 ```
+
+### Deployment
+
+Merging to `main` deploys the app and the Firestore rules to dev automatically.
+Every pull request gets its own live preview URL. Production is manual dispatch
+with a required reviewer — see
+[docs/09-continuous-deployment.md](docs/09-continuous-deployment.md).
 
 ### Known follow-ups
 

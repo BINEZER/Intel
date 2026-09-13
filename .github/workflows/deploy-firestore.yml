@@ -16,6 +16,12 @@ on:
         type: choice
         options: [dev, prod]
 
+# Rules and indexes are global to a project: two overlapping deploys can land in
+# either order, so the last to finish wins rather than the last merged.
+concurrency:
+  group: firestore-${{ inputs.target || 'dev' }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
