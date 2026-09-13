@@ -19,7 +19,7 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
 | ✅ | **Module 2** — Clients, contracts, milestones, renewal alerts, security-rules tests |
 | ✅ | **Module 3** — Projects, elevator phases, certification, team assignments |
 | ✅ | **Module 4** — Invoices, disbursements, VAT & WHT returns, financial roll-up |
-| ⬜ | Module 5 — Financial reporting |
+| ✅ | **Module 5** — Financial reporting, trend chart, cash-flow outlook, CSV export |
 | ⬜ | Module 6 — Kanban boards |
 
 ## Start here
@@ -39,10 +39,12 @@ tax, and a dual Gregorian/Ethiopian calendar throughout.
    weighted progress roll-up, certification, and team assignments.
 7. **[docs/06-module-4-finance.md](docs/06-module-4-finance.md)** — invoicing,
    disbursements, the monthly VAT and WHT returns, and the financial roll-up.
+8. **[docs/07-module-5-reporting.md](docs/07-module-5-reporting.md)** — project
+   statements, the fiscal-year boundary, cash-flow outlook, and CSV export.
 
 ```bash
 npm ci
-npm test          # 301 tests
+npm test          # 342 tests
 npm run test:rules  # 48 security-rules tests against the emulator
 npm run typecheck
 ```
@@ -87,6 +89,10 @@ node scripts/set-user-role.mjs you@example.com admin
 - **VAT is summed per line**, never applied to an invoice total — zero-rated
   lines sit alongside standard-rated ones.
 - **An invoice paid net of client withholding is settled, not part paid.**
+- **Reports run on the Ethiopian fiscal year** (1 Hamle – 30 Sene), the boundary
+  the annual filing uses.
+- **Exported CSV cells are neutralised against formula injection** before they
+  reach a spreadsheet.
 
 Each is explained in [docs/01-firestore-schema.md](docs/01-firestore-schema.md).
 
@@ -110,6 +116,8 @@ src/lib/
   invoicing.ts          line totals, settlement, ageing, numbering
   returns.ts            monthly VAT and WHT returns
   rollup.ts             project financial roll-up (pure)
+  reporting.ts          statements, fiscal year, period series, cash flow
+  csv.ts                export with formula-injection and encoding handling
   schema.ts             typed Firestore schema
 src/auth/               AuthProvider, role model, route guards
 src/data/               Firestore repositories, audit stamping, React bindings
