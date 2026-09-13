@@ -28,7 +28,6 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target || 'dev' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,6 +45,6 @@ jobs:
           printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
           firebase deploy \
             --only firestore:rules,firestore:indexes \
-            --project '${{ secrets.FIREBASE_PROJECT_ID }}' \
+            --project intel-afc60 \
             --non-interactive
           rm -f sa.json

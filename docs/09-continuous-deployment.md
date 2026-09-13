@@ -13,70 +13,74 @@ and the two Firebase projects must already exist.
 | Trigger | What happens | Approval |
 |---|---|---|
 | **Open / update a PR** | CI (typecheck, 389 tests, build, 53 rules tests) + a **live preview URL** commented on the PR | none |
-| **Merge to `main`** | App deploys to **dev**; Firestore rules and indexes deploy to dev | none |
-| **Manual dispatch** | App and/or rules deploy to **dev or prod** | **prod requires a reviewer** |
+| **Merge to `main`** | App and Firestore rules deploy to `intel-afc60` | none |
+| **Manual dispatch** | Same, on demand | none |
 
-Production is never automatic. A finance system going live on every merge is not
-a feature.
+**Note on production.** Only one Firebase project exists today, so there is no
+separate production environment and no reviewer gate. Before real client data
+goes in, create a second project and I will reinstate the split: automatic
+deploys to the practice project, and production behind a manual dispatch with a
+required reviewer. A finance system going live on every merge is not a feature —
+that guard just cannot be meaningful until there are two projects to guard
+between.
 
 ---
 
 ## Step 1 — Enable Hosting on both projects
 
 In the [Firebase console](https://console.firebase.google.com), for **each** of
-`intelmotion-pcm-dev` and `intelmotion-pcm-prod`:
+`intel-afc60` (a production project comes later):
 
 **Build → Hosting → Get started.** Click through the CLI instructions without
 running them — this repo already carries the config. You only need Hosting
 switched on.
 
-## Step 2 — Add the Hosting role to the CI service accounts
+## Step 2 — Confirm the services are on
 
-The service accounts from the original setup can deploy rules but not the app.
+In **https://console.firebase.google.com/project/intel-afc60**, check the left
+sidebar under **Build**. Each of these must be set up rather than showing a
+*Get started* button:
 
-Google Cloud Console → the project → **IAM & Admin → IAM** → find `github-ci` →
-**Edit** → **Add another role**:
+- **Authentication** — with Email/Password enabled
+- **Firestore Database** — created
+- **Hosting** — started
 
-- `Firebase Hosting Admin`
+## Step 3 — Add the one secret CI needs
 
-Repeat for the prod project. No new key is needed — the existing
-`FIREBASE_SERVICE_ACCOUNT` secret still works, it just gains permission.
+Only **one** value has to be stored in GitHub: the service account key that lets
+CI publish on your behalf.
 
-## Step 3 — Register the web app config as repository *variables*
+The Firebase web config is **not** stored in GitHub. It lives in
+`.env.production`, committed to the repository, because those six values are
+public by design — they ship inside the compiled website, so every visitor's
+browser already has them. They identify the project and authorise nothing;
+`firestore.rules` is what protects the data, which is why it carries 53 tests.
 
-> **These are variables, not secrets.** The Firebase web config is **public by
-> design** — it ships inside the client bundle and merely identifies the project.
-> It authorises nothing. Access is controlled entirely by the security rules,
-> which is why they are tested against the emulator.
->
-> Storing them as secrets would mean GitHub masks them in every build log, so a
-> genuine misconfiguration would appear as `***` and take an afternoon to find.
+Committing them removes six error-prone settings fields and means a fresh clone
+builds correctly with no configuration at all.
 
-Get the values from **Firebase console → Project settings → General → Your apps →
-Web app → Config**.
+### Create the key
 
-Set them per environment (Settings → Environments → `dev` → *Environment
-variables*), or with the CLI:
+1. **https://console.cloud.google.com/iam-admin/serviceaccounts?project=intel-afc60**
+2. **Create service account** → name `github-ci` → **Create and continue**
+3. Grant these three roles, and only these:
+   - `Firebase Hosting Admin`
+   - `Firebase Rules Admin`
+   - `Cloud Datastore Index Admin`
+4. **Continue** → **Done**
+5. Click the new `github-ci` account → **Keys** tab → **Add key** → **Create new
+   key** → **JSON** → **Create**. A file downloads.
 
-```bash
-REPO=BINEZER/Intel
+### Store it in GitHub
 
-# dev
-gh variable set VITE_FIREBASE_API_KEY             --env dev --repo $REPO --body "AIza…"
-gh variable set VITE_FIREBASE_AUTH_DOMAIN         --env dev --repo $REPO --body "intelmotion-pcm-dev.firebaseapp.com"
-gh variable set VITE_FIREBASE_PROJECT_ID          --env dev --repo $REPO --body "intelmotion-pcm-dev"
-gh variable set VITE_FIREBASE_STORAGE_BUCKET      --env dev --repo $REPO --body "intelmotion-pcm-dev.appspot.com"
-gh variable set VITE_FIREBASE_MESSAGING_SENDER_ID --env dev --repo $REPO --body "…"
-gh variable set VITE_FIREBASE_APP_ID              --env dev --repo $REPO --body "1:…:web:…"
-
-# prod — same six, with the prod project's values
-gh variable set VITE_FIREBASE_PROJECT_ID --env prod --repo $REPO --body "intelmotion-pcm-prod"
-# …and the rest
-```
-
-`VITE_FIREBASE_PROJECT_ID` does double duty: it is both built into the bundle and
-used as the deploy target, so the app can never be built against one project and
-deployed to another.
+1. **https://github.com/BINEZER/Intel/settings/secrets/actions**
+2. **New repository secret**
+3. Name: `FIREBASE_SERVICE_ACCOUNT`
+4. Secret: open the downloaded `.json` file in a text editor, copy **everything**
+   including the outer `{` and `}`, and paste it
+5. **Add secret**
+6. **Delete the downloaded file from your computer.** It is a real credential —
+   anyone holding it can publish to your Firebase project.
 
 ## Step 4 — Authorise the Hosting domains for sign-in
 
@@ -86,12 +90,12 @@ channel is a new domain each time.
 **Firebase console → Authentication → Settings → Authorized domains → Add
 domain**, for each project:
 
-- `intelmotion-pcm-dev.web.app`
-- `intelmotion-pcm-dev.firebaseapp.com`
+- `intel-afc60.web.app`
+- `intel-afc60.firebaseapp.com`
 - your production domain, when you have one
 
 > Preview channels get URLs like
-> `intelmotion-pcm-dev--pr-7-abc123.web.app`. Firebase authorises
+> `intel-afc60--pr-7-abc123.web.app`. Firebase authorises
 > `*.web.app` subdomains of your own project automatically, so previews work
 > without adding each one. If a preview ever shows `auth/unauthorized-domain`,
 > add that exact host.
@@ -108,8 +112,7 @@ gh api -X PUT repos/BINEZER/Intel/branches/main/protection \
   -F "restrictions="
 ```
 
-Then **Settings → Environments → `prod` → Required reviewers → add yourself.**
-A production deploy now pauses for a human, every time.
+Then Environment reviewers come later, with the production project.
 
 ## Step 6 — Verify end to end
 
@@ -117,7 +120,7 @@ A production deploy now pauses for a human, every time.
    comment** and a green `build-and-test` check.
 2. Open the preview URL, sign in, confirm the dashboard loads.
 3. Merge. Watch **Actions → Deploy app** turn green.
-4. Visit `https://intelmotion-pcm-dev.web.app` and confirm your change is live.
+4. Visit `https://intel-afc60.web.app` and confirm your change is live.
 
 If step 2 fails with `auth/unauthorized-domain`, revisit step 4.
 
