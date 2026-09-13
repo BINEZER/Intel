@@ -25,12 +25,12 @@ import type {
 } from '../lib/schema.js';
 import {
   derivePhaseStatus,
-  ELEVATOR_PHASE_TEMPLATE,
   recordInspection,
   rollUpProgress,
   type CertificationResult,
   type PhaseStatus,
 } from '../lib/phases.js';
+import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
 import { stampCreate, stampUpdate, stripReserved } from './audit.js';
@@ -130,7 +130,9 @@ export async function createProject(
     ...stampCreate(uid),
   });
 
-  ELEVATOR_PHASE_TEMPLATE.forEach((template, index) => {
+  // The full lifecycle, not just what happens inside the shaft. A project stuck
+  // in customs previously had nowhere to be recorded.
+  ELEVATOR_STAGE_TEMPLATE.forEach((template, index) => {
     batch.set(doc(db, phasePath(projectId), newId(phasePath(projectId))), {
       seq: index + 1,
       key: template.key,

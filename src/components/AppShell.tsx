@@ -17,10 +17,12 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', capability: 'read' },
   { to: '/priority', label: 'Priority', capability: 'read' },
+  { to: '/finish-next', label: 'Finish next', capability: 'read' },
   { to: '/projects', label: 'Projects', capability: 'read' },
   { to: '/clients', label: 'Clients', capability: 'read' },
   { to: '/contracts', label: 'Contracts', capability: 'read' },
   { to: '/finance', label: 'Finance', capability: 'viewFinancials' },
+  { to: '/performance', label: 'Performance', capability: 'read' },
   { to: '/boards', label: 'Boards', capability: 'useBoards' },
   { to: '/settings', label: 'Settings', capability: 'manageConfig' },
 ];
