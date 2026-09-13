@@ -7,17 +7,7 @@ import { useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
-import { addVat, computeDisbursement, formatETB, birrToSantim } from '../lib/money.js';
 import { ethiopianFiscalYear, utcDateToEthiopian } from '../lib/ethiopic.js';
-import {
-  computeProjectKpis,
-  computeTechnicianKpis,
-  flagRepeatCallouts,
-  DEFAULT_KPI_TARGETS,
-} from '../lib/kpi.js';
-import { ProjectKpiPanel } from './ProjectKpis.js';
-import { TechnicianKpiPanel } from './TechnicianKpis.js';
-import { SAMPLE_PROJECT, SAMPLE_CALLOUTS, SAMPLE_VISITS, SAMPLE_CERTS } from './sample-kpi-data.js';
 import type { DualDate } from '../lib/schema.js';
 
 export function Dashboard() {
@@ -28,64 +18,12 @@ export function Dashboard() {
   const utcToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
   const fiscalYear = ethiopianFiscalYear(utcDateToEthiopian(utcToday));
 
-  // Illustrative figures until the collections are populated in later modules.
-  const contract = addVat(birrToSantim(1_000_000));
-  const payout = computeDisbursement({
-    netSantim: birrToSantim(100_000),
-    category: 'services',
-    supplierVatRegistered: true,
-    supplierHasTin: true,
-  });
-
-  // Worked figures until the collections are populated in later modules. The
-  // computation is the real engine — only the inputs are placeholders.
-  const asOf = utcToday;
-  const projectKpi = computeProjectKpis(SAMPLE_PROJECT, asOf);
-  const technicianKpi = computeTechnicianKpis(
-    flagRepeatCallouts(SAMPLE_CALLOUTS, DEFAULT_KPI_TARGETS.repeatCalloutWindowDays),
-    SAMPLE_VISITS,
-    SAMPLE_CERTS,
-    asOf,
-    { availableMinutes: 40 * 60 * 4, certificationWarningDays: DEFAULT_KPI_TARGETS.certificationWarningDays },
-  );
-
   return (
     <>
       <h1>Dashboard</h1>
       <p className="muted">
         Ethiopian fiscal year <strong>{fiscalYear}</strong> (1 Hamle – 30 Sene).
       </p>
-
-      {can(role, 'viewFinancials') && (
-        <section className="cards">
-          <article className="card stat">
-            <h3>Contract value</h3>
-            <p className="figure">{formatETB(contract.grossSantim)}</p>
-            <p className="muted">
-              {formatETB(contract.netSantim)} net + {formatETB(contract.vatSantim)} VAT @ 15%
-            </p>
-          </article>
-
-          <article className="card stat">
-            <h3>Example phase payout</h3>
-            <p className="figure">{formatETB(payout.netPayableSantim)}</p>
-            <p className="muted">
-              {formatETB(payout.grossSantim)} invoiced less {formatETB(payout.whtSantim)} WHT @ 3%
-              — withheld on the VAT-exclusive base
-            </p>
-          </article>
-        </section>
-      )}
-
-      {can(role, 'read') && (
-        <>
-          <h2 className="section-heading">Project — Bole Tower, LIFT-01</h2>
-          <ProjectKpiPanel kpi={projectKpi} />
-
-          <h2 className="section-heading">Technician performance</h2>
-          <TechnicianKpiPanel name="Sample technician" kpi={technicianKpi} />
-        </>
-      )}
 
       <section className="card">
         <h2>Dual-calendar date entry</h2>
