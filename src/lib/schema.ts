@@ -213,14 +213,29 @@ export interface Project extends AuditFields {
   site: { name: string; city: string; subCity?: string; gps?: { lat: number; lng: number } };
 
   /** Elevator units under this project; empty for non-elevator work. */
+  /**
+   * The lifts under this project. Each carries its own identity because a lift
+   * outlives the project that installed it: maintenance contracts, callouts and
+   * authority certificates all attach to the UNIT, not the job.
+   */
   units: Array<{
-    tag: string;              // "LIFT-01"
+    /** Our reference on site, e.g. "LIFT-01". */
+    tag: string;
+    /** The manufacturer's unit id / equipment number — the one on the nameplate. */
+    unitId?: string;
+    serialNo?: string;
     brand?: string;
     model?: string;
     capacityKg?: number;
+    personCapacity?: number;
     speedMps?: number;
     stops?: number;
-    serialNo?: string;
+    /** Passenger, goods, bed, panoramic, escalator. */
+    type?: string;
+    /** Where in the building, e.g. "Block B, core 2". */
+    location?: string;
+    /** Per-unit progress, for a project where the shafts run at different speeds. */
+    status?: 'not_started' | 'in_progress' | 'testing' | 'commissioned' | 'handed_over';
   }>;
 
   plannedStart: DualDate;
@@ -494,6 +509,12 @@ export interface Technician extends AuditFields {
   /** Set when the technician belongs to a subcontractor rather than to us. */
   subcontractorId: string | null;
   phone: string;
+  /**
+   * What this person actually does. Installation and service are judged on
+   * different evidence — stages delivered versus callouts closed — and scoring
+   * an installer on SLA compliance produces nothing but blanks.
+   */
+  discipline: 'installation' | 'service' | 'both';
   trades: string[];
   /**
    * Licences and competency cards. Elevator work is certified work — an expired

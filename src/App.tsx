@@ -5,6 +5,9 @@ import { AppShell } from './components/AppShell.js';
 import { ComingSoon, Dashboard } from './pages/Dashboard.js';
 import { Boards } from './pages/Boards.js';
 import { Clients } from './pages/Clients.js';
+import { FinishNextRoute } from './pages/FinishNext.js';
+import { Performance } from './pages/Performance.js';
+import { Settings } from './pages/Settings.js';
 import { Finance } from './pages/Finance.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
 import { Projects } from './pages/Projects.js';
@@ -28,6 +31,15 @@ export function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="priority" element={<Priority />} />
+            <Route path="finish-next" element={<FinishNextRoute />} />
+            <Route
+              path="performance"
+              element={
+                <RequireCapability capability="read">
+                  <Performance />
+                </RequireCapability>
+              }
+            />
             <Route
               path="projects"
               element={
@@ -80,7 +92,7 @@ export function App() {
               path="settings"
               element={
                 <RequireCapability capability="manageConfig">
-                  <ComingSoon title="Settings" module="module 2" />
+                  <Settings />
                 </RequireCapability>
               }
             />
