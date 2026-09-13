@@ -50,14 +50,54 @@ if (!projectId) {
 initializeApp(usingEmulator ? { projectId } : { credential: applicationDefault(), projectId });
 
 const auth = getAuth();
+// Catch ONLY "no such user". Swallowing every error here previously reported a
+// permission failure as "user not found", which sent the operator hunting for a
+// missing account when the real problem was a service account without the
+// Firebase Authentication Admin role.
 const user = await (looksLikeUid ? auth.getUser(identifier) : auth.getUserByEmail(identifier)).catch(
-  () => null,
+  (error) => {
+    if (error?.code === 'auth/user-not-found') return null;
+    console.error(`Could not look up '${identifier}'.\n`);
+    console.error(`  ${error?.code ?? 'unknown error'}: ${error?.message ?? error}\n`);
+    if (String(error?.message ?? '').match(/permission|PERMISSION_DENIED|insufficient|403/i)) {
+      console.error(
+        `This looks like a permissions problem, not a missing account.\n` +
+          `The github-ci service account needs the "Firebase Authentication Admin" role:\n` +
+          `  https://console.cloud.google.com/iam-admin/iam?project=${projectId}\n` +
+          `Find github-ci, edit it, add that role, then re-run.`,
+      );
+    }
+    process.exit(1);
+  },
 );
 if (user === null) {
-  console.error(
-    `No user matching '${identifier}' in project ${projectId}. ` +
-      `Create the account in Authentication > Users first.`,
-  );
+  console.error(`No user matching '${identifier}' in project ${projectId}.\n`);
+
+  // Listing what DOES exist turns a dead end into a diagnosis. The usual cause
+  // is an account created while the console was pointed at a different project,
+  // and seeing an empty list says that immediately.
+  const { users } = await auth.listUsers(20).catch((error) => {
+    console.error(`Could not list accounts either: ${error?.code ?? error}`);
+    console.error(
+      `That points at a permissions problem. Give github-ci the ` +
+        `"Firebase Authentication Admin" role and re-run.`,
+    );
+    process.exit(1);
+  });
+  if (users.length === 0) {
+    console.error(
+      `This project has NO user accounts at all.\n` +
+        `Create one at:\n` +
+        `  https://console.firebase.google.com/project/${projectId}/authentication/users\n` +
+        `Check the project name shown in the console matches '${projectId}'.`,
+    );
+  } else {
+    console.error(`Accounts that do exist in ${projectId}:`);
+    for (const existing of users) {
+      console.error(`  ${existing.uid}  ${existing.email ?? '(no email)'}`);
+    }
+    console.error(`\nRe-run with one of the values above.`);
+  }
   process.exit(1);
 }
 
