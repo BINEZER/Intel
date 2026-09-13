@@ -23,13 +23,18 @@ import { getAuth } from 'firebase-admin/auth';
 
 const ROLES = ['admin', 'manager', 'finance', 'engineer', 'viewer'];
 
-const [email, role, activeArg = 'true'] = process.argv.slice(2);
+const [identifier, role, activeArg = 'true'] = process.argv.slice(2);
 
-if (!email || !role) {
-  console.error('Usage: node scripts/set-user-role.mjs <email> <role> [active]');
+if (!identifier || !role) {
+  console.error('Usage: node scripts/set-user-role.mjs <email|uid> <role> [active]');
   console.error(`  role: ${ROLES.join(' | ')}`);
   process.exit(1);
 }
+
+// A Firebase uid is 28 characters with no "@". Accepting either means the
+// console (which shows a uid) and a staff list (which shows emails) both work
+// without the caller having to know which is which.
+const looksLikeUid = !identifier.includes('@');
 if (!ROLES.includes(role)) {
   console.error(`Unknown role '${role}'. Expected one of: ${ROLES.join(', ')}`);
   process.exit(1);
@@ -45,9 +50,14 @@ if (!projectId) {
 initializeApp(usingEmulator ? { projectId } : { credential: applicationDefault(), projectId });
 
 const auth = getAuth();
-const user = await auth.getUserByEmail(email).catch(() => null);
+const user = await (looksLikeUid ? auth.getUser(identifier) : auth.getUserByEmail(identifier)).catch(
+  () => null,
+);
 if (user === null) {
-  console.error(`No user with email ${email} in project ${projectId}. Have them sign up first.`);
+  console.error(
+    `No user matching '${identifier}' in project ${projectId}. ` +
+      `Create the account in Authentication > Users first.`,
+  );
   process.exit(1);
 }
 
@@ -55,7 +65,7 @@ const active = activeArg !== 'false';
 await auth.setCustomUserClaims(user.uid, { role, active });
 
 console.log(
-  `${email} -> role=${role} active=${active} in ${projectId}` +
+  `${user.email ?? user.uid} -> role=${role} active=${active} in ${projectId}` +
     (usingEmulator ? ' (emulator)' : '') +
     '\nThey must sign out and back in, or the app must call refreshRole(), ' +
     'before the new claim takes effect.',

@@ -1,0 +1,58 @@
+# Grants a user their role, without anyone handling the service account key.
+#
+# Roles live in a Firebase custom auth claim, which only the Admin SDK can set —
+# deliberately, so a user who signs up cannot promote themselves. That normally
+# means somebody runs a script with a downloaded credential on their laptop.
+#
+# This runs it inside GitHub Actions instead, where FIREBASE_SERVICE_ACCOUNT
+# already exists. The key never leaves GitHub and never touches a personal
+# machine, which is the whole point.
+name: Grant user role
+
+on:
+  workflow_dispatch:
+    inputs:
+      user:
+        description: The user's email address, or their Firebase UID
+        required: true
+        type: string
+      role:
+        description: Role to grant
+        required: true
+        default: viewer
+        type: choice
+        options: [admin, manager, finance, engineer, viewer]
+      active:
+        description: Account active (an inactive account can sign in but do nothing)
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  grant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Grant the role
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa.json
+          GCLOUD_PROJECT: intel-afc60
+        run: |
+          printf '%s' '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
+          node scripts/set-user-role.mjs \
+            '${{ inputs.user }}' '${{ inputs.role }}' '${{ inputs.active }}'
+          rm -f sa.json
+
+      - name: Always remove the credential
+        if: always()
+        run: rm -f sa.json
