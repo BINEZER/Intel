@@ -9,12 +9,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getProject, subscribePhases } from '../data/projects.js';
+import { getPaymentStagesForProject } from '../data/contracts.js';
 import { subscribeTechnicians } from '../data/technicians.js';
 import { useCollection } from '../data/useCollection.js';
 import { computeProjectKpis } from '../lib/kpi.js';
 import { assessProjectRisk } from '../lib/risk.js';
 import { rollUpProgress } from '../lib/phases.js';
 import { PhaseTracker } from '../components/PhaseTracker.js';
+import { StageManager } from '../components/StageManager.js';
 import { CertificationPanel } from '../components/CertificationPanel.js';
 import { ProjectTeam } from '../components/ProjectTeam.js';
 import { RiskFlagList } from '../components/RiskAlerts.js';
@@ -38,6 +40,20 @@ export function ProjectDetail() {
     [],
     'load technicians',
   );
+
+  // Which stages release money. Loaded once rather than subscribed: it changes
+  // when a contract is signed, not while someone is looking at the tracker, and
+  // it exists to stop a stage being deleted out from under a payment.
+  const [paymentsByPhase, setPaymentsByPhase] = useState<ReadonlyMap<string, string[]>>(new Map());
+
+  useEffect(() => {
+    if (projectId === undefined) return;
+    let cancelled = false;
+    getPaymentStagesForProject(projectId)
+      .then((found) => { if (!cancelled) setPaymentsByPhase(found); })
+      .catch(() => { /* the tracker still works; deletion just loses its guard */ });
+    return () => { cancelled = true; };
+  }, [projectId]);
 
   useEffect(() => {
     if (projectId === undefined) return;
@@ -134,6 +150,9 @@ export function ProjectDetail() {
 
       {phases.error && <p className="error" role="alert">{phases.error}</p>}
       {phases.rows.length > 0 && <PhaseTracker projectId={project.id} phases={phases.rows} />}
+      {phases.rows.length > 0 && (
+        <StageManager projectId={project.id} phases={phases.rows} paymentsByPhase={paymentsByPhase} />
+      )}
 
       {inspectionPhase !== undefined && (
         <CertificationPanel projectId={project.id} phase={inspectionPhase} />

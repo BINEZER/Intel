@@ -1,12 +1,29 @@
 /* Minimal, legible chrome. Replaced by the design system in a later module. */
+/* ===========================================================================
+   IntelMotion brand, taken from intelmotionlifts.com.
+
+   Blue is the identity colour and leads; teal is the call-to-action accent;
+   green marks the active state; amber comes from the logo mark. Headings use a
+   geometric sans to match the site's weight, with a system fallback so nothing
+   depends on a webfont arriving.
+   =========================================================================== */
 :root {
-  --bg: #f6f7f9;
-  --surface: #fff;
-  --border: #dfe3e8;
-  --text: #1c2126;
-  --muted: #667085;
-  --accent: #0b5fff;
-  --danger: #b42318;
+  /* Brand */
+  --brand-blue:   #2B7BE9;
+  --brand-blue-dark: #1F62C4;
+  --brand-teal:   #22BFC4;
+  --brand-teal-dark: #189DA1;
+  --brand-green:  #2FB57C;
+  --brand-amber:  #F3C24B;
+
+  /* Surfaces — the site is light with a soft grey field behind white cards. */
+  --bg: #F0F1F2;
+  --surface: #ffffff;
+  --border: #E1E4E8;
+  --text: #16202B;
+  --muted: #5B6774;
+  --accent: var(--brand-blue);
+  --danger: #D0342C;
   --radius: 8px;
   color-scheme: light;
 }
@@ -17,11 +34,17 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans Ethiopic", sans-serif;
+  font: 14px/1.55 "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans Ethiopic", sans-serif;
 }
 
-h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
-h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+h1, h2, h3, .brand {
+  font-family: "Poppins", "Inter", system-ui, -apple-system, "Segoe UI",
+    "Noto Sans Ethiopic", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 .25rem; }
+h2 { font-size: 1.15rem; font-weight: 650; margin: 0 0 .5rem; }
 h3 { font-size: .8rem; margin: 0 0 .5rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 
 .muted { color: var(--muted); }
@@ -41,7 +64,8 @@ code { background: #eef1f4; padding: .1em .35em; border-radius: 4px; font-size: 
   padding: .75rem 1.25rem;
   background: var(--surface); border-bottom: 1px solid var(--border);
 }
-.brand { font-weight: 650; font-size: 1.05rem; }
+.brand { font-weight: 700; font-size: 1.1rem; color: var(--brand-blue); }
+.brand .muted { color: var(--brand-teal); font-weight: 600; }
 .topbar .today { margin-inline-start: auto; text-align: right; }
 .account { display: flex; align-items: center; gap: .75rem; }
 .role-chip {
@@ -61,7 +85,8 @@ code { background: #eef1f4; padding: .1em .35em; border-radius: 4px; font-size: 
   color: var(--text); text-decoration: none;
 }
 .sidebar a:hover { background: #eef1f4; }
-.sidebar a.active { background: var(--accent); color: #fff; }
+.sidebar a.active { background: var(--brand-blue); color: #fff; font-weight: 550; }
+.sidebar a.active:hover { background: var(--brand-blue-dark); }
 
 .content { flex: 1; padding: 1.5rem; overflow: auto; }
 
@@ -101,8 +126,11 @@ button {
 }
 button:hover:not(:disabled) { background: #eef1f4; }
 button:disabled { opacity: .55; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; margin-top: 1rem; }
-button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+button.primary {
+  background: var(--brand-teal-dark); border-color: var(--brand-teal-dark);
+  color: #fff; font-weight: 550; margin-top: 1rem;
+}
+button.primary:hover:not(:disabled) { background: var(--brand-teal); border-color: var(--brand-teal); }
 
 .error { color: var(--danger); margin: .35rem 0 0; }
 .hint { color: var(--muted); margin: .35rem 0 0; font-size: .88rem; }
@@ -237,7 +265,7 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
 
 .chip { display: inline-block; padding: .1rem .5rem; border-radius: 999px; background: #eef1f4; font-size: .78rem; text-transform: capitalize; }
-.chip-ok { background: #e6f4ef; color: #12805c; }
+.chip-ok { background: #E4F6EE; color: #1E8A5C; }
 
 /* --- forms --- */
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; align-items: start; }
@@ -306,7 +334,7 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
 .phase-dates { font-size: .85rem; margin: 0; }
 .warn-text { color: #b5691a; margin: .3rem 0; }
 
-.chip-active { background: #e7f0fd; color: #0b5fff; }
+.chip-active { background: #E6F0FD; color: var(--brand-blue-dark); }
 .chip-blocked { background: #fdf1e3; color: #b5691a; }
 
 .cert-status { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin: .5rem 0 1rem; }
@@ -345,9 +373,9 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
    =========================================================================== */
 .viz-root {
   --viz-surface: var(--surface);
-  --viz-revenue: #2a78d6;   /* categorical slot 1 — blue */
-  --viz-cost:    #eb6834;   /* categorical slot 2 — orange */
-  --viz-margin:  #4a3aa7;   /* slot 7 — violet, a third identity */
+  --viz-revenue: #2B7BE9;   /* brand blue */
+  --viz-cost:    #D9761F;   /* warm orange — validated against the brand blue */
+  --viz-margin:  #4A3AA7;   /* violet, a third identity distinct from both */
   --viz-grid:    #e6e8ea;
   --viz-ink:     var(--text);
   --viz-ink-mute: var(--muted);
@@ -513,3 +541,92 @@ button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(
 .owner-client { background: #fdf1e3; color: #b5691a; }
 .owner-supplier { background: #f3eefd; color: #4a3aa7; }
 .owner-authority { background: #fdeceb; color: #b42318; }
+
+/* --- Stage manager ------------------------------------------------------- */
+
+.stage-manager > summary {
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.stage-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+}
+
+.stage-table th,
+.stage-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.stage-table th {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stage-table td.num,
+.stage-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inline-edit {
+  width: 100%;
+  min-width: 6rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.inline-edit:hover:not(:disabled) { border-color: var(--border); }
+.inline-edit:focus { border-color: var(--accent); background: var(--surface); outline: none; }
+.inline-edit.num { width: 5rem; min-width: 0; text-align: right; }
+
+.weight-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.stage-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stage-actions button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.add-stage {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.add-stage h3 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+
+.note {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.65rem;
+  border-left: 3px solid var(--brand-green);
+  background: color-mix(in srgb, var(--brand-green) 8%, transparent);
+  border-radius: 0 4px 4px 0;
+}
+
+/* The stage table has six columns; on a phone it scrolls rather than crushing
+   the name field down to three characters. */
+@media (max-width: 640px) {
+  .stage-manager .stage-table { display: block; overflow-x: auto; white-space: nowrap; }
+}
