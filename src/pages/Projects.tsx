@@ -12,6 +12,9 @@ import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
 import { formatETB } from '../lib/money.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
+import { DEFAULT_TEMPLATE_KEY, PROJECT_TEMPLATES, projectTemplate } from '../lib/project-templates.js';
+import { subscribePrograms } from '../data/programs.js';
+import type { Program } from '../lib/schema.js';
 import { ProgressBar } from '../components/KpiTile.js';
 import { expectedProgressBps } from '../lib/kpi.js';
 import type { Client, DualDate, Project } from '../lib/schema.js';
@@ -101,9 +104,14 @@ function ProjectForm({
   const [siteName, setSiteName] = useState('');
   const [city, setCity] = useState('Addis Ababa');
   const [units, setUnits] = useState(1);
+  const [templateKey, setTemplateKey] = useState(DEFAULT_TEMPLATE_KEY);
+  const [programId, setProgramId] = useState('');
   const [plannedStart, setPlannedStart] = useState<DualDate | null>(null);
   const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(null);
   const { busy, error, run } = useAsyncAction('create this project');
+
+  const programs = useCollection<Program>((d, e) => subscribePrograms(d, e, { status: 'active' }), [], 'load programs').rows;
+  const template = projectTemplate(templateKey);
 
   const ready = title.trim() !== '' && clientId !== '' && plannedStart !== null && plannedEnd !== null;
 
@@ -116,12 +124,15 @@ function ProjectForm({
       createProject(
         {
           projectNo: `P-${Date.now()}`,
-          type: 'elevator',
+          // A project built from a lift template is elevator work; anything else
+          // is not, and forcing it into the elevator reports would misstate them.
+          type: templateKey === 'elevator_install' || templateKey === 'modernisation' ? 'elevator' : 'non_elevator',
           title: title.trim(),
           clientId,
           clientName: client.name,
           contractId: null,
           site: { name: siteName.trim() || title.trim(), city },
+          programId: programId === '' ? null : programId,
           units: Array.from({ length: Math.max(1, units) }, (_, i) => ({
             tag: `LIFT-${String(i + 1).padStart(2, '0')}`,
           })),
@@ -132,7 +143,7 @@ function ProjectForm({
           status: 'planned',
         },
         uid,
-        { plannedStart: plannedStart as DualDate, plannedEnd: plannedEnd as DualDate },
+        { plannedStart: plannedStart as DualDate, plannedEnd: plannedEnd as DualDate, templateKey },
       ),
     );
     if (result !== null) onDone();
@@ -142,7 +153,9 @@ function ProjectForm({
     <section className="card">
       <h2>New project</h2>
       <p className="muted">
-        The five standard elevator phases are created automatically, weighted by effort.
+        Pick the kind of job and its stages are created for you. Every stage can be
+        renamed, reweighted, reordered or deleted on the project afterwards — the
+        template is a starting point, not a rule.
       </p>
       <form onSubmit={(e) => void submit(e)}>
         <div className="form-grid">
@@ -171,6 +184,26 @@ function ProjectForm({
           </div>
 
           <div className="field">
+            <label htmlFor="p-template">Kind of job</label>
+            <select id="p-template" value={templateKey} onChange={(e) => setTemplateKey(e.target.value)}>
+              {PROJECT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
+            </select>
+            <p className="hint">{template.description}</p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-program">Part of a program</label>
+            <select id="p-program" value={programId} onChange={(e) => setProgramId(e.target.value)}>
+              <option value="">Stand-alone project</option>
+              {programs.map((p) => <option key={p.id} value={p.id}>{p.programNo} · {p.name}</option>)}
+            </select>
+            <p className="hint">
+              Group the lifts of one building, or the phases of one client's development,
+              so they report as a single commitment.
+            </p>
+          </div>
+
+          <div className="field">
             <label htmlFor="p-units">Units</label>
             <input id="p-units" type="number" min={1} value={units}
               onChange={(e) => setUnits(Number(e.target.value) || 1)} />
@@ -181,6 +214,36 @@ function ProjectForm({
           <DualDateInput label="Planned start" value={plannedStart} onChange={setPlannedStart} required />
           <DualDateInput label="Planned end" value={plannedEnd} onChange={setPlannedEnd} required />
         </div>
+
+        <details className="stage-preview">
+          <summary>
+            Stages that will be created ({template.stages.length})
+          </summary>
+          <p className="hint">
+            Each stage records who has to move for it to finish. A project stalled in
+            customs and one stalled because the crew has not mobilised need different
+            interventions, so they are tracked apart. Payment milestones are attached
+            to stages on the contract's payment schedule. All of this is editable
+            once the project exists.
+          </p>
+          <ol className="stage-list">
+            {template.stages.map((stage) => (
+              <li key={stage.key}>
+                <div>
+                  <strong>{stage.name}</strong>
+                  <span className="muted"> · {(stage.weightBps / 100).toFixed(0)}%</span>
+                  {stage.commonlyGatesPayment && (
+                    <span className="chip chip-ok stage-pay">payment</span>
+                  )}
+                </div>
+                <p className="muted">{stage.description}</p>
+                <span className={`chip owner-${stage.owner}`}>
+                  {stage.owner === 'us' ? 'our crew' : stage.owner}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </details>
 
         {error && <p className="error" role="alert">{error}</p>}
 

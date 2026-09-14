@@ -209,6 +209,13 @@ export interface Project extends AuditFields {
   clientId: string;
   clientName: string;
   contractId: string | null;
+  /**
+   * The program this project belongs to, where it is part of something larger.
+   * A tower with four lifts is four projects and one commitment.
+   */
+  programId?: string | null;
+  /** Which stage template it was created from. Stages are editable afterwards. */
+  templateKey?: string;
 
   site: { name: string; city: string; subCity?: string; gps?: { lat: number; lng: number } };
 
@@ -530,6 +537,85 @@ export interface Technician extends AuditFields {
   /** Working minutes available per week, for the utilisation KPI. */
   contractedMinutesPerWeek: number;
   status: 'active' | 'on_leave' | 'inactive';
+}
+
+// ===========================================================================
+// programs/{programId} — projects that belong together
+// ===========================================================================
+
+/**
+ * A program owns no money of its own. Every figure reported against it is the
+ * sum of its projects, so it can never disagree with what is inside it.
+ *
+ * A tower with four lifts is usually four projects — separate contracts, crews
+ * and invoices — and ONE commitment to one client. Reported separately they look
+ * like four modest jobs; together they are the largest thing the company carries.
+ */
+export interface Program extends AuditFields {
+  programNo: string;
+  name: string;
+  description: string;
+  /** A program may span clients (a developer with several buildings). */
+  clientId: string | null;
+  clientName: string | null;
+  kind: 'program' | 'portfolio' | 'framework';
+  status: 'active' | 'on_hold' | 'closed';
+  plannedStart: DualDate;
+  plannedEnd: DualDate;
+  ownerUid: string | null;
+}
+
+// ===========================================================================
+// units/{unitId} — the lift itself
+// ===========================================================================
+
+/**
+ * A lift outlives the project that installed it and the contract that services
+ * it. Maintenance, callouts and authority certificates all attach to the MACHINE,
+ * which is why it needs an identity of its own rather than being an entry inside
+ * whichever project happened to install it.
+ */
+export interface ElevatorUnit extends AuditFields {
+  /** Our stable reference, e.g. "IM-U-00142". Never reused. */
+  unitCode: string;
+  /** The tag painted on site, e.g. "LIFT-01". Not unique across buildings. */
+  tag: string;
+  /** The manufacturer's equipment number — the one on the nameplate. */
+  manufacturerUnitId?: string;
+  serialNo?: string;
+  brand?: string;
+  model?: string;
+  /** Passenger, goods, bed, panoramic, escalator. */
+  type?: string;
+  capacityKg?: number;
+  personCapacity?: number;
+  speedMps?: number;
+  stops?: number;
+
+  siteName: string;
+  city: string;
+  /** Where in the building, e.g. "Block B, core 2". */
+  location?: string;
+
+  clientId: string;
+  clientName: string;
+  /** The project that installed it, where we installed it. */
+  installedByProjectId: string | null;
+  /** The maintenance contract it is currently under, if any. */
+  maintenanceContractId: string | null;
+  maintenanceContractNo: string | null;
+
+  commissionedOn: DualDate | null;
+  status: 'under_installation' | 'in_service' | 'out_of_service' | 'decommissioned';
+
+  certificate: {
+    no?: string;
+    issuedOn: DualDate | null;
+    expiresOn: DualDate | null;
+  } | null;
+
+  /** Free text a manager keeps about this machine, separate from visit findings. */
+  remarks: string;
 }
 
 // ===========================================================================

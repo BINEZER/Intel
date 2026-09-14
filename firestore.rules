@@ -145,6 +145,29 @@ service cloud.firestore {
       }
     }
 
+    // --- programs ----------------------------------------------------------
+    // A program is a grouping, not a ledger: it holds no money of its own, so
+    // there is no financial block to protect. Deleting one must never take the
+    // projects with it — the projects simply stop pointing at it.
+    match /programs/{programId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if isManager() && stampedUpdate();
+      allow delete: if isAdmin();
+    }
+
+    // --- units: the lifts themselves ---------------------------------------
+    // Engineers may update a unit — status, remarks, the certificate they just
+    // collected — because they are the people standing next to the machine.
+    // Creating and deleting one is a manager's act: a unit is an identity that
+    // callouts and contracts hang off, and a duplicate is worse than a gap.
+    match /units/{unitId} {
+      allow read:   if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if has(['admin', 'manager', 'engineer']) && stampedUpdate();
+      allow delete: if isAdmin() && resource.data.status == 'decommissioned';
+    }
+
     // --- invoices: finance only; issued invoices are immutable -------------
     match /invoices/{invoiceId} {
       allow read:   if canRead();

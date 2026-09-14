@@ -4,6 +4,7 @@
  */
 
 import { NavLink, Outlet } from 'react-router-dom';
+import { Logo } from './Logo.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can, type Capability } from '../auth/roles.js';
 import { formatEthiopian, formatGregorianShort, utcDateToEthiopian } from '../lib/ethiopic.js';
@@ -16,12 +17,16 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', capability: 'read' },
+  { to: '/alerts', label: 'Alerts', capability: 'read' },
   { to: '/priority', label: 'Priority', capability: 'read' },
   { to: '/finish-next', label: 'Finish next', capability: 'read' },
   { to: '/projects', label: 'Projects', capability: 'read' },
+  { to: '/programs', label: 'Programs', capability: 'read' },
+  { to: '/units', label: 'Lifts', capability: 'read' },
   { to: '/clients', label: 'Clients', capability: 'read' },
   { to: '/contracts', label: 'Contracts', capability: 'read' },
   { to: '/finance', label: 'Finance', capability: 'viewFinancials' },
+  { to: '/reports', label: 'Reports', capability: 'viewFinancials' },
   { to: '/performance', label: 'Performance', capability: 'read' },
   { to: '/boards', label: 'Boards', capability: 'useBoards' },
   { to: '/settings', label: 'Settings', capability: 'manageConfig' },
@@ -46,7 +51,8 @@ export function AppShell() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          IntelMotion <span className="muted">PCM</span>
+          <Logo height={28} />
+          <span className="muted brand-sub">PCM</span>
         </div>
         <TodayBadge />
         <div className="account">

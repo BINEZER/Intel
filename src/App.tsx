@@ -13,6 +13,10 @@ import { ProjectDetail } from './pages/ProjectDetail.js';
 import { Projects } from './pages/Projects.js';
 import { Contracts } from './pages/Contracts.js';
 import { Priority } from './pages/Priority.js';
+import { Alerts } from './pages/Alerts.js';
+import { Programs, ProgramDetail } from './pages/Programs.js';
+import { Units, UnitDetail } from './pages/Units.js';
+import { CeoReport } from './pages/CeoReport.js';
 import { SignIn } from './pages/SignIn.js';
 
 export function App() {
@@ -31,6 +35,23 @@ export function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="priority" element={<Priority />} />
+            <Route path="alerts" element={<Alerts />} />
+            <Route
+              path="programs"
+              element={<RequireCapability capability="read"><Programs /></RequireCapability>}
+            />
+            <Route
+              path="programs/:programId"
+              element={<RequireCapability capability="read"><ProgramDetail /></RequireCapability>}
+            />
+            <Route
+              path="units"
+              element={<RequireCapability capability="read"><Units /></RequireCapability>}
+            />
+            <Route
+              path="units/:unitId"
+              element={<RequireCapability capability="read"><UnitDetail /></RequireCapability>}
+            />
             <Route path="finish-next" element={<FinishNextRoute />} />
             <Route
               path="performance"
@@ -77,6 +98,14 @@ export function App() {
               element={
                 <RequireCapability capability="viewFinancials">
                   <Finance />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <RequireCapability capability="viewFinancials">
+                  <CeoReport />
                 </RequireCapability>
               }
             />
