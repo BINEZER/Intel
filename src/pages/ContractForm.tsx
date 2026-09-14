@@ -17,7 +17,9 @@ import { MoneyInput } from '../components/MoneyInput.js';
 import { MilestoneEditor } from '../components/MilestoneEditor.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { createContract } from '../data/contracts.js';
-import type { Client, Contract, ContractType, DualDate } from '../lib/schema.js';
+import { FormPanel } from '../components/FormPanel.js';
+import { ReminderEditor } from '../components/ReminderEditor.js';
+import type { Client, Contract, ContractType, DualDate, Reminder } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ContractForm({
@@ -44,6 +46,9 @@ export function ContractForm({
   const [resolutionHours, setResolutionHours] = useState(24);
   const [visitsPerYear, setVisitsPerYear] = useState(12);
   const [shares, setShares] = useState<MilestoneShare[]>(DEFAULT_SUPPLY_INSTALL_SHARES);
+  const [warrantyMonths, setWarrantyMonths] = useState(12);
+  const [warrantyAlertDays, setWarrantyAlertDays] = useState(60);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
 
   const { busy, error, run } = useAsyncAction('create this contract');
 
@@ -92,6 +97,13 @@ export function ContractForm({
           endDate: endDate as DualDate,
           autoRenew,
           renewalWindowDays,
+          reminders,
+          // The warranty clock starts at HANDOVER, which has not happened yet,
+          // so the end date is left null rather than guessed from the contract
+          // end. A warranty dated from the wrong day expires on the wrong day.
+          ...(warrantyMonths > 0
+            ? { warranty: { months: warrantyMonths, startsOn: null, endsOn: null, alertDays: warrantyAlertDays } }
+            : {}),
           renewalStatus: 'not_due',
           ...(isMaintenance
             ? {
@@ -120,8 +132,11 @@ export function ContractForm({
   }
 
   return (
-    <section className="card">
-      <h2>New contract</h2>
+    <FormPanel
+      title="New contract"
+      description="The contract carries the value, the VAT and the payment milestones. Those milestones are what the whole cash forecast is built from."
+      onClose={onDone}
+    >
       <form onSubmit={(e) => void submit(e)}>
         <div className="form-grid">
           <div className="field">
@@ -212,6 +227,39 @@ export function ContractForm({
               Auto-renews
             </label>
           </div>
+
+          <div className="field">
+            <label htmlFor="k-warranty">Warranty / defects liability (months)</label>
+            <input
+              id="k-warranty"
+              type="number"
+              min={0}
+              max={120}
+              value={warrantyMonths}
+              onChange={(e) => setWarrantyMonths(Math.max(0, Math.min(120, Number(e.target.value) || 0)))}
+            />
+            <p className="hint">
+              Runs from handover, not from signing, so the clock starts when the project actually
+              hands over. Zero if there is no warranty.
+            </p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="k-warranty-alert">Warn before warranty ends (days)</label>
+            <input
+              id="k-warranty-alert"
+              type="number"
+              min={0}
+              max={365}
+              value={warrantyAlertDays}
+              disabled={warrantyMonths === 0}
+              onChange={(e) => setWarrantyAlertDays(Math.max(0, Math.min(365, Number(e.target.value) || 0)))}
+            />
+            <p className="hint">
+              Long enough to inspect every unit and raise a claim while defects are still ours to fix
+              for free.
+            </p>
+          </div>
         </div>
 
         {isMaintenance && (
@@ -243,6 +291,12 @@ export function ContractForm({
 
         <MilestoneEditor shares={shares} onChange={setShares} contract={breakdown} />
 
+        <ReminderEditor
+          reminders={reminders}
+          onChange={setReminders}
+          sourceLabel={contractNo.trim() === '' ? 'This contract' : contractNo.trim()}
+        />
+
         {error && <p className="error" role="alert">{error}</p>}
 
         <div className="form-actions">
@@ -259,7 +313,7 @@ export function ContractForm({
           </p>
         )}
       </form>
-    </section>
+    </FormPanel>
   );
 }
 

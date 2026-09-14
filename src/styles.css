@@ -401,6 +401,7 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 /* --- page chrome --- */
 .page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
 .page-head h1 { margin: 0; }
+.page-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
 
 .chip {
@@ -928,51 +929,81 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
    destination reachable without a menu to open.
    ------------------------------------------------------------------------- */
 
+/* The toggle and the scrim exist only below the breakpoint. */
+.nav-toggle, .nav-scrim { display: none; }
+
 @media (max-width: 900px) {
-  .body { flex-direction: column; }
+  /* A drawer, not a horizontal scroller. Seventeen destinations in a strip you
+     have to swipe through hides most of them off-screen with no sign they are
+     there; a drawer shows the whole grouped menu at once and gets out of the
+     way when it is closed. */
+  .nav-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; padding: 0; flex-shrink: 0;
+  }
+  .nav-toggle-bars { display: grid; gap: 4px; width: 18px; }
+  .nav-toggle-bars > span {
+    display: block; height: 2px; border-radius: 2px; background: var(--text-2);
+    transition: transform .18s var(--ease), opacity .18s var(--ease);
+  }
+  .nav-open .nav-toggle-bars > span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  .nav-open .nav-toggle-bars > span:nth-child(2) { opacity: 0; }
+  .nav-open .nav-toggle-bars > span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 
   .sidebar {
-    width: 100%;
-    height: auto;
+    position: fixed;
+    top: var(--topbar-h); left: 0;
+    width: min(280px, 82vw);
+    /* An explicit height rather than top+bottom+auto: the menu is taller than a
+       phone screen, and `auto` lets the box grow to its content and slide the
+       whole thing up past the header. Fixed height, internal scroll. */
+    height: calc(100vh - var(--topbar-h));
+    height: calc(100dvh - var(--topbar-h));
     max-height: none;
-    position: sticky;
-    top: var(--topbar-h);
-    z-index: 15;
-    flex-direction: row;
-    align-items: center;
-    gap: .3rem;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: .5rem .75rem;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    scrollbar-width: thin;
+    z-index: 30;
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    transform: translateX(-100%);
+    transition: transform .22s var(--ease);
+    overscroll-behavior: contain;
   }
+  .nav-open .sidebar { transform: translateX(0); }
 
-  .nav-section { flex-direction: row; align-items: center; gap: .3rem; }
-  /* The group headings become inline dividers rather than stacked labels. */
-  .nav-group {
-    margin: 0 .2rem 0 .5rem; padding: 0;
-    border-left: 1px solid var(--border); padding-left: .6rem;
-    white-space: nowrap; align-self: stretch; display: flex; align-items: center;
+  .nav-scrim {
+    display: block;
+    position: fixed; top: var(--topbar-h); left: 0; right: 0;
+    height: calc(100vh - var(--topbar-h));
+    height: calc(100dvh - var(--topbar-h));
+    z-index: 25;
+    border: none; border-radius: 0; box-shadow: none; padding: 0;
+    background: rgba(16, 24, 40, .38);
+    opacity: 0; pointer-events: none;
+    transition: opacity .22s var(--ease);
   }
-  .nav-section:first-child .nav-group { border-left: none; padding-left: 0; margin-left: 0; }
-  .sidebar a { white-space: nowrap; }
+  .nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
 
   .content { padding: 1.1rem 1rem 2.5rem; }
-  .topbar { gap: .75rem; padding: 0 1rem; }
+  .topbar { gap: .6rem; padding: 0 .9rem; }
   /* The email is the first thing to go: the role chip and sign-out are what
      the header is actually for. */
   .account > .muted { display: none; }
   .topbar .today { font-size: .82rem; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .nav-scrim, .nav-toggle-bars > span { transition: none; }
+}
+
 @media (max-width: 560px) {
   h1 { font-size: 1.45rem; }
+  .brand-sub { display: none; }
   .card { padding: 1rem; border-radius: var(--radius); }
   .topbar .today { display: none; }
   .page-head { align-items: flex-start; }
 }
+
+/* Shown only on paper. */
+.print-only { display: none; }
 
 /* --- Printing, which is also how the PDF is made ------------------------- */
 
@@ -980,14 +1011,57 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
   /* The browser's own print pipeline gives live, selectable, searchable text at
      the printer's resolution. A PDF library would either rasterise the page or
      make us lay it out a second time in its coordinate system. */
+  /* Every page is printable, not just the report. What comes out is the data
+     plus a header saying what it is and when it was taken — a printed list
+     with no date on it is a list nobody can trust a week later. */
   .no-print,
   .sidebar,
   .topbar,
+  .nav-scrim,
+  .nav-toggle,
   .app-header,
   .viz-toggle,
-  .report-controls {
+  .form-panel,
+  .report-controls,
+  .actions-cell,
+  .stage-actions,
+  .payout-actions,
+  .form-actions,
+  .filter-row,
+  button {
     display: none !important;
   }
+
+  .print-only { display: block !important; }
+
+  .print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    border-bottom: 2px solid #2B7BE9;
+    padding-bottom: .6rem;
+    margin-bottom: 1rem;
+  }
+  .print-header h2 { margin: .15rem 0 0; font-size: 1.3rem; }
+  .print-company { margin: 0; font-size: .72rem; letter-spacing: .12em; font-weight: 700; color: #2B7BE9; }
+  .print-date { margin: 0; white-space: nowrap; }
+
+  /* The on-screen page title duplicates the print header — but ONLY the page's
+     own head. `.page-head` is reused inside cards, and hiding those took every
+     project's name and client off the printout. */
+  .content > .page-head { display: none !important; }
+
+  .content { padding: 0 !important; overflow: visible !important; max-width: none; }
+  .content > * { max-width: none; }
+  .body { display: block !important; }
+
+  /* Tables are the point of most printouts: keep rows whole and repeat the
+     header on every page, or a three-page list is unreadable after page one. */
+  thead { display: table-header-group; }
+  tr, .chase-row, .voucher-row, .alert-row, .program-card { break-inside: avoid; page-break-inside: avoid; }
+  .table-scroll { overflow: visible !important; }
+  a { color: inherit; text-decoration: none; }
 
   body { background: #fff; }
 
@@ -1257,3 +1331,86 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .setup-head { display: flex; align-items: baseline; gap: 0.5rem; font-weight: 600; }
 .setup-mark { color: var(--brand-teal-dark); font-size: 1rem; }
 .setup-list p { margin: 0.15rem 0 0 1.45rem; font-size: 0.88rem; line-height: 1.45; max-width: 46rem; }
+
+
+/* --- Form panels --------------------------------------------------------- */
+
+.form-panel {
+  border-left: 3px solid var(--brand-teal);
+  scroll-margin-top: calc(var(--topbar-h) + 1rem);
+}
+.form-panel-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  margin-bottom: .9rem;
+}
+.form-panel-head h2 { margin: 0; }
+.form-panel-head p { margin: .15rem 0 0; }
+
+.icon-button {
+  width: 32px; height: 32px; padding: 0; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); font-size: .9rem; line-height: 1;
+}
+
+/* --- Reminders ----------------------------------------------------------- */
+
+/* Alert points are their own section, not a trailing field: without a rule
+   above it the heading read as a label belonging to the field before it. */
+.reminders {
+  border-top: 1px solid var(--border);
+  margin-top: 1.35rem;
+  padding-top: 1.1rem;
+}
+.reminders h3 { margin-bottom: .2rem; }
+
+.reminder-list { list-style: none; padding: 0; margin: .6rem 0 0; display: grid; gap: .5rem; }
+
+.reminder-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem;
+  padding: .55rem .75rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.reminder-row.state-overdue { border-left-color: var(--danger); }
+.reminder-row.state-due     { border-left-color: var(--amber-ink); }
+.reminder-row.state-done    { opacity: .6; }
+.reminder-row .reminder-label { font-weight: 600; }
+.reminder-row .reminder-when { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.reminder-add { border-top: 1px dashed var(--border); margin-top: .8rem; padding-top: .8rem; }
+.lead-suggestions { display: flex; flex-wrap: wrap; gap: .35rem; margin: .4rem 0 0; }
+.lead-suggestions button { padding: .25rem .6rem; font-size: .8rem; font-weight: 500; }
+
+/* --- Sub-projects -------------------------------------------------------- */
+
+.subproject-row > td:first-child { padding-left: 2rem; position: relative; }
+.subproject-row > td:first-child::before {
+  content: '';
+  position: absolute; left: .9rem; top: 0; bottom: 50%;
+  width: 9px;
+  border-left: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+  border-bottom-left-radius: 4px;
+}
+.tree-toggle {
+  padding: .1rem .4rem; font-size: .75rem; font-weight: 600;
+  border-radius: var(--radius-full); margin-right: .4rem;
+}
+.family-figures { font-size: .82rem; color: var(--muted); margin: 0 0 .5rem; }
+
+.subprojects {
+  border-top: 1px solid var(--border);
+  margin-top: .9rem;
+  padding-top: .8rem;
+}
+
+.subproject-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .3rem; }
+.subproject-list li {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+  padding: .4rem .6rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.subproject-list li > span { font-variant-numeric: tabular-nums; white-space: nowrap; }

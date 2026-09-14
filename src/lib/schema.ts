@@ -103,7 +103,7 @@ export interface Client extends AuditFields {
   tin: string;
   vatRegistered: boolean;
   vatRegNo?: string;
-  address: { city: string; subCity?: string; woreda?: string; kebele?: string; poBox?: string };
+  address: { city: string; subCity?: string; woreda?: string; kebele?: string; poBox?: string; street?: string; landmark?: string };
   contacts: Array<{ name: string; role?: string; phone: string; email?: string }>;
   status: 'active' | 'inactive';
   notes?: string;
@@ -115,6 +115,28 @@ export interface Client extends AuditFields {
 
 export type ContractType = 'supply_install' | 'maintenance' | 'modernization' | 'other';
 export type ContractStatus = 'draft' | 'active' | 'suspended' | 'completed' | 'terminated' | 'expired';
+
+/**
+ * A date somebody wants to be warned about before it arrives.
+ *
+ * The system already knows about contract expiry and renewal windows, but those
+ * are the two dates it happens to model. Real jobs carry others: a warranty
+ * running out, a performance bond to release, a permit to renew, a price
+ * escalation clause that bites on a date. None of them announce themselves, and
+ * all of them cost money when missed.
+ *
+ * `leadDays` is the whole point. A warning on the day is not a warning.
+ */
+export interface Reminder {
+  id: string;
+  label: string;
+  dueDate: DualDate;
+  /** Days before `dueDate` the alert starts firing. */
+  leadDays: number;
+  /** Set when somebody has dealt with it, so it stops appearing. */
+  doneAt: Timestamp | null;
+  note?: string;
+}
 
 export interface Contract extends AuditFields {
   contractNo: string;
@@ -166,6 +188,25 @@ export interface Contract extends AuditFields {
     };
   };
 
+  // --- warranty / defects liability ------------------------------------
+  /**
+   * The period after handover during which we fix our own defects for free.
+   * Tracked separately from the contract term because it usually starts when
+   * the contract's delivery obligations END, and an expiring warranty is the
+   * moment to inspect, not the moment to discover a claim.
+   */
+  warranty?: {
+    months: number;
+    /** Usually handover. Null until the project actually hands over. */
+    startsOn: DualDate | null;
+    endsOn: DualDate | null;
+    /** Days before `endsOn` to start warning. */
+    alertDays: number;
+  };
+
+  /** Dates on this contract somebody wants warning about. */
+  reminders?: Reminder[];
+
   status: ContractStatus;
   attachments: Array<{ name: string; storagePath: string; uploadedAt: Timestamp }>;
 }
@@ -214,10 +255,37 @@ export interface Project extends AuditFields {
    * A tower with four lifts is four projects and one commitment.
    */
   programId?: string | null;
+  /**
+   * The project this one sits under.
+   *
+   * A tower is one job commercially and several jobs operationally — per block,
+   * per lift, per phase — each with its own crew, stages and dates. A parent
+   * holds the commitment; the children hold the work. A project may not be its
+   * own parent, and the tree is deliberately ONE level deep: a sub-project with
+   * sub-projects of its own is a program, and there is already a Programs page
+   * for that.
+   */
+  parentProjectId?: string | null;
   /** Which stage template it was created from. Stages are editable afterwards. */
   templateKey?: string;
+  /** Dates on this project somebody wants warning about. */
+  reminders?: Reminder[];
 
-  site: { name: string; city: string; subCity?: string; gps?: { lat: number; lng: number } };
+  /**
+   * Where the work is. `city` alone is not a location anyone can drive to, and
+   * a crew sent to the wrong Bole tower loses a day.
+   */
+  site: {
+    name: string;
+    city: string;
+    subCity?: string;
+    woreda?: string;
+    /** Street, building, floor — how you would tell a driver. */
+    address?: string;
+    /** "Opposite Edna Mall" does more work than a street name in Addis. */
+    landmark?: string;
+    gps?: { lat: number; lng: number };
+  };
 
   /** Elevator units under this project; empty for non-elevator work. */
   /**

@@ -14,11 +14,39 @@ import { subscribeProjects } from '../data/projects.js';
 import { subscribeUnits } from '../data/units.js';
 import { assessPortfolioRisk } from '../data/project-risk.js';
 import { useCollection } from '../data/useCollection.js';
-import { buildAlerts, countBySeverity, type Alert, type AlertProject } from '../lib/alerts.js';
+import {
+  buildAlerts,
+  countBySeverity,
+  type Alert,
+  type AlertProject,
+  type AlertReminder,
+  type AlertWarranty,
+} from '../lib/alerts.js';
+import { activeReminders, viewWarranty, type ReminderInput } from '../lib/reminders.js';
 import { formatETB } from '../lib/money.js';
 import { ExtensionLetter } from '../components/ExtensionLetter.js';
 import type { Contract, ElevatorUnit, Invoice, Project, RiskSeverity } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
+
+/** Stored reminders into the shape `lib/reminders` reasons about. */
+function toReminderInputs(
+  reminders: readonly { id: string; label: string; dueDate: { at: { toDate: () => Date } }; leadDays: number; doneAt: { toDate: () => Date } | null }[],
+  sourceKind: 'contract' | 'project',
+  sourceId: string,
+  sourceLabel: string,
+): ReminderInput[] {
+  return reminders.map((r) => ({
+    id: r.id,
+    label: r.label,
+    dueDate: r.dueDate.at.toDate(),
+    leadDays: r.leadDays,
+    doneAt: r.doneAt?.toDate() ?? null,
+    sourceKind,
+    sourceId,
+    sourceLabel,
+  }));
+}
 
 const SEVERITY_LABEL: Record<RiskSeverity, string> = {
   critical: 'Critical',
@@ -69,6 +97,52 @@ export function Alerts() {
             flags: risk.flags,
             plannedEnd: project.plannedEnd.at.toDate(),
           })),
+          // Warranty and the dates somebody asked to be warned about. Both are
+          // resolved here — stored dual dates turned into real ones — because
+          // the alert engine ranks and phrases; it does not recompute what
+          // lib/reminders already knows.
+          warranties: contracts.rows.flatMap<AlertWarranty>((c) => {
+            const view = viewWarranty(
+              c.warranty == null
+                ? null
+                : {
+                    months: c.warranty.months,
+                    startsOn: c.warranty.startsOn?.at.toDate() ?? null,
+                    endsOn: c.warranty.endsOn?.at.toDate() ?? null,
+                    alertDays: c.warranty.alertDays,
+                  },
+              asOf,
+            );
+            return view.endsOn === null || view.state === 'not_started'
+              ? []
+              : [{
+                  contractId: c.id,
+                  contractNo: c.contractNo,
+                  clientName: c.clientName,
+                  endsOn: view.endsOn,
+                  state: view.state,
+                  message: view.message,
+                }];
+          }),
+          reminders: [
+            ...contracts.rows.flatMap((c) =>
+              toReminderInputs(c.reminders ?? [], 'contract', c.id, `${c.contractNo} · ${c.clientName}`),
+            ),
+            ...projects.rows.flatMap((p) =>
+              toReminderInputs(p.reminders ?? [], 'project', p.id, `${p.projectNo} · ${p.title}`),
+            ),
+          ]
+            .flatMap((input) => activeReminders([input], asOf))
+            .map<AlertReminder>((view) => ({
+              id: view.id,
+              label: view.label,
+              message: view.message,
+              daysRemaining: view.daysRemaining,
+              state: view.state === 'overdue' ? 'overdue' : 'due',
+              sourceKind: view.sourceKind,
+              sourceId: view.sourceId,
+              sourceLabel: view.sourceLabel,
+            })),
           units: units.rows.map((u) => ({
             id: u.id,
             unitCode: u.unitCode,
@@ -84,7 +158,7 @@ export function Alerts() {
         },
         asOf,
       ),
-    [contracts.rows, risks, units.rows, asOf],
+    [contracts.rows, projects.rows, risks, units.rows, asOf],
   );
 
   const counts = countBySeverity(alerts);
@@ -96,6 +170,9 @@ export function Alerts() {
   return (
     <>
       <h1>Alerts</h1>
+      {/* print-only */}
+      <PrintHeader title="Alerts" subtitle="things needing attention" />
+      <div className="page-actions no-print"><PrintButton label="Print this page" /></div>
       <p className="muted">
         Only things with a deadline and something to do about them. A contract expiring
         in three weeks is here because a letter written today still works and one written
