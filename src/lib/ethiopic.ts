@@ -168,6 +168,76 @@ export function ethiopianPeriodKey(date: Date): string {
 }
 
 // ---------------------------------------------------------------------------
+// Month spans
+// ---------------------------------------------------------------------------
+
+/**
+ * Which calendar a monthly series is bucketed by.
+ *
+ * Gregorian is the default wherever a person reads a trend — it is the database
+ * baseline and the calendar banks, suppliers and clients work in. Ethiopian
+ * stays available because a VAT return is filed for an Ethiopian month, so any
+ * figure that has to reconcile to a filing must be bucketed that way.
+ */
+export type CalendarBasis = 'gregorian' | 'ethiopian';
+
+export function isGregorianLeapYear(year: number): boolean {
+  return (mod(year, 4) === 0 && mod(year, 100) !== 0) || mod(year, 400) === 0;
+}
+
+/** Days in a Gregorian month. */
+export function gregorianMonthLength(year: number, month: number): number {
+  if (month === 2) return isGregorianLeapYear(year) ? 29 : 28;
+  return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
+}
+
+/**
+ * The Gregorian months an Ethiopian month falls across: `Sep-Oct 2025`.
+ *
+ * An Ethiopian month straddles two Gregorian ones for all but a few days of the
+ * year, so naming only the month it starts in would be wrong most of the time.
+ */
+export function gregorianSpanLabel(ecYear: number, ecMonth: number): string {
+  const start = ethiopianToGregorian({ year: ecYear, month: ecMonth, day: 1 });
+  const end = ethiopianToGregorian({
+    year: ecYear,
+    month: ecMonth,
+    day: ethiopianMonthLength(ecYear, ecMonth),
+  });
+  return spanLabel(
+    GREGORIAN_MONTHS_SHORT[start.month - 1] as string, start.year,
+    GREGORIAN_MONTHS_SHORT[end.month - 1] as string, end.year,
+  );
+}
+
+/**
+ * The Ethiopian months a Gregorian month falls across: `Nehase-Meskerem 2018`.
+ *
+ * A Gregorian month can cover THREE Ethiopian ones — September runs through the
+ * tail of Nehase, all of Pagume and the start of Meskerem — so this is a range
+ * from first to last, not a list. The caller adds the `EC` suffix, as everywhere
+ * else that an Ethiopian reading is printed.
+ */
+export function ethiopianSpanLabel(gcYear: number, gcMonth: number): string {
+  const start = gregorianToEthiopian({ year: gcYear, month: gcMonth, day: 1 });
+  const end = gregorianToEthiopian({
+    year: gcYear,
+    month: gcMonth,
+    day: gregorianMonthLength(gcYear, gcMonth),
+  });
+  return spanLabel(
+    ETHIOPIAN_MONTHS[start.month - 1] as string, start.year,
+    ETHIOPIAN_MONTHS[end.month - 1] as string, end.year,
+  );
+}
+
+function spanLabel(startName: string, startYear: number, endName: string, endYear: number): string {
+  if (startYear !== endYear) return `${startName} ${startYear}\u2013${endName} ${endYear}`;
+  if (startName === endName) return `${startName} ${startYear}`;
+  return `${startName}\u2013${endName} ${startYear}`;
+}
+
+// ---------------------------------------------------------------------------
 // Formatting
 // ---------------------------------------------------------------------------
 
@@ -178,7 +248,7 @@ export function formatEthiopian(d: EthiopianDate, opts: { script?: 'latin' | 'am
   return `${d.day} ${name} ${d.year}`;
 }
 
-const GREGORIAN_MONTHS_SHORT = [
+export const GREGORIAN_MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ] as const;
 
@@ -192,7 +262,6 @@ export function formatGregorianShort(date: Date): string {
   return `${date.getUTCDate()} ${name} ${date.getUTCFullYear()}`;
 }
 
-/** `1 Meskerem 2018 EC (11 Sep 2025)` — the dual-calendar label used across the UI. */
 /**
  * A date in both calendars, GREGORIAN FIRST.
  *

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   ethiopianFiscalYear,
+  ethiopianSpanLabel,
   ethiopianMonthLength,
   ethiopianToGregorian,
+  gregorianMonthLength,
+  gregorianSpanLabel,
   ethiopianToUTCDate,
   ethiopianPeriodKey,
   formatDual,
@@ -109,5 +112,38 @@ describe('dual formatting', () => {
 
   it('supports Amharic month names', () => {
     expect(formatDual(new Date(Date.UTC(2025, 8, 11)), { script: 'amharic' })).toContain('መስከረም');
+  });
+});
+
+describe('month spans', () => {
+  it('names both Gregorian months an Ethiopian month falls across', () => {
+    // Meskerem 2018 runs 11 Sep – 10 Oct 2025. Naming only September would be
+    // wrong for three weeks of it.
+    expect(gregorianSpanLabel(2018, 1)).toBe('Sep–Oct 2025');
+    expect(gregorianSpanLabel(2018, 12)).toBe('Aug–Sep 2026');
+  });
+
+  it('names a single Gregorian month when Pagume sits inside one', () => {
+    // Pagume is 5 or 6 days and does not straddle, so a range would be noise.
+    expect(gregorianSpanLabel(2017, 13)).toBe('Sep 2025');
+  });
+
+  it('names the Ethiopian months a Gregorian month falls across', () => {
+    expect(ethiopianSpanLabel(2025, 12)).toBe('Hidar–Tahsas 2018');
+  });
+
+  it('carries both years when a Gregorian month crosses Ethiopian New Year', () => {
+    // September holds the end of Nehase, all of Pagume and the start of
+    // Meskerem — three Ethiopian months in two different years, so the label is
+    // a range from first to last and both years have to appear.
+    expect(ethiopianSpanLabel(2025, 9)).toBe('Nehase 2017–Meskerem 2018');
+  });
+
+  it('knows Gregorian month lengths including the century rule', () => {
+    expect(gregorianMonthLength(2024, 2)).toBe(29);
+    expect(gregorianMonthLength(2025, 2)).toBe(28);
+    expect(gregorianMonthLength(2100, 2)).toBe(28); // divisible by 100, not 400
+    expect(gregorianMonthLength(2000, 2)).toBe(29);
+    expect(gregorianMonthLength(2025, 9)).toBe(30);
   });
 });

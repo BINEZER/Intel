@@ -7,7 +7,12 @@
  * that can disagree with its own source records is worse than no report.
  */
 
-import { ethiopianFiscalYear, ethiopianToUTCDate, utcDateToEthiopian } from './ethiopic.js';
+import {
+  ethiopianFiscalYear,
+  ethiopianToUTCDate,
+  utcDateToEthiopian,
+  type CalendarBasis,
+} from './ethiopic.js';
 import { ageBucket, settle, type AgeBucket, type ReceiptInput } from './invoicing.js';
 import { rateBps } from './kpi.js';
 import type { RateBps } from './schema.js';
@@ -291,10 +296,13 @@ export function summarisePortfolio(statements: readonly ProjectStatement[]): Por
 // ---------------------------------------------------------------------------
 
 export interface PeriodRow {
-  /** `EC-2018-04`. */
-  periodEc: string;
-  ecYear: number;
-  ecMonth: number;
+  /** `2025-09` on the Gregorian basis, `EC-2018-01` on the Ethiopian one. */
+  period: string;
+  basis: CalendarBasis;
+  /** Year in `basis`. */
+  year: number;
+  /** Month in `basis`: 1-12 Gregorian, 1-13 Ethiopian (13 = Pagume). */
+  month: number;
   revenueNetSantim: number;
   outputVatSantim: number;
   costNetSantim: number;
@@ -308,7 +316,47 @@ export interface PeriodRow {
 }
 
 /**
- * Revenue, cost and margin by Ethiopian month.
+ * Read a month key, and refuse one that does not belong to the stated basis.
+ *
+ * Every invoice and voucher carries BOTH keys (`vatPeriodGc` / `vatPeriodEc`),
+ * and they look similar enough to swap by accident: `2025-12` and `EC-2018-04`
+ * are the same month. A swap would not fail — it would draw a chart with
+ * plausible months and the wrong figures in them, which is the worst kind of
+ * wrong. So the shape is checked rather than trusted.
+ */
+function parsePeriodKey(period: string, basis: CalendarBasis): { year: number; month: number } {
+  const match =
+    basis === 'ethiopian' ? /^EC-(\d{4})-(\d{2})$/.exec(period) : /^(\d{4})-(\d{2})$/.exec(period);
+  if (match === null) {
+    throw new Error(
+      `${JSON.stringify(period)} is not a ${basis} month key. ` +
+        `Use vatPeriodGc/whtPeriodGc with basis 'gregorian', vatPeriodEc/whtPeriodEc with 'ethiopian'.`,
+    );
+  }
+  return { year: Number(match[1]), month: Number(match[2]) };
+}
+
+function emptyRow(period: string, basis: CalendarBasis, year: number, month: number): PeriodRow {
+  return {
+    period, basis, year, month,
+    revenueNetSantim: 0, outputVatSantim: 0, costNetSantim: 0, inputVatSantim: 0,
+    marginSantim: 0, marginBps: null, netVatPayableSantim: 0, whtWithheldSantim: 0,
+    invoices: 0, vouchers: 0,
+  };
+}
+
+function periodKey(basis: CalendarBasis, year: number, month: number): string {
+  const tail = `${year}-${String(month).padStart(2, '0')}`;
+  return basis === 'ethiopian' ? `EC-${tail}` : tail;
+}
+
+/**
+ * Revenue, cost and margin by month, on whichever calendar the caller asks for.
+ *
+ * Gregorian is what the trend chart uses: it is the calendar the reader thinks
+ * in, and a bar per Gregorian month lines up with bank statements and supplier
+ * invoices. The Ethiopian basis stays available for anything that must
+ * reconcile to a filed VAT return, which is declared per Ethiopian month.
  *
  * Every month between the first and last with activity is emitted, including
  * empty ones — a trend with silently missing months reads as a smooth line when
@@ -316,30 +364,24 @@ export interface PeriodRow {
  * to see.
  */
 export function buildPeriodSeries(
-  invoices: readonly { periodEc: string; netSantim: number; vatSantim: number; status: StatementInvoice['status'] }[],
-  disbursements: readonly { periodEc: string; netSantim: number; supplierVatSantim: number; whtSantim: number; status: StatementDisbursement['status'] }[],
+  invoices: readonly { period: string; netSantim: number; vatSantim: number; status: StatementInvoice['status'] }[],
+  disbursements: readonly { period: string; netSantim: number; supplierVatSantim: number; whtSantim: number; status: StatementDisbursement['status'] }[],
+  basis: CalendarBasis,
 ): PeriodRow[] {
   const rows = new Map<string, PeriodRow>();
 
-  const ensure = (periodEc: string): PeriodRow => {
-    const existing = rows.get(periodEc);
+  const ensure = (period: string): PeriodRow => {
+    const existing = rows.get(period);
     if (existing !== undefined) return existing;
-    const [, year, month] = /^EC-(\d+)-(\d+)$/.exec(periodEc) ?? [];
-    const created: PeriodRow = {
-      periodEc,
-      ecYear: Number(year ?? 0),
-      ecMonth: Number(month ?? 0),
-      revenueNetSantim: 0, outputVatSantim: 0, costNetSantim: 0, inputVatSantim: 0,
-      marginSantim: 0, marginBps: null, netVatPayableSantim: 0, whtWithheldSantim: 0,
-      invoices: 0, vouchers: 0,
-    };
-    rows.set(periodEc, created);
+    const { year, month } = parsePeriodKey(period, basis);
+    const created = emptyRow(period, basis, year, month);
+    rows.set(period, created);
     return created;
   };
 
   for (const invoice of invoices) {
     if (invoice.status === 'draft' || invoice.status === 'void') continue;
-    const row = ensure(invoice.periodEc);
+    const row = ensure(invoice.period);
     row.revenueNetSantim += invoice.netSantim;
     row.outputVatSantim += invoice.vatSantim;
     row.invoices += 1;
@@ -347,14 +389,14 @@ export function buildPeriodSeries(
 
   for (const voucher of disbursements) {
     if (voucher.status !== 'approved' && voucher.status !== 'paid') continue;
-    const row = ensure(voucher.periodEc);
+    const row = ensure(voucher.period);
     row.costNetSantim += voucher.netSantim;
     row.inputVatSantim += voucher.supplierVatSantim;
     row.whtWithheldSantim += voucher.whtSantim;
     row.vouchers += 1;
   }
 
-  const filled = fillGaps([...rows.values()]);
+  const filled = fillGaps([...rows.values()], basis);
   for (const row of filled) {
     row.marginSantim = row.revenueNetSantim - row.costNetSantim;
     row.marginBps = rateBps(row.marginSantim, row.revenueNetSantim);
@@ -364,28 +406,23 @@ export function buildPeriodSeries(
 }
 
 /** Emit every month between the first and last, so a gap reads as a gap. */
-function fillGaps(rows: readonly PeriodRow[]): PeriodRow[] {
+function fillGaps(rows: readonly PeriodRow[], basis: CalendarBasis): PeriodRow[] {
   if (rows.length === 0) return [];
-  const sorted = [...rows].sort((a, b) => a.ecYear - b.ecYear || a.ecMonth - b.ecMonth);
+  const sorted = [...rows].sort((a, b) => a.year - b.year || a.month - b.month);
   const first = sorted[0] as PeriodRow;
   const last = sorted[sorted.length - 1] as PeriodRow;
-  const byKey = new Map(sorted.map((r) => [r.periodEc, r]));
+  const byKey = new Map(sorted.map((r) => [r.period, r]));
+
+  // 13 months in an Ethiopian year, Pagume included; 12 in a Gregorian one.
+  const monthsInYear = basis === 'ethiopian' ? 13 : 12;
 
   const out: PeriodRow[] = [];
-  // 13 months per Ethiopian year, Pagume included.
-  for (let year = first.ecYear; year <= last.ecYear; year++) {
-    const from = year === first.ecYear ? first.ecMonth : 1;
-    const to = year === last.ecYear ? last.ecMonth : 13;
+  for (let year = first.year; year <= last.year; year++) {
+    const from = year === first.year ? first.month : 1;
+    const to = year === last.year ? last.month : monthsInYear;
     for (let month = from; month <= to; month++) {
-      const periodEc = `EC-${year}-${String(month).padStart(2, '0')}`;
-      out.push(
-        byKey.get(periodEc) ?? {
-          periodEc, ecYear: year, ecMonth: month,
-          revenueNetSantim: 0, outputVatSantim: 0, costNetSantim: 0, inputVatSantim: 0,
-          marginSantim: 0, marginBps: null, netVatPayableSantim: 0, whtWithheldSantim: 0,
-          invoices: 0, vouchers: 0,
-        },
-      );
+      const key = periodKey(basis, year, month);
+      out.push(byKey.get(key) ?? emptyRow(key, basis, year, month));
     }
   }
   return out;

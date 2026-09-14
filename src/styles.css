@@ -584,6 +584,8 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .viz-grid { stroke: var(--viz-grid); stroke-width: 1; }
 .viz-grid-strong { stroke: var(--viz-ink-mute); stroke-width: 1; opacity: .45; }
 .viz-tick { fill: var(--viz-ink-mute); font-size: 11px; }
+/* The year under a month name: present, but never competing with it. */
+.viz-tick-year { font-size: 10px; opacity: 0.75; }
 .viz-axis-label { fill: var(--viz-ink-mute); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
 .viz-direct-label { fill: var(--viz-ink); font-size: 11px; font-weight: 650; }
 
