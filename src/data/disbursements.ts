@@ -7,8 +7,9 @@
  * is refused by the database itself.
  */
 
-import { deleteDoc, doc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore';
-import type { Disbursement, DualDate, Subcontractor } from '../lib/schema.js';
+import { deleteDoc, doc, getDocs, orderBy, query, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import type { Disbursement, DualDate, Role, Subcontractor } from '../lib/schema.js';
+import { availableTransitions, type PayoutStatus } from '../lib/payout-workflow.js';
 import { computeDisbursement, type WhtCategory } from '../lib/money.js';
 import { gregorianPeriodKey, periodKeyFor } from '../lib/returns.js';
 import { stampCreate, stampUpdate } from './audit.js';
@@ -16,7 +17,6 @@ import { nextSequence } from './counters.js';
 import { collectionRef, getOne, newId, subscribe, type WithId } from './repository.js';
 import { formatInvoiceNo } from '../lib/invoicing.js';
 import { db } from '../firebase.js';
-import { setDoc } from 'firebase/firestore';
 
 const PATH = 'disbursements';
 
@@ -131,6 +131,7 @@ export async function createDisbursement(
       : { foreign: { ...input.foreign, rateDate: input.supplierInvoiceDate.at } }),
     whtRemittedDate: null,
     status: 'draft',
+    workflow: EMPTY_WORKFLOW,
     whtPeriodEc: periodKeyFor(invoiceDate),
     whtPeriodGc: gregorianPeriodKey(invoiceDate),
     ...stampCreate(uid),
@@ -139,8 +140,84 @@ export async function createDisbursement(
   return { id, voucherNo };
 }
 
+const EMPTY_WORKFLOW = {
+  requestedAt: null, requestedBy: null,
+  checkedAt: null, checkedBy: null,
+  approvedAt: null, approvedBy: null,
+  paidAt: null, paidBy: null,
+  rejectedAt: null, rejectedBy: null,
+  heldAt: null, heldBy: null,
+  reason: null,
+};
+
+/**
+ * Move a voucher along the payout workflow.
+ *
+ * The transition is validated against `availableTransitions` FIRST, using the
+ * stamps already on the record. That is what enforces separation of duties: the
+ * person who confirmed the work happened may not release the money for it, and
+ * a client that has simply hidden the button is not enforcement.
+ *
+ * Every step writes its own timestamp and actor. Waiting time is read from
+ * those, never from `updatedAt`, which moves whenever anyone touches the record.
+ */
+export async function advanceDisbursement(
+  id: string,
+  to: PayoutStatus,
+  actor: { uid: string; role: Role | null },
+  options: { reason?: string } = {},
+): Promise<void> {
+  const current = await getDisbursement(id);
+  if (current === null) throw new Error('That payment voucher no longer exists.');
+
+  const workflow = { ...EMPTY_WORKFLOW, ...(current.workflow ?? {}) };
+  const context = {
+    uid: actor.uid,
+    role: actor.role,
+    actors: {
+      ...(workflow.requestedBy === null ? {} : { requested: workflow.requestedBy }),
+      ...(workflow.checkedBy === null ? {} : { checked: workflow.checkedBy }),
+      ...(workflow.approvedBy === null ? {} : { approved: workflow.approvedBy }),
+    },
+  };
+
+  const transition = availableTransitions(current.status, context).find((t) => t.to === to);
+  if (transition === undefined) {
+    throw new Error(`A voucher that is ${current.status} cannot go straight to ${to}.`);
+  }
+  if (transition.blockedBy !== null) throw new Error(transition.blockedBy);
+
+  // A rejection or a hold with no reason is a dead end for whoever picks it up
+  // next, so the reason is required rather than merely invited.
+  if ((to === 'rejected' || to === 'on_hold') && (options.reason ?? '').trim() === '') {
+    throw new Error(`Say why the voucher is being ${to === 'rejected' ? 'rejected' : 'put on hold'}.`);
+  }
+
+  const now = Timestamp.now();
+  const stamp: Record<string, unknown> = { status: to, ...stampUpdate(actor.uid) };
+
+  if (to === 'requested') { stamp['workflow.requestedAt'] = now; stamp['workflow.requestedBy'] = actor.uid; }
+  if (to === 'checked')   { stamp['workflow.checkedAt'] = now;   stamp['workflow.checkedBy'] = actor.uid; }
+  if (to === 'approved')  { stamp['workflow.approvedAt'] = now;  stamp['workflow.approvedBy'] = actor.uid; stamp['approvedBy'] = actor.uid; }
+  if (to === 'rejected')  { stamp['workflow.rejectedAt'] = now;  stamp['workflow.rejectedBy'] = actor.uid; }
+  if (to === 'on_hold')   { stamp['workflow.heldAt'] = now;      stamp['workflow.heldBy'] = actor.uid; }
+  if (options.reason !== undefined) stamp['workflow.reason'] = options.reason.trim();
+  // Releasing a hold clears the reason, so a stale explanation cannot linger on
+  // a voucher that has moved on.
+  if (to === 'checked' && current.status === 'on_hold') stamp['workflow.reason'] = null;
+
+  await updateDoc(doc(db, PATH, id), stamp);
+}
+
+/** Kept for callers that only ever approve; the workflow path is preferred. */
 export async function approveDisbursement(id: string, uid: string): Promise<void> {
-  await updateDoc(doc(db, PATH, id), { status: 'approved', approvedBy: uid, ...stampUpdate(uid) });
+  await updateDoc(doc(db, PATH, id), {
+    status: 'approved',
+    approvedBy: uid,
+    'workflow.approvedAt': Timestamp.now(),
+    'workflow.approvedBy': uid,
+    ...stampUpdate(uid),
+  });
 }
 
 /**
@@ -165,6 +242,8 @@ export async function payDisbursement(
 
   await updateDoc(doc(db, PATH, id), {
     status: 'paid',
+    'workflow.paidAt': Timestamp.now(),
+    'workflow.paidBy': uid,
     paymentDate: details.paymentDate,
     ...(details.paymentMethod === undefined ? {} : { paymentMethod: details.paymentMethod }),
     ...(details.bankRef === undefined ? {} : { bankRef: details.bankRef }),
@@ -175,8 +254,15 @@ export async function payDisbursement(
   return { whtCertificateNo };
 }
 
-export async function rejectDisbursement(id: string, uid: string): Promise<void> {
-  await updateDoc(doc(db, PATH, id), { status: 'rejected', ...stampUpdate(uid) });
+export async function rejectDisbursement(id: string, uid: string, reason: string): Promise<void> {
+  if (reason.trim() === '') throw new Error('Say why the voucher is being rejected.');
+  await updateDoc(doc(db, PATH, id), {
+    status: 'rejected',
+    'workflow.rejectedAt': Timestamp.now(),
+    'workflow.rejectedBy': uid,
+    'workflow.reason': reason.trim(),
+    ...stampUpdate(uid),
+  });
 }
 
 export async function markWhtRemitted(id: string, remittedDate: DualDate, uid: string): Promise<void> {

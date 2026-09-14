@@ -34,7 +34,7 @@ export interface VatReturnDisbursement {
   subcontractorTin: string;
   netSantim: number;
   supplierVatSantim: number;
-  status: 'draft' | 'approved' | 'paid' | 'rejected' | 'void';
+  status: 'draft' | 'requested' | 'checked' | 'approved' | 'paid' | 'rejected' | 'on_hold' | 'void';
 }
 
 export interface VatReturn {
@@ -73,6 +73,10 @@ export function buildVatReturn(
   disbursements: readonly VatReturnDisbursement[],
 ): VatReturn {
   const declarable = invoices.filter((i) => i.status !== 'draft' && i.status !== 'void');
+  // Input VAT is claimable against an AUTHORISED voucher, never against one
+  // still working its way through the payout workflow. A requested or held
+  // voucher can still be reduced or refused, and reclaiming VAT on a purchase
+  // that is later cut is a correction to ERCA rather than a saving.
   const claimable = disbursements.filter((d) => d.status === 'approved' || d.status === 'paid');
 
   const outputNetSantim = declarable.reduce((a, i) => a + i.netSantim, 0);
@@ -112,7 +116,7 @@ export interface WhtReturnRow {
   whtBaseSantim: number;
   whtSantim: number;
   certificateNo?: string | undefined;
-  status: 'draft' | 'approved' | 'paid' | 'rejected' | 'void';
+  status: 'draft' | 'requested' | 'checked' | 'approved' | 'paid' | 'rejected' | 'on_hold' | 'void';
 }
 
 export interface WhtSupplierSummary {
@@ -150,6 +154,8 @@ export interface WhtReturn {
  */
 export function buildWhtReturn(periodEc: string, rows: readonly WhtReturnRow[]): WhtReturn {
   const withheld = rows.filter(
+    // Same rule on the withholding side: declared once authorised, not once
+    // requested.
     (r) => (r.status === 'approved' || r.status === 'paid') && r.whtSantim > 0,
   );
 

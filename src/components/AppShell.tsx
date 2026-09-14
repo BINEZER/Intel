@@ -26,8 +26,11 @@ const NAV: NavItem[] = [
   { to: '/clients', label: 'Clients', capability: 'read' },
   { to: '/contracts', label: 'Contracts', capability: 'read' },
   { to: '/finance', label: 'Finance', capability: 'viewFinancials' },
+  { to: '/collections', label: 'Collections', capability: 'viewFinancials' },
+  { to: '/payouts', label: 'Payouts', capability: 'viewFinancials' },
   { to: '/reports', label: 'Reports', capability: 'viewFinancials' },
   { to: '/performance', label: 'Performance', capability: 'read' },
+  { to: '/incentives', label: 'Incentives', capability: 'read' },
   { to: '/boards', label: 'Boards', capability: 'useBoards' },
   { to: '/settings', label: 'Settings', capability: 'manageConfig' },
 ];

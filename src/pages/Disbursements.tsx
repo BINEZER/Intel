@@ -24,6 +24,7 @@ import { formatBps } from '../lib/kpi.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
+import { PayoutActions } from '../components/PayoutActions.js';
 import { CurrencyAmountInput, emptyAmount, type CurrencyAmount } from '../components/CurrencyAmountInput.js';
 import { formatConverted, RATE_SCALE } from '../lib/currency.js';
 import type { Disbursement, DualDate, Project, Subcontractor } from '../lib/schema.js';
@@ -150,32 +151,7 @@ function VoucherRow({
       </td>
       {editable && (
         <td className="actions-cell">
-          {voucher.status === 'draft' && (
-            <>
-              <button type="button" className="primary" disabled={busy}
-                onClick={() => void run(() => approveDisbursement(voucher.id, uid))}>Approve</button>
-              <button type="button" disabled={busy}
-                onClick={() => void run(() => rejectDisbursement(voucher.id, uid))}>Reject</button>
-            </>
-          )}
-          {voucher.status === 'approved' && (
-            <button type="button" className="primary" disabled={busy}
-              onClick={() =>
-                void run(() =>
-                  payDisbursement(
-                    voucher.id,
-                    {
-                      paymentDate: dualDateFromGregorian(new Date(), toTimestamp, 'GC'),
-                      paymentMethod: 'bank_transfer',
-                      whtSantim: voucher.whtSantim,
-                    },
-                    uid,
-                  ),
-                )
-              }>
-              Mark paid
-            </button>
-          )}
+          <PayoutActions voucher={voucher} />
         </td>
       )}
     </tr>

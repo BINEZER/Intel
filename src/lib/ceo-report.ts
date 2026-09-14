@@ -70,7 +70,7 @@ export interface ReportDisbursement {
   supplierVatSantim: number;
   whtSantim: number;
   netPayableSantim: number;
-  status: 'draft' | 'approved' | 'paid' | 'rejected' | 'void';
+  status: 'draft' | 'requested' | 'checked' | 'approved' | 'paid' | 'rejected' | 'on_hold' | 'void';
 }
 
 export interface ReportProject {
@@ -691,9 +691,13 @@ function moneyOutSection(
 ): ReportSection {
   const paid = disbursementsPaidIn(inputs.disbursements, inputs.period);
   const approved = inputs.disbursements.filter((d) => d.status === 'approved');
-  const drafts = inputs.disbursements.filter((d) => d.status === 'draft');
+  // Submitted and awaiting a decision. A draft nobody has sent is not the same
+  // thing, and neither is money already authorised.
+  const inFlight = inputs.disbursements.filter((d) => d.status === 'requested' || d.status === 'checked');
+  const held = inputs.disbursements.filter((d) => d.status === 'on_hold');
   const approvedSantim = approved.reduce((a, d) => a + d.netPayableSantim, 0);
-  const draftSantim = drafts.reduce((a, d) => a + d.netPayableSantim, 0);
+  const inFlightSantim = inFlight.reduce((a, d) => a + d.netPayableSantim, 0);
+  const heldSantim = held.reduce((a, d) => a + d.netPayableSantim, 0);
   const netVat = now.outputVatSantim - now.inputVatSantim;
 
   const narrative: string[] = [];
@@ -718,10 +722,17 @@ function moneyOutSection(
     );
   }
 
-  if (drafts.length > 0) {
+  if (inFlight.length > 0) {
     narrative.push(
-      `A further ${plural(drafts.length, 'voucher')} worth ${formatETB(draftSantim)} has been raised but not yet approved. ` +
+      `A further ${plural(inFlight.length, 'voucher')} worth ${formatETB(inFlightSantim)} has been submitted and is waiting on verification or approval. ` +
         `Those are still decisions — approving them is what turns them into commitments.`,
+    );
+  }
+
+  if (held.length > 0) {
+    narrative.push(
+      `${plural(held.length, 'voucher is', 'vouchers are')} on hold, worth ${formatETB(heldSantim)}. ` +
+        `A hold is somebody waiting on us, and subcontractors notice.`,
     );
   }
 

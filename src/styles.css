@@ -158,7 +158,9 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
 
 .kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  /* Wide enough for "ETB 13,750,550.00" on one line. A money figure clipped
+     mid-number does not look clipped — it looks like a smaller number. */
+  grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
   gap: .75rem;
   margin-top: 1rem;
 }
@@ -730,6 +732,14 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
 .metric-tile.tone-good { border-left-color: var(--brand-green); }
 .metric-tile.tone-bad  { border-left-color: var(--danger); }
 
+/* Chips carrying a phrase rather than a single word keep the capitalisation
+   they were written with. "Nobody Has Chased It" is not English. */
+[class*='chase-chip-'],
+.verdict-problem, .verdict-watch, .verdict-healthy, .verdict-unknown,
+.sev-chip-critical, .sev-chip-high, .sev-chip-medium {
+  text-transform: none;
+}
+
 .metric-label { margin: 0; font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .metric-value { margin: 0.2rem 0; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow-x: auto; }
 .metric-note  { margin: 0; font-size: 0.8rem; line-height: 1.4; }
@@ -919,3 +929,80 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
 .timeline-entry.is-open        { background: color-mix(in srgb, var(--brand-amber) 8%, transparent); }
 .timeline-entry p { margin: 0.2rem 0 0; }
 .timeline-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
+
+/* --- Collections chase --------------------------------------------------- */
+
+.chase-list, .voucher-list { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.6rem; }
+
+.chase-row, .voucher-row {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+  background: var(--surface);
+}
+/* Urgency is border colour AND leading position AND a reason sentence — never
+   colour alone. */
+.chase-row.is-urgent, .voucher-row.is-stuck { border-left-color: var(--danger); }
+.chase-row.stage-promised { border-left-color: var(--brand-teal); }
+.chase-row.stage-disputed { border-left-color: var(--brand-amber); }
+
+.chase-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
+.chase-amount { margin-left: auto; font-variant-numeric: tabular-nums; }
+.chase-reason { margin: 0.35rem 0; }
+.chase-meta { margin: 0.2rem 0; font-size: 0.85rem; }
+.chase-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.4rem; }
+.chase-next { font-weight: 600; color: var(--brand-teal-dark); }
+.chase-next.overdue { color: var(--danger); }
+
+.chase-chip-promise_broken, .chase-chip-not_started { background: var(--danger); color: #fff; }
+.chase-chip-disputed { background: var(--brand-amber); color: #16202B; }
+.chase-chip-promised { background: var(--brand-teal); color: #fff; }
+
+.chase-log { border-top: 1px solid var(--border); margin-top: 0.6rem; padding-top: 0.6rem; }
+
+.step-form { border-top: 1px dashed var(--border); margin-top: 0.75rem; padding-top: 0.75rem; }
+.step-form h4 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+.field-wide { grid-column: 1 / -1; }
+
+/* --- Payout pipeline ----------------------------------------------------- */
+
+.pipeline { list-style: none; padding: 0; margin: 0.5rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pipeline > li > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+}
+.pipeline > li.is-stuck > button { border-color: var(--danger); }
+.pipeline-count { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.payout-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-top: 0.4rem; }
+.payout-actions button { padding: 0.25rem 0.6rem; font-size: 0.85rem; }
+.payout-blocked { flex-basis: 100%; font-size: 0.8rem; margin: 0.15rem 0 0; }
+.reason-form { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: end; }
+.reason-form label { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.85rem; }
+
+/* --- Incentives ---------------------------------------------------------- */
+
+.gate-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.6rem; }
+.gate-list li { border-left: 3px solid var(--brand-teal); padding-left: 0.7rem; }
+.gate-list label { display: flex; align-items: center; gap: 0.45rem; }
+.gate-list p { margin: 0.2rem 0 0; font-size: 0.85rem; }
+
+.metric-tile.tone-good { border-left-color: var(--brand-green); }
+.metric-tile.tone-bad  { border-left-color: var(--danger); }
+
+/* Chips carrying a phrase rather than a single word keep the capitalisation
+   they were written with. "Nobody Has Chased It" is not English. */
+[class*='chase-chip-'],
+.verdict-problem, .verdict-watch, .verdict-healthy, .verdict-unknown,
+.sev-chip-critical, .sev-chip-high, .sev-chip-medium {
+  text-transform: none;
+}

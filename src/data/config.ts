@@ -12,6 +12,8 @@ import { VAT_RATE_BPS, WHT } from '../lib/money.js';
 import { DEFAULT_KPI_TARGETS } from '../lib/kpi.js';
 import { DEFAULT_PRIORITY_CONFIG } from '../lib/priority.js';
 import { DEFAULT_PROJECT_WEIGHTS, DEFAULT_TECHNICIAN_WEIGHTS, assertWeightsValid } from '../lib/scorecard.js';
+import { assertSchemeValid, defaultScheme, type IncentiveScheme } from '../lib/incentive.js';
+import { DEFAULT_CADENCE, type ChaseCadence } from '../lib/collection-chase.js';
 import { stampUpdate } from './audit.js';
 import { db } from '../firebase.js';
 
@@ -84,4 +86,40 @@ export async function saveKpiWeights(
   assertWeightsValid(weights.project as unknown as Record<string, number>);
   assertWeightsValid(weights.technician as unknown as Record<string, number>);
   await setDoc(doc(db, PATH, 'kpiWeights'), { ...weights, ...stampUpdate(uid) }, { merge: true });
+}
+
+/**
+ * The incentive scheme.
+ *
+ * The shipped numbers are a PLACEHOLDER, not IntelMotion's policy. An incentive
+ * scheme is a promise to people about their pay; it belongs to the business, and
+ * until somebody sets it here what is stored is a plausible default with its own
+ * description saying so.
+ */
+export function getIncentiveScheme() {
+  return readWithDefault<IncentiveScheme>(
+    'incentive',
+    defaultScheme({ ...DEFAULT_TECHNICIAN_WEIGHTS } as unknown as Record<string, number>),
+  );
+}
+
+/**
+ * Validated before it is stored, never on read.
+ *
+ * A scheme whose weights do not sum to 100%, or whose higher band pays less than
+ * a lower one, is wrong in a way nobody notices until somebody's bonus falls for
+ * doing better. The place to catch that is the write.
+ */
+export async function saveIncentiveScheme(scheme: IncentiveScheme, uid: string): Promise<void> {
+  assertSchemeValid(scheme);
+  await setDoc(doc(db, PATH, 'incentive'), { ...scheme, ...stampUpdate(uid) }, { merge: true });
+}
+
+/** How hard and how often to chase. A ministry and a private developer differ. */
+export function getChaseCadence() {
+  return readWithDefault<ChaseCadence>('chaseCadence', { ...DEFAULT_CADENCE });
+}
+
+export async function saveChaseCadence(cadence: Partial<ChaseCadence>, uid: string): Promise<void> {
+  await setDoc(doc(db, PATH, 'chaseCadence'), { ...cadence, ...stampUpdate(uid) }, { merge: true });
 }
