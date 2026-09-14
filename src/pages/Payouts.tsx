@@ -25,6 +25,7 @@ import { formatDual } from '../lib/ethiopic.js';
 import { PayoutActions } from '../components/PayoutActions.js';
 import type { Disbursement } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 
 function toVoucher(row: WithId<Disbursement>): PayoutVoucher {
   const workflow = row.workflow;
@@ -85,6 +86,9 @@ export function Payouts() {
   return (
     <>
       <h1>Payouts</h1>
+      {/* print-only */}
+      <PrintHeader title="Payouts" subtitle="payment vouchers" />
+      <div className="page-actions no-print"><PrintButton label="Print this page" /></div>
       <p className="muted">
         Where every subcontractor payment is and how long it has been there. A voucher that has sat
         for three weeks and one raised yesterday both read as "approved" everywhere else.

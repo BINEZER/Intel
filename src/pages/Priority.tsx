@@ -16,6 +16,7 @@ import { assessProjectRisk } from '../lib/risk.js';
 import { DEFAULT_PRIORITY_CONFIG, rankProjects, type PriorityInput } from '../lib/priority.js';
 import { PriorityBoard, type PriorityRow } from './PriorityBoard.js';
 import type { Contract, Invoice, Project } from '../lib/schema.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 
 export function Priority() {
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
@@ -119,6 +120,9 @@ export function Priority() {
     return (
       <>
         <h1>Priority</h1>
+      {/* print-only */}
+      <PrintHeader title="Priority" />
+      <div className="page-actions no-print"><PrintButton label="Print this page" /></div>
         <p className="muted">
           Nothing to rank yet. Add a client, then a contract, then a project, and
           projects will appear here ordered by the cash they can realistically bring

@@ -14,6 +14,7 @@ import { DualDateText } from '../components/DualDateInput.js';
 import { ContractForm } from './ContractForm.js';
 import type { Client, Contract } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 
 export function Contracts() {
   const { user, role } = useAuth();
@@ -27,6 +28,9 @@ export function Contracts() {
     <>
       <div className="page-head">
         <h1>Contracts</h1>
+      {/* print-only */}
+      <PrintHeader title="Contracts" subtitle="contracts" />
+        <PrintButton label="Print list" />
         {editable && !creating && (
           <button type="button" className="primary" onClick={() => setCreating(true)}>
             New contract

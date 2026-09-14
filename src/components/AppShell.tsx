@@ -3,7 +3,8 @@
  * shows today in both calendars.
  */
 
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Logo } from './Logo.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can, type Capability } from '../auth/roles.js';
@@ -86,10 +87,42 @@ export function TodayBadge() {
 
 export function AppShell() {
   const { user, role, signOut } = useAuth();
+  const [navOpen, setNavOpen] = useState(false);
+  const location = useLocation();
+  const toggle = useRef<HTMLButtonElement>(null);
+
+  // Going somewhere closes the drawer. A menu still covering the page you just
+  // asked for is the commonest bug in every hand-rolled mobile nav.
+  useEffect(() => { setNavOpen(false); }, [location.pathname]);
+
+  // Escape closes it, and the focus goes back to the button that opened it
+  // rather than to the top of the document.
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setNavOpen(false);
+      toggle.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
 
   return (
-    <div className="shell">
+    <div className={`shell ${navOpen ? 'nav-open' : ''}`}>
       <header className="topbar">
+        <button
+          type="button"
+          ref={toggle}
+          className="nav-toggle"
+          aria-expanded={navOpen}
+          aria-controls="app-nav"
+          aria-label={navOpen ? 'Close menu' : 'Open menu'}
+          onClick={() => setNavOpen((open) => !open)}
+        >
+          <span className="nav-toggle-bars" aria-hidden="true"><span /><span /><span /></span>
+        </button>
+
         <div className="brand">
           <Logo height={28} />
           <span className="muted brand-sub">PCM</span>
@@ -103,7 +136,17 @@ export function AppShell() {
       </header>
 
       <div className="body">
-        <nav className="sidebar" aria-label="Sections">
+        {/* The overlay is a button so dismissing by tapping outside is a real,
+            announced action rather than a click handler on a div. */}
+        <button
+          type="button"
+          className="nav-scrim"
+          tabIndex={navOpen ? 0 : -1}
+          aria-label="Close menu"
+          onClick={() => setNavOpen(false)}
+        />
+
+        <nav className="sidebar" id="app-nav" aria-label="Sections">
           {NAV.map((group) => {
             const visible = group.items.filter((item) => can(role, item.capability));
             if (visible.length === 0) return null;

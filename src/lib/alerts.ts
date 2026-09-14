@@ -23,6 +23,10 @@ import type { RiskFlag, RiskSeverity } from './schema.js';
 export type AlertKind =
   | 'contract_expiring'
   | 'contract_lapsed'
+  | 'warranty_expiring'
+  | 'warranty_expired'
+  | 'reminder_due'
+  | 'reminder_overdue'
   | 'project_in_danger'
   | 'certificate_expiring'
   | 'certificate_expired'
@@ -256,10 +260,81 @@ export function unitAlerts(
   return alerts;
 }
 
+/**
+ * Warranty, and every date somebody asked to be warned about.
+ *
+ * These arrive already resolved — the caller has turned stored dual dates into
+ * real ones and worked out what is due — because the alert engine's job is to
+ * rank and phrase, not to recompute what `lib/reminders` already knows.
+ */
+export interface AlertWarranty {
+  contractId: string;
+  contractNo: string;
+  clientName: string;
+  endsOn: Date;
+  state: 'active' | 'expiring' | 'expired';
+  message: string;
+}
+
+export interface AlertReminder {
+  id: string;
+  label: string;
+  message: string;
+  daysRemaining: number;
+  state: 'due' | 'overdue';
+  sourceKind: 'contract' | 'project';
+  sourceId: string;
+  sourceLabel: string;
+}
+
+/**
+ * A warranty running out is the moment to inspect, not the moment to discover a
+ * claim: every defect found the week after is a chargeable repair we do for
+ * free anyway, or an argument with a client we would rather keep.
+ */
+export function warrantyAlerts(warranties: readonly AlertWarranty[]): Alert[] {
+  return warranties
+    .filter((w) => w.state !== 'active')
+    .map((w) => ({
+      id: `warranty-${w.contractId}`,
+      kind: (w.state === 'expired' ? 'warranty_expired' : 'warranty_expiring') as AlertKind,
+      severity: (w.state === 'expired' ? 'medium' : 'high') as RiskSeverity,
+      subject: `${w.contractNo} · ${w.clientName}`,
+      message: w.message,
+      action:
+        w.state === 'expired'
+          ? 'Anything found now is chargeable. Close the file, or agree a goodwill position deliberately rather than by default.'
+          : 'Book the end-of-warranty inspection while defects are still ours to fix for free.',
+      href: `/contracts?contract=${w.contractId}`,
+      daysRemaining: Math.round((w.endsOn.getTime() - Date.now()) / 86_400_000),
+    }));
+}
+
+/** Dates somebody put in deliberately. They outrank nothing and are never noise. */
+export function reminderAlerts(reminders: readonly AlertReminder[]): Alert[] {
+  return reminders.map((reminder) => ({
+    id: `reminder-${reminder.id}`,
+    kind: (reminder.state === 'overdue' ? 'reminder_overdue' : 'reminder_due') as AlertKind,
+    // Somebody set this date on purpose. Overdue is high; approaching is medium
+    // — loud enough to see, quiet enough not to bury a lapsed contract.
+    severity: (reminder.state === 'overdue' ? 'high' : 'medium') as RiskSeverity,
+    subject: reminder.sourceLabel,
+    message: reminder.message,
+    action:
+      reminder.state === 'overdue'
+        ? 'Deal with it or mark it done — a reminder nobody closes teaches everyone to ignore the list.'
+        : 'Act on it now, while there is still time for it to matter.',
+    href: reminder.sourceKind === 'project' ? `/projects/${reminder.sourceId}` : `/contracts?contract=${reminder.sourceId}`,
+    daysRemaining: reminder.daysRemaining,
+  }));
+}
+
 export interface AlertInputs {
   contracts: readonly AlertContract[];
   projects: readonly AlertProject[];
   units: readonly AlertUnit[];
+  warranties?: readonly AlertWarranty[];
+  reminders?: readonly AlertReminder[];
 }
 
 export function buildAlerts(
@@ -269,6 +344,8 @@ export function buildAlerts(
 ): Alert[] {
   return sortAlerts([
     ...contractAlerts(inputs.contracts, asOf),
+    ...warrantyAlerts(inputs.warranties ?? []),
+    ...reminderAlerts(inputs.reminders ?? []),
     ...projectAlerts(inputs.projects, asOf),
     ...unitAlerts(inputs.units, asOf, thresholds),
   ]);

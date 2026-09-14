@@ -31,6 +31,8 @@ import { formatBps } from '../lib/kpi.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
 import type { Client, Contract, DualDate, Invoice, Program, Project } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
+import { FormPanel } from '../components/FormPanel.js';
 
 /** Everything both the list and the detail page need, computed once. */
 function usePrograms() {
@@ -91,11 +93,14 @@ export function Programs() {
       <div className="page-head">
         <div>
           <h1>Programs</h1>
+      {/* print-only */}
+      <PrintHeader title="Programs" subtitle="programs" />
           <p className="muted">
             Projects that belong together — the lifts of one building, the phases of one
             development, a framework with one client. Ranked by what needs attention, not by size.
           </p>
         </div>
+        <PrintButton label="Print list" />
         {editable && (
           <button type="button" className="primary" onClick={() => setCreating((v) => !v)}>
             {creating ? 'Cancel' : 'New program'}
@@ -344,8 +349,11 @@ function ProgramForm({ uid, onDone }: { uid: string; onDone: () => void }) {
   }
 
   return (
-    <section className="card">
-      <h2>New program</h2>
+    <FormPanel
+      title="New program"
+      description="Group the lifts of one building or the phases of one development so they report as a single commitment."
+      onClose={onDone}
+    >
       <form onSubmit={(e) => void submit(e)}>
         <div className="form-grid">
           <div className="field">
@@ -387,6 +395,6 @@ function ProgramForm({ uid, onDone }: { uid: string; onDone: () => void }) {
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>
       </form>
-    </section>
+    </FormPanel>
   );
 }

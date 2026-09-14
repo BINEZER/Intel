@@ -18,6 +18,7 @@ import { formatETB } from '../lib/money.js';
 import { formatBps } from '../lib/kpi.js';
 import { KpiTile } from '../components/KpiTile.js';
 import type { Contract, Project } from '../lib/schema.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 
 const OWNER_LABEL: Record<string, string> = {
   us: 'Our crew',
@@ -39,6 +40,9 @@ export function FinishNext({
   return (
     <>
       <h1>Finish next</h1>
+      {/* print-only */}
+      <PrintHeader title="Finish next" subtitle="ranked by cash released" />
+      <div className="page-actions no-print"><PrintButton label="Print this page" /></div>
       <p className="muted">
         Unfinished work ranked by the money its completion releases, across every
         project. Work our own crew can act on is listed first.

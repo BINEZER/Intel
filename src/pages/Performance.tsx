@@ -16,6 +16,7 @@ import { headlineMetrics, type WorkforceRow } from '../lib/performance.js';
 import { KpiTile } from '../components/KpiTile.js';
 import { DEFAULT_KPI_TARGETS } from '../lib/kpi.js';
 import type { Subcontractor, Technician } from '../lib/schema.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 
 type Filter = 'all' | 'installation' | 'service' | 'subcontractors';
 
@@ -85,6 +86,9 @@ export function Performance() {
   return (
     <>
       <h1>Performance</h1>
+      {/* print-only */}
+      <PrintHeader title="Performance" />
+      <div className="page-actions no-print"><PrintButton label="Print this page" /></div>
       <p className="muted">
         Installation crews, service technicians and subcontractors. Each is scored on
         the evidence its own work produces — an installer is judged on stages

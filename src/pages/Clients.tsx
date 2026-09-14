@@ -7,6 +7,8 @@ import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { createClient, subscribeClients, updateClient, type ClientInput } from '../data/clients.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
+import { FormPanel } from '../components/FormPanel.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import type { Client } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
@@ -33,12 +35,25 @@ export function Clients() {
     <>
       <div className="page-head">
         <h1>Clients</h1>
-        {editable && (
-          <button type="button" className="primary" onClick={() => setEditing('new')}>
-            Add client
-          </button>
-        )}
+        <div className="page-actions">
+          <PrintButton label="Print list" />
+          {editable && (
+            <button type="button" className="primary" onClick={() => setEditing('new')}>
+              Add client
+            </button>
+          )}
+        </div>
       </div>
+
+      <PrintHeader title="Clients" subtitle={`${rows.length} on the register`} />
+
+      {editing !== null && user !== null && (
+        <ClientForm
+          initial={editing === 'new' ? null : editing}
+          uid={user.uid}
+          onDone={() => setEditing(null)}
+        />
+      )}
 
       {error && <p className="error" role="alert">{error}</p>}
       {loading && <p className="muted">Loading clients…</p>}
@@ -95,13 +110,6 @@ export function Clients() {
         </div>
       )}
 
-      {editing !== null && user !== null && (
-        <ClientForm
-          initial={editing === 'new' ? null : editing}
-          uid={user.uid}
-          onDone={() => setEditing(null)}
-        />
-      )}
     </>
   );
 }
@@ -146,8 +154,11 @@ function ClientForm({
   const contact = form.contacts[0] ?? { name: '', phone: '' };
 
   return (
-    <section className="card">
-      <h2>{initial === null ? 'New client' : `Edit ${initial.name}`}</h2>
+    <FormPanel
+      title={initial === null ? 'New client' : `Edit ${initial.name}`}
+      description="Everything else hangs off a client — contracts, projects and invoices all point back here."
+      onClose={onDone}
+    >
       <form onSubmit={(e) => void submit(e)} className="form-grid">
         <div className="field">
           <label htmlFor="c-name">Name <span className="req" aria-hidden="true">*</span></label>
@@ -175,6 +186,57 @@ function ClientForm({
             id="c-city"
             value={form.address.city}
             onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })}
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="c-subcity">Sub-city</label>
+          <input
+            id="c-subcity"
+            value={form.address.subCity ?? ''}
+            placeholder="Bole"
+            onChange={(e) => setForm({ ...form, address: { ...form.address, subCity: e.target.value } })}
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="c-woreda">Woreda</label>
+          <input
+            id="c-woreda"
+            value={form.address.woreda ?? ''}
+            onChange={(e) => setForm({ ...form, address: { ...form.address, woreda: e.target.value } })}
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="c-street">Street / building</label>
+          <input
+            id="c-street"
+            value={form.address.street ?? ''}
+            placeholder="Africa Avenue, Getu Commercial Centre, 4th floor"
+            onChange={(e) => setForm({ ...form, address: { ...form.address, street: e.target.value } })}
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="c-landmark">Landmark</label>
+          <input
+            id="c-landmark"
+            value={form.address.landmark ?? ''}
+            placeholder="Opposite Edna Mall"
+            onChange={(e) => setForm({ ...form, address: { ...form.address, landmark: e.target.value } })}
+          />
+          <p className="hint">
+            In Addis a landmark does more work than a street name. This is what goes on the delivery note.
+          </p>
+        </div>
+
+        <div className="field">
+          <label htmlFor="c-pobox">P.O. Box</label>
+          <input
+            id="c-pobox"
+            value={form.address.poBox ?? ''}
+            onChange={(e) => setForm({ ...form, address: { ...form.address, poBox: e.target.value } })}
           />
         </div>
 
@@ -228,6 +290,6 @@ function ClientForm({
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>
       </form>
-    </section>
+    </FormPanel>
   );
 }

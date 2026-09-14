@@ -34,6 +34,7 @@ import { formatETB } from '../lib/money.js';
 import { formatDual } from '../lib/ethiopic.js';
 import type { Invoice } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 
 export function Collections() {
   const { user, role } = useAuth();
@@ -95,6 +96,9 @@ export function Collections() {
   return (
     <>
       <h1>Collections</h1>
+      {/* print-only */}
+      <PrintHeader title="Collections" subtitle="unpaid invoices" />
+      <div className="page-actions no-print"><PrintButton label="Print this page" /></div>
       <p className="muted">
         Every unpaid invoice and what has actually been done about it. Broken promises come first,
         then money nobody has chased — asking is free and it is the step most often skipped.

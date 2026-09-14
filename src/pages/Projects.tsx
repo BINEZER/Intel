@@ -2,7 +2,7 @@
  * Project list and creation.
  */
 
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -17,7 +17,11 @@ import { subscribePrograms } from '../data/programs.js';
 import type { Program } from '../lib/schema.js';
 import { ProgressBar } from '../components/KpiTile.js';
 import { expectedProgressBps } from '../lib/kpi.js';
-import type { Client, DualDate, Project } from '../lib/schema.js';
+import { FormPanel } from '../components/FormPanel.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
+import { buildTree, sortTree, type TreeProject } from '../lib/project-tree.js';
+import { ReminderEditor } from '../components/ReminderEditor.js';
+import type { Client, DualDate, Project, Reminder } from '../lib/schema.js';
 
 export function Projects() {
   const { user, role } = useAuth();
@@ -27,16 +31,50 @@ export function Projects() {
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
 
-  const asOf = new Date();
+  const asOf = useMemo(() => new Date(), []);
+
+  /**
+   * Parents with their sub-projects nested under them.
+   *
+   * A tower is one job commercially and several operationally. Flattened, the
+   * page shows five unrelated projects where there is one commitment.
+   */
+  const tree = useMemo(
+    () =>
+      sortTree(
+        buildTree(
+          projects.rows.map<TreeProject & { source: typeof projects.rows[number] }>((p) => ({
+            id: p.id,
+            projectNo: p.projectNo,
+            title: p.title,
+            clientName: p.clientName,
+            parentProjectId: p.parentProjectId ?? null,
+            status: p.status,
+            progressBps: p.progressBps,
+            contractNetSantim: p.financials?.contractNetSantim ?? 0,
+            plannedEnd: p.plannedEnd.at.toDate(),
+            inDanger: false,
+            source: p,
+          })),
+          asOf,
+        ),
+      ),
+    [projects.rows, asOf],
+  );
 
   return (
     <>
       <div className="page-head">
         <h1>Projects</h1>
-        {editable && !creating && (
-          <button type="button" className="primary" onClick={() => setCreating(true)}>New project</button>
-        )}
+        <div className="page-actions">
+          <PrintButton label="Print list" />
+          {editable && !creating && (
+            <button type="button" className="primary" onClick={() => setCreating(true)}>New project</button>
+          )}
+        </div>
       </div>
+
+      <PrintHeader title="Projects" subtitle={`${projects.rows.length} on the books`} />
 
       {projects.error && <p className="error" role="alert">{projects.error}</p>}
 
@@ -50,7 +88,8 @@ export function Projects() {
       )}
 
       <div className="project-cards">
-        {projects.rows.map((project) => {
+        {tree.map(({ project: node, children, rolled, hasChildren }) => {
+          const project = node.source;
           const expected = expectedProgressBps(
             project.plannedStart.at.toDate(),
             project.plannedEnd.at.toDate(),
@@ -82,6 +121,30 @@ export function Projects() {
                 <dt>Contract value</dt>
                 <dd>{formatETB(project.financials?.contractGrossSantim ?? 0)}</dd>
               </dl>
+
+              {hasChildren && (
+                <div className="subprojects">
+                  <p className="family-figures">
+                    {children.length} sub-project{children.length === 1 ? '' : 's'} ·{' '}
+                    {formatBps(rolled.progressBps, 0)} across the family
+                    {rolled.weightedBy === 'value' ? ' weighted by value' : ''} ·{' '}
+                    {formatETB(rolled.contractNetSantim)} contracted
+                    {rolled.overdue > 0 && (
+                      <span className="warn-text"> · {rolled.overdue} past planned end</span>
+                    )}
+                  </p>
+                  <ul className="subproject-list">
+                    {children.map((child) => (
+                      <li key={child.id}>
+                        <Link to={`/projects/${child.id}`}>{child.projectNo} {child.title}</Link>
+                        <span className="muted">
+                          {formatBps(child.progressBps, 0)} · {formatETB(child.contractNetSantim)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </article>
           );
         })}
@@ -106,12 +169,26 @@ function ProjectForm({
   const [units, setUnits] = useState(1);
   const [templateKey, setTemplateKey] = useState(DEFAULT_TEMPLATE_KEY);
   const [programId, setProgramId] = useState('');
+  const [parentProjectId, setParentProjectId] = useState('');
+  const [subCity, setSubCity] = useState('');
+  const [address, setAddress] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [plannedStart, setPlannedStart] = useState<DualDate | null>(null);
   const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(null);
   const { busy, error, run } = useAsyncAction('create this project');
 
   const programs = useCollection<Program>((d, e) => subscribePrograms(d, e, { status: 'active' }), [], 'load programs').rows;
+  const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
   const template = projectTemplate(templateKey);
+
+  /**
+   * Only top-level projects may be a parent. Sub-projects do not nest — a
+   * second level is a program, and there is a Programs page for that.
+   */
+  const parentCandidates = allProjects.filter(
+    (p) => p.parentProjectId === null || p.parentProjectId === undefined,
+  );
 
   const ready = title.trim() !== '' && clientId !== '' && plannedStart !== null && plannedEnd !== null;
 
@@ -131,8 +208,16 @@ function ProjectForm({
           clientId,
           clientName: client.name,
           contractId: null,
-          site: { name: siteName.trim() || title.trim(), city },
+          site: {
+            name: siteName.trim() || title.trim(),
+            city,
+            ...(subCity.trim() === '' ? {} : { subCity: subCity.trim() }),
+            ...(address.trim() === '' ? {} : { address: address.trim() }),
+            ...(landmark.trim() === '' ? {} : { landmark: landmark.trim() }),
+          },
           programId: programId === '' ? null : programId,
+          parentProjectId: parentProjectId === '' ? null : parentProjectId,
+          reminders,
           units: Array.from({ length: Math.max(1, units) }, (_, i) => ({
             tag: `LIFT-${String(i + 1).padStart(2, '0')}`,
           })),
@@ -150,13 +235,11 @@ function ProjectForm({
   }
 
   return (
-    <section className="card">
-      <h2>New project</h2>
-      <p className="muted">
-        Pick the kind of job and its stages are created for you. Every stage can be
-        renamed, reweighted, reordered or deleted on the project afterwards — the
-        template is a starting point, not a rule.
-      </p>
+    <FormPanel
+      title="New project"
+      description="Pick the kind of job and its stages are created for you. Every stage can be renamed, reweighted, reordered or deleted afterwards — the template is a starting point, not a rule."
+      onClose={onDone}
+    >
       <form onSubmit={(e) => void submit(e)}>
         <div className="form-grid">
           <div className="field">
@@ -181,6 +264,43 @@ function ProjectForm({
           <div className="field">
             <label htmlFor="p-city">City</label>
             <input id="p-city" value={city} onChange={(e) => setCity(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-subcity">Sub-city</label>
+            <input id="p-subcity" value={subCity} placeholder="Bole"
+              onChange={(e) => setSubCity(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-address">Site address</label>
+            <input id="p-address" value={address}
+              placeholder="Africa Avenue, Getu Commercial Centre"
+              onChange={(e) => setAddress(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-landmark">Landmark</label>
+            <input id="p-landmark" value={landmark} placeholder="Opposite Edna Mall"
+              onChange={(e) => setLandmark(e.target.value)} />
+            <p className="hint">
+              What you would actually tell a driver. A crew sent to the wrong Bole tower loses a day.
+            </p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-parent">Sub-project of</label>
+            <select id="p-parent" value={parentProjectId}
+              onChange={(e) => setParentProjectId(e.target.value)}>
+              <option value="">Not a sub-project</option>
+              {parentCandidates.map((p) => (
+                <option key={p.id} value={p.id}>{p.projectNo} · {p.title}</option>
+              ))}
+            </select>
+            <p className="hint">
+              A tower is one job commercially and several operationally — per block, per lift, per
+              phase. The parent holds the commitment; this holds the work.
+            </p>
           </div>
 
           <div className="field">
@@ -245,6 +365,12 @@ function ProjectForm({
           </ol>
         </details>
 
+        <ReminderEditor
+          reminders={reminders}
+          onChange={setReminders}
+          sourceLabel={title.trim() === '' ? 'This project' : title.trim()}
+        />
+
         {error && <p className="error" role="alert">{error}</p>}
 
         <div className="form-actions">
@@ -254,6 +380,6 @@ function ProjectForm({
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>
       </form>
-    </section>
+    </FormPanel>
   );
 }

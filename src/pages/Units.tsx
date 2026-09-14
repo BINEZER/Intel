@@ -40,6 +40,8 @@ import { formatDual } from '../lib/ethiopic.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import type { Callout, Client, Contract, ElevatorUnit, MaintenanceVisit } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { PrintButton, PrintHeader } from '../components/PrintButton.js';
+import { FormPanel } from '../components/FormPanel.js';
 
 const VERDICT_LABEL: Record<UnitHealth['verdict'], string> = {
   problem: 'Needs attention',
@@ -179,12 +181,15 @@ export function Units() {
       <div className="page-head">
         <div>
           <h1>Lifts</h1>
+      {/* print-only */}
+      <PrintHeader title="Lifts" subtitle="lifts on the register" />
           <p className="muted">
             Every machine on the register, worst first. A lift with nothing recorded against it is
             listed as unknown rather than healthy — two years of silence is not the same as two
             years of no problems.
           </p>
         </div>
+        <PrintButton label="Print list" />
         {editable && (
           <button type="button" className="primary" onClick={() => setCreating((v) => !v)}>
             {creating ? 'Cancel' : 'Add a lift'}
@@ -480,12 +485,11 @@ function UnitForm({ uid, onDone }: { uid: string; onDone: () => void }) {
   }
 
   return (
-    <section className="card">
-      <h2>Add a lift</h2>
-      <p className="muted">
-        The tag is what is painted in the building; the code is ours and never changes. Every
-        building has a LIFT-01, which is why the machine needs an identity of its own.
-      </p>
+    <FormPanel
+      title="Add a lift"
+      description="The tag is what is painted in the building; the code is ours and never changes. Every building has a LIFT-01, which is why the machine needs an identity of its own."
+      onClose={onDone}
+    >
       <form onSubmit={(e) => void submit(e)}>
         <div className="form-grid">
           <div className="field">
@@ -540,6 +544,6 @@ function UnitForm({ uid, onDone }: { uid: string; onDone: () => void }) {
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>
       </form>
-    </section>
+    </FormPanel>
   );
 }
