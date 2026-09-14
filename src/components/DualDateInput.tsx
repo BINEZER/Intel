@@ -218,10 +218,12 @@ export function DualDateText({ value }: { value: DualDate | null }) {
   if (value === null) return <span className="muted">—</span>;
   const date = value.at.toDate();
   return (
+    // Gregorian leads; the Ethiopian reading follows, quieter. Both are always
+    // shown — the Ethiopian one is what a government filing is dated by.
     <span className="dual-text" title={`${value.ecPeriod} · FY ${value.ecFiscalYear}`}>
-      {formatEthiopian(utcDateToEthiopian(date))} <span className="muted">EC</span>
+      {formatGregorianShort(date)}
       <span className="sep"> · </span>
-      <span className="muted">{formatGregorianShort(date)}</span>
+      <span className="muted">{formatEthiopian(utcDateToEthiopian(date))} EC</span>
     </span>
   );
 }

@@ -21,7 +21,7 @@
 import { useId, useMemo, useState } from 'react';
 import { formatETB, santimToBirr } from '../lib/money.js';
 import { formatBps } from '../lib/kpi.js';
-import { ETHIOPIAN_MONTHS } from '../lib/ethiopic.js';
+import { ETHIOPIAN_MONTHS, ethiopianMonthLength, ethiopianToUTCDate } from '../lib/ethiopic.js';
 import type { PeriodRow } from '../lib/reporting.js';
 
 const W = 760;
@@ -38,6 +38,33 @@ const BARS_Y0 = PAD.top;
 const BARS_Y1 = PAD.top + BARS_H;
 const MARGIN_Y0 = BARS_Y1 + GAP;
 const MARGIN_Y1 = MARGIN_Y0 + MARGIN_H;
+
+const GC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * The Gregorian span an Ethiopian month covers.
+ *
+ * An Ethiopian month straddles two Gregorian ones, so naming only the first
+ * would be wrong for three weeks of every four. The axis is keyed by Ethiopian
+ * month because that is the unit a VAT return is filed in; this says what that
+ * means on the calendar most people read.
+ */
+function gregorianSpan(ecYear: number, ecMonth: number): string {
+  const start = ethiopianToUTCDate({ year: ecYear, month: ecMonth, day: 1 });
+  const end = ethiopianToUTCDate({
+    year: ecYear,
+    month: ecMonth,
+    day: ethiopianMonthLength(ecYear, ecMonth),
+  });
+
+  const startMonth = GC_MONTHS[start.getUTCMonth()] as string;
+  const endMonth = GC_MONTHS[end.getUTCMonth()] as string;
+
+  if (startMonth === endMonth) return `${startMonth} ${end.getUTCFullYear()}`;
+  return start.getUTCFullYear() === end.getUTCFullYear()
+    ? `${startMonth}–${endMonth} ${end.getUTCFullYear()}`
+    : `${startMonth} ${start.getUTCFullYear()}–${endMonth} ${end.getUTCFullYear()}`;
+}
 
 /** Compact ETB for an axis tick: 4.2M, 850k, 0. */
 function compactBirr(santim: number): string {
@@ -284,7 +311,10 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
               <p className="muted">Hover or focus a month for its figures.</p>
             ) : (
               <>
-                <strong>{ETHIOPIAN_MONTHS[active.ecMonth - 1]} {active.ecYear} EC</strong>
+                <strong>{gregorianSpan(active.ecYear, active.ecMonth)}</strong>{' '}
+                <span className="muted">
+                  {ETHIOPIAN_MONTHS[active.ecMonth - 1]} {active.ecYear} EC
+                </span>
                 <dl>
                   <div>
                     <dt><span className="swatch swatch-revenue" aria-hidden="true" /> Revenue</dt>
