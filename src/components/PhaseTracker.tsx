@@ -12,17 +12,18 @@ import { useAuth } from '../auth/AuthProvider.js';
 import { setPhaseBlocked, updatePhaseProgress } from '../data/projects.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
-import {
-  ELEVATOR_PHASE_TEMPLATE,
-  nextActionablePhase,
-  sequenceWarnings,
-  type PhaseStatus,
-} from '../lib/phases.js';
+import { nextActionablePhase, sequenceWarnings, type PhaseStatus } from '../lib/phases.js';
+import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
 import { DualDateText } from './DualDateInput.js';
 import type { ProjectPhase } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
-const DEPENDS_ON = new Map(ELEVATOR_PHASE_TEMPLATE.map((t) => [t.key as string, t.dependsOn as readonly string[]]));
+// Dependencies come from the FOURTEEN-stage template, which is what projects are
+// actually seeded with. Reading them from the old five-phase template meant the
+// keys never matched and out-of-sequence work was silently never flagged.
+// Stages a manager added by hand have no dependencies — nothing knows where
+// they sit in the chain, and guessing would produce warnings nobody can act on.
+const DEPENDS_ON = new Map(ELEVATOR_STAGE_TEMPLATE.map((s) => [s.key as string, s.dependsOn as readonly string[]]));
 
 export function PhaseTracker({
   projectId,

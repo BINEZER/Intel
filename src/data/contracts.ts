@@ -9,6 +9,7 @@
 
 import {
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   orderBy,
@@ -111,6 +112,45 @@ export function subscribeMilestones(
  * Create a contract and its milestones atomically.
  * Returns the new contract id.
  */
+/**
+ * Which payment milestones are tied to which stage of a project.
+ *
+ * The tracker needs this before it will let a stage be deleted. A milestone
+ * whose stage no longer exists is a payment that will never become due — the
+ * money stays uninvoiced, and nothing in the system ever complains, because
+ * from its point of view the milestone is simply still waiting.
+ *
+ * Keyed by phase id; the values are milestone names, which is what a manager
+ * needs to see in order to act on the refusal.
+ */
+export async function getPaymentStagesForProject(projectId: string): Promise<Map<string, string[]>> {
+  const contracts = await getMany<Contract>(query(collectionRef(PATH), where('projectId', '==', projectId)));
+  const byPhase = new Map<string, string[]>();
+
+  for (const contract of contracts) {
+    for (const milestone of await getMilestones(contract.id)) {
+      if (milestone.phaseId === undefined) continue;
+      const label = `${contract.contractNo}: ${milestone.name}`;
+      byPhase.set(milestone.phaseId, [...(byPhase.get(milestone.phaseId) ?? []), label]);
+    }
+  }
+
+  return byPhase;
+}
+
+/** Re-point a milestone at a different stage, so the stage it was on can go. */
+export async function setMilestoneStage(
+  contractId: string,
+  milestoneId: string,
+  phaseId: string | null,
+  uid: string,
+): Promise<void> {
+  await updateDoc(doc(db, milestonePath(contractId), milestoneId), {
+    ...(phaseId === null ? { phaseId: deleteField() } : { phaseId }),
+    ...stampUpdate(uid),
+  });
+}
+
 export async function createContract(
   input: ContractInput,
   shares: readonly MilestoneShare[],
