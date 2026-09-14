@@ -30,7 +30,7 @@ import {
   type CertificationResult,
   type PhaseStatus,
 } from '../lib/phases.js';
-import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
+import { DEFAULT_TEMPLATE_KEY, templateStages } from '../lib/project-templates.js';
 import {
   addStage,
   diffStages,
@@ -120,30 +120,41 @@ export function subscribeAssignments(
 // ---------------------------------------------------------------------------
 
 /**
- * Create a project and seed its phases in one batch.
+ * Create a project and seed its stages in one batch.
  *
- * An elevator project gets the five standard phases; a non-elevator project gets
- * whatever the caller supplies. A project with no phases cannot report progress
- * at all, so it is never created without them.
+ * The stage list comes from a TEMPLATE — elevator installation, modernisation,
+ * service mobilisation, a general non-elevator job, or a single blank stage.
+ * IntelMotion's work is not only lift installation, and a project forced into
+ * the fourteen-stage lift lifecycle was a project whose progress figure meant
+ * nothing.
+ *
+ * The template is only a starting point: every stage can be renamed, reweighted,
+ * reordered or deleted afterwards, and the weights rebalance themselves.
+ *
+ * A project with no stages cannot report progress at all, so it is never created
+ * without them.
  */
 export async function createProject(
   input: ProjectInput,
   uid: string,
-  options: { plannedStart: DualDate; plannedEnd: DualDate },
+  options: { plannedStart: DualDate; plannedEnd: DualDate; templateKey?: string },
 ): Promise<string> {
   const projectId = newId(PATH);
   const batch = writeBatch(db);
 
+  const templateKey = options.templateKey ?? DEFAULT_TEMPLATE_KEY;
+
   batch.set(doc(db, PATH, projectId), {
     ...stripReserved(input),
+    templateKey,
     progressBps: 0,
     financials: { ...EMPTY_FINANCIALS, lastComputedAt: Timestamp.now() },
     ...stampCreate(uid),
   });
 
-  // The full lifecycle, not just what happens inside the shaft. A project stuck
-  // in customs previously had nowhere to be recorded.
-  ELEVATOR_STAGE_TEMPLATE.forEach((template, index) => {
+  // Weights arrive already rescaled to exactly 100%, so a typo in a template
+  // cannot reach a project and silently distort its progress figure.
+  templateStages(templateKey).forEach((template, index) => {
     batch.set(doc(db, phasePath(projectId), newId(phasePath(projectId))), {
       seq: index + 1,
       key: template.key,

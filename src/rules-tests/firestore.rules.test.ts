@@ -608,6 +608,92 @@ describe('config is admin-only', () => {
   });
 });
 
+describe('programs are a grouping, not a ledger', () => {
+  const PROGRAM = {
+    programNo: 'PG-1', name: 'Bole Tower', description: 'All lifts',
+    clientId: 'cl1', clientName: 'Acme', kind: 'program', status: 'active',
+    plannedStart: null, plannedEnd: null, ownerUid: 'mgr',
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'programs/pg1'), { ...PROGRAM, ...stamped('mgr') });
+    });
+  });
+
+  it('lets anyone who can read the app read a program', async () => {
+    await assertSucceeds(getDoc(doc(ctx('u1', 'viewer'), 'programs/pg1')));
+  });
+
+  it('lets a manager create one and refuses an engineer', async () => {
+    await assertSucceeds(setDoc(doc(ctx('mgr', 'manager'), 'programs/pg2'), { ...PROGRAM, ...stamped('mgr') }));
+    await assertFails(setDoc(doc(ctx('eng', 'engineer'), 'programs/pg3'), { ...PROGRAM, ...stamped('eng') }));
+  });
+
+  it('refuses a create whose audit stamp names someone else', async () => {
+    await assertFails(setDoc(doc(ctx('mgr', 'manager'), 'programs/pg4'), { ...PROGRAM, ...stamped('someone-else') }));
+  });
+
+  it('lets only an admin delete one', async () => {
+    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'programs/pg1')));
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'programs/pg1')));
+  });
+});
+
+describe('units: engineers may update the machine in front of them', () => {
+  const UNIT = {
+    unitCode: 'IM-U-1', tag: 'LIFT-01', siteName: 'Sheger Mall', city: 'Addis Ababa',
+    clientId: 'cl1', clientName: 'Acme', installedByProjectId: null,
+    maintenanceContractId: null, maintenanceContractNo: null,
+    commissionedOn: null, status: 'in_service', certificate: null, remarks: '',
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'units/u1'), { ...UNIT, ...stamped('mgr') });
+    });
+  });
+
+  it('lets an engineer record what they found, because they are the one standing there', async () => {
+    const db = ctx('eng', 'engineer');
+    await assertSucceeds(
+      updateDoc(doc(db, 'units/u1'), {
+        remarks: 'Governor rope wear.', updatedAt: serverTimestamp(), updatedBy: 'eng',
+      }),
+    );
+  });
+
+  it('refuses an engineer creating a unit — a duplicate identity is worse than a gap', async () => {
+    await assertFails(setDoc(doc(ctx('eng', 'engineer'), 'units/u2'), { ...UNIT, ...stamped('eng') }));
+    await assertSucceeds(setDoc(doc(ctx('mgr', 'manager'), 'units/u3'), { ...UNIT, ...stamped('mgr') }));
+  });
+
+  it('refuses a viewer any write at all', async () => {
+    await assertFails(
+      updateDoc(doc(ctx('u1', 'viewer'), 'units/u1'), { remarks: 'x', updatedAt: serverTimestamp(), updatedBy: 'u1' }),
+    );
+  });
+
+  it('refuses an update that rewrites who created the unit', async () => {
+    await assertFails(
+      updateDoc(doc(ctx('eng', 'engineer'), 'units/u1'), {
+        remarks: 'x', createdBy: 'eng', updatedAt: serverTimestamp(), updatedBy: 'eng',
+      }),
+    );
+  });
+
+  it('refuses deletion of a lift still in service, even by an admin', async () => {
+    // A unit is an identity that callouts and certificates hang off. Deleting
+    // one that is still running would orphan its whole history.
+    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'units/u1')));
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'units/u1'), { ...UNIT, status: 'decommissioned', ...stamped('mgr') });
+    });
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'units/u1')));
+  });
+});
+
 describe('unmatched collections are closed by default', () => {
   it('denies a collection the rules never mention', async () => {
     const db = ctx('adm', 'admin');

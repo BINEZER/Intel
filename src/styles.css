@@ -799,3 +799,123 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
 
   @page { margin: 18mm 14mm; }
 }
+
+/* --- Brand mark ---------------------------------------------------------- */
+
+.logo { display: block; }
+.logo-word {
+  font-family: Poppins, 'Segoe UI', system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  fill: var(--brand-blue);
+  letter-spacing: -0.01em;
+}
+.logo-word tspan.logo-word-2 { fill: var(--brand-teal-dark); }
+
+.brand { display: flex; align-items: center; gap: 0.5rem; }
+.brand-sub { font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* --- Alerts -------------------------------------------------------------- */
+
+.alert-count.tone-critical { border-left-color: var(--danger); }
+.alert-count.tone-high     { border-left-color: #D9761F; }
+.alert-count.tone-medium   { border-left-color: var(--brand-amber); }
+.alert-count.tone-low      { border-left-color: var(--border); }
+
+.alert-list { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.6rem; }
+
+.alert-row {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+  background: var(--surface);
+}
+.alert-row.sev-critical { border-left-color: var(--danger); }
+.alert-row.sev-high     { border-left-color: #D9761F; }
+.alert-row.sev-medium   { border-left-color: var(--brand-amber); }
+.alert-row p { margin: 0.3rem 0; }
+
+.alert-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
+.alert-amount { margin-left: auto; font-variant-numeric: tabular-nums; }
+.alert-action { color: var(--brand-teal-dark); font-weight: 600; }
+.alert-links { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.35rem; }
+
+.sev-chip-critical { background: var(--danger); color: #fff; }
+.sev-chip-high     { background: #D9761F; color: #fff; }
+.sev-chip-medium   { background: var(--brand-amber); color: #16202B; }
+
+/* --- Extension letter ---------------------------------------------------- */
+
+.letter-panel textarea.letter-body {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* --- Programs ------------------------------------------------------------ */
+
+.program-list { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.75rem; }
+
+.program-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+}
+.program-card.is-danger { border-left: 4px solid var(--danger); }
+.program-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+
+.program-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  overflow: hidden;
+  margin: 0.6rem 0;
+}
+.program-bar > span { display: block; height: 100%; background: var(--brand-blue); }
+
+.program-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0;
+}
+.program-figures > div { display: flex; flex-direction: column; }
+.program-figures dt { font-size: 0.76rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.program-figures dd { margin: 0.1rem 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.pick-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; }
+.pick-list li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border); }
+
+.row-danger { background: color-mix(in srgb, var(--danger) 6%, transparent); }
+
+/* --- Lifts and service history ------------------------------------------- */
+
+.filter-row { display: flex; align-items: center; gap: 0.45rem; margin: 0.75rem 0; }
+
+.verdict-problem { background: var(--danger); color: #fff; }
+.verdict-watch   { background: var(--brand-amber); color: #16202B; }
+.verdict-healthy { background: var(--brand-green); color: #fff; }
+.verdict-unknown { background: var(--border); color: var(--muted); }
+
+.reason-list { margin: 0 0 0.75rem; padding-left: 1.1rem; }
+.reason-list li { margin-bottom: 0.2rem; }
+
+.timeline { list-style: none; padding: 0; margin: 0.5rem 0 0; display: grid; gap: 0.5rem; }
+
+.timeline-entry {
+  border-left: 3px solid var(--border);
+  padding: 0.45rem 0 0.45rem 0.75rem;
+}
+/* A safety finding is the single most important thing in a lift's history, so
+   it is never allowed to look like a routine note. */
+.timeline-entry.sev-safety     { border-left-color: var(--danger); }
+.timeline-entry.sev-entrapment { border-left-color: var(--danger); }
+.timeline-entry.sev-defect     { border-left-color: var(--brand-amber); }
+.timeline-entry.sev-breakdown  { border-left-color: #D9761F; }
+.timeline-entry.is-open        { background: color-mix(in srgb, var(--brand-amber) 8%, transparent); }
+.timeline-entry p { margin: 0.2rem 0 0; }
+.timeline-head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
