@@ -21,13 +21,20 @@
 import { useId, useMemo, useState } from 'react';
 import { formatETB, santimToBirr } from '../lib/money.js';
 import { formatBps } from '../lib/kpi.js';
-import { ETHIOPIAN_MONTHS, ethiopianMonthLength, ethiopianToUTCDate } from '../lib/ethiopic.js';
+import {
+  ETHIOPIAN_MONTHS,
+  GREGORIAN_MONTHS_SHORT,
+  ethiopianSpanLabel,
+  gregorianSpanLabel,
+} from '../lib/ethiopic.js';
 import type { PeriodRow } from '../lib/reporting.js';
 
 const W = 760;
 // `top` leaves room for the axis unit label above the first gridline; without
 // it the unit collides with the topmost tick.
-const PAD = { top: 30, right: 16, bottom: 26, left: 66 };
+// `bottom` holds two lines: the month name and, where the year turns over,
+// the year beneath it.
+const PAD = { top: 30, right: 16, bottom: 32, left: 66 };
 const BARS_H = 190;
 const GAP = 34;
 const MARGIN_H = 78;
@@ -39,31 +46,41 @@ const BARS_Y1 = PAD.top + BARS_H;
 const MARGIN_Y0 = BARS_Y1 + GAP;
 const MARGIN_Y1 = MARGIN_Y0 + MARGIN_H;
 
-const GC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /**
- * The Gregorian span an Ethiopian month covers.
+ * How a row names itself.
  *
- * An Ethiopian month straddles two Gregorian ones, so naming only the first
- * would be wrong for three weeks of every four. The axis is keyed by Ethiopian
- * month because that is the unit a VAT return is filed in; this says what that
- * means on the calendar most people read.
+ * The chart is Gregorian: the axis, the readout heading and the table all lead
+ * with the Gregorian month, because that is the calendar the reader thinks in
+ * and the one bank statements arrive on. The Ethiopian reading is always there
+ * as the second line — never dropped, never first.
+ *
+ * On the Ethiopian basis (kept for anything that must tie back to a filed VAT
+ * return) the two swap over, and the Gregorian span comes first in the readout
+ * because an Ethiopian month straddles two Gregorian ones.
  */
-function gregorianSpan(ecYear: number, ecMonth: number): string {
-  const start = ethiopianToUTCDate({ year: ecYear, month: ecMonth, day: 1 });
-  const end = ethiopianToUTCDate({
-    year: ecYear,
-    month: ecMonth,
-    day: ethiopianMonthLength(ecYear, ecMonth),
-  });
+function axisLabel(row: PeriodRow): string {
+  return row.basis === 'gregorian'
+    ? (GREGORIAN_MONTHS_SHORT[row.month - 1] ?? String(row.month))
+    : (ETHIOPIAN_MONTHS[row.month - 1]?.slice(0, 3) ?? String(row.month));
+}
 
-  const startMonth = GC_MONTHS[start.getUTCMonth()] as string;
-  const endMonth = GC_MONTHS[end.getUTCMonth()] as string;
+/** The heading a hovered month gets, on the chart's own calendar. */
+function primaryLabel(row: PeriodRow): string {
+  return row.basis === 'gregorian'
+    ? `${GREGORIAN_MONTHS_SHORT[row.month - 1] ?? row.month} ${row.year}`
+    : gregorianSpanLabel(row.year, row.month);
+}
 
-  if (startMonth === endMonth) return `${startMonth} ${end.getUTCFullYear()}`;
-  return start.getUTCFullYear() === end.getUTCFullYear()
-    ? `${startMonth}–${endMonth} ${end.getUTCFullYear()}`
-    : `${startMonth} ${start.getUTCFullYear()}–${endMonth} ${end.getUTCFullYear()}`;
+/** The same month read on the other calendar, always shown alongside. */
+function secondaryLabel(row: PeriodRow): string {
+  return row.basis === 'gregorian'
+    ? `${ethiopianSpanLabel(row.year, row.month)} EC`
+    : `${ETHIOPIAN_MONTHS[row.month - 1] ?? row.month} ${row.year} EC`;
+}
+
+/** `Sep 2025` / `Meskerem 2018 EC` for the table's month column. */
+function tableLabel(row: PeriodRow): string {
+  return `${primaryLabel(row)} · ${secondaryLabel(row)}`;
 }
 
 /** Compact ETB for an axis tick: 4.2M, 850k, 0. */
@@ -160,13 +177,17 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
 
   const active = hovered === null ? null : rows[hovered] ?? null;
   const lastIndex = rows.length - 1;
+  const basis = (rows[0] as PeriodRow).basis;
+  const calendarName = basis === 'gregorian' ? 'Gregorian' : 'Ethiopian';
 
   return (
     <section className="card viz-root">
       <div className="viz-head">
         <div>
           <h2>{title}</h2>
-          <p className="muted">Revenue and subcontract cost, VAT-exclusive, by Ethiopian month.</p>
+          <p className="muted">
+            Revenue and subcontract cost, VAT-exclusive, by {calendarName} month.
+          </p>
         </div>
         <button type="button" onClick={() => setShowTable((v) => !v)}>
           {showTable ? 'Show chart' : 'Show table'}
@@ -192,7 +213,8 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
             onMouseLeave={() => setHovered(null)}
           >
             <title id={`${baseId}-title`}>
-              {title}: revenue, subcontract cost and margin percentage across {rows.length} Ethiopian months.
+              {title}: revenue, subcontract cost and margin percentage across {rows.length}{' '}
+              {calendarName} months.
             </title>
 
             {/* Recessive grid */}
@@ -217,7 +239,7 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
             {rows.map((row, i) => {
               const groupX = PAD.left + band * i + groupPad;
               return (
-                <g key={row.periodEc} className={hovered !== null && hovered !== i ? 'viz-dim' : undefined}>
+                <g key={row.period} className={hovered !== null && hovered !== i ? 'viz-dim' : undefined}>
                   <path className="bar-revenue" d={barPath(groupX, yBar(row.revenueNetSantim), barW, BARS_Y1 - yBar(row.revenueNetSantim))} />
                   <path className="bar-cost" d={barPath(groupX + barW + 2, yBar(row.costNetSantim), barW, BARS_Y1 - yBar(row.costNetSantim))} />
                 </g>
@@ -245,21 +267,36 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
 
             {/* X labels: every month when there is room, otherwise every other. */}
             {rows.map((row, i) => {
-              // A full Ethiopian year is 13 months and they all fit at this
-              // width. Only drop to alternating labels beyond that, because
-              // making a reader count bars to identify a month is worse than
-              // a slightly crowded axis.
+              // A full year is 12 or 13 months and they all fit at this width.
+              // Only drop to alternating labels beyond that, because making a
+              // reader count bars to identify a month is worse than a slightly
+              // crowded axis.
               if (rows.length > 13 && i % 2 === 1 && i !== lastIndex) return null;
+              // The year is stamped on the first bar and wherever it turns
+              // over. Without it a series spanning a new year shows two bars
+              // labelled "Jan" with nothing to tell them apart.
+              const showYear = i === 0 || row.month === 1;
               return (
-                <text
-                  key={row.periodEc}
-                  className="viz-tick"
-                  x={PAD.left + band * i + band / 2}
-                  y={H - PAD.bottom + 14}
-                  textAnchor="middle"
-                >
-                  {ETHIOPIAN_MONTHS[row.ecMonth - 1]?.slice(0, 3) ?? row.ecMonth}
-                </text>
+                <g key={row.period}>
+                  <text
+                    className="viz-tick"
+                    x={PAD.left + band * i + band / 2}
+                    y={H - PAD.bottom + 14}
+                    textAnchor="middle"
+                  >
+                    {axisLabel(row)}
+                  </text>
+                  {showYear && (
+                    <text
+                      className="viz-tick viz-tick-year"
+                      x={PAD.left + band * i + band / 2}
+                      y={H - PAD.bottom + 24}
+                      textAnchor="middle"
+                    >
+                      {row.year}
+                    </text>
+                  )}
+                </g>
               );
             })}
 
@@ -278,7 +315,7 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
             {/* Hit targets, wider than the marks. */}
             {rows.map((row, i) => (
               <rect
-                key={row.periodEc}
+                key={row.period}
                 x={PAD.left + band * i}
                 y={BARS_Y0}
                 width={band}
@@ -288,7 +325,7 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
                 onFocus={() => setHovered(i)}
                 tabIndex={0}
                 role="button"
-                aria-label={`${ETHIOPIAN_MONTHS[row.ecMonth - 1] ?? ''} ${row.ecYear}: revenue ${formatETB(row.revenueNetSantim)}, cost ${formatETB(row.costNetSantim)}, margin ${formatBps(row.marginBps)}`}
+                aria-label={`${primaryLabel(row)} (${secondaryLabel(row)}): revenue ${formatETB(row.revenueNetSantim)}, cost ${formatETB(row.costNetSantim)}, margin ${formatBps(row.marginBps)}`}
               />
             ))}
 
@@ -311,10 +348,8 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
               <p className="muted">Hover or focus a month for its figures.</p>
             ) : (
               <>
-                <strong>{gregorianSpan(active.ecYear, active.ecMonth)}</strong>{' '}
-                <span className="muted">
-                  {ETHIOPIAN_MONTHS[active.ecMonth - 1]} {active.ecYear} EC
-                </span>
+                <strong>{primaryLabel(active)}</strong>{' '}
+                <span className="muted">{secondaryLabel(active)}</span>
                 <dl>
                   <div>
                     <dt><span className="swatch swatch-revenue" aria-hidden="true" /> Revenue</dt>
@@ -344,6 +379,10 @@ export function TrendChart({ rows, title }: { rows: readonly PeriodRow[]; title:
 
 /** The same numbers as a table — the accessible equivalent of the plot. */
 function TrendTable({ rows }: { rows: readonly PeriodRow[] }) {
+  // Net VAT is declared for an ETHIOPIAN month. On a Gregorian series the
+  // column would hold a number that matches no return we ever file, so it is
+  // not shown at all rather than shown with a caveat nobody reads.
+  const showNetVat = (rows[0] as PeriodRow).basis === 'ethiopian';
   return (
     <div className="table-scroll">
       <table className="data-table">
@@ -354,18 +393,20 @@ function TrendTable({ rows }: { rows: readonly PeriodRow[] }) {
             <th scope="col" className="num">Cost</th>
             <th scope="col" className="num">Margin</th>
             <th scope="col" className="num">Margin %</th>
-            <th scope="col" className="num">Net VAT</th>
+            {showNetVat && <th scope="col" className="num">Net VAT</th>}
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.periodEc}>
-              <td>{ETHIOPIAN_MONTHS[row.ecMonth - 1]} {row.ecYear}</td>
+            <tr key={row.period}>
+              <td>{tableLabel(row)}</td>
               <td className="num">{formatETB(row.revenueNetSantim, { withSymbol: false })}</td>
               <td className="num">{formatETB(row.costNetSantim, { withSymbol: false })}</td>
               <td className="num">{formatETB(row.marginSantim, { withSymbol: false })}</td>
               <td className="num">{formatBps(row.marginBps)}</td>
-              <td className="num muted">{formatETB(row.netVatPayableSantim, { withSymbol: false })}</td>
+              {showNetVat && (
+                <td className="num muted">{formatETB(row.netVatPayableSantim, { withSymbol: false })}</td>
+              )}
             </tr>
           ))}
         </tbody>

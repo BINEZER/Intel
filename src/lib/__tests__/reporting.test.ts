@@ -162,57 +162,115 @@ describe('portfolio summary', () => {
 });
 
 describe('period series', () => {
-  it('aggregates revenue and cost by Ethiopian month', () => {
+  it('aggregates revenue and cost by Gregorian month', () => {
     const rows = buildPeriodSeries(
       [
-        { periodEc: 'EC-2018-01', netSantim: ETB(1_000_000), vatSantim: ETB(150_000), status: 'issued' },
-        { periodEc: 'EC-2018-01', netSantim: ETB(500_000), vatSantim: ETB(75_000), status: 'paid' },
+        { period: '2025-09', netSantim: ETB(1_000_000), vatSantim: ETB(150_000), status: 'issued' },
+        { period: '2025-09', netSantim: ETB(500_000), vatSantim: ETB(75_000), status: 'paid' },
       ],
-      [{ periodEc: 'EC-2018-01', netSantim: ETB(900_000), supplierVatSantim: ETB(135_000), whtSantim: ETB(27_000), status: 'paid' }],
+      [{ period: '2025-09', netSantim: ETB(900_000), supplierVatSantim: ETB(135_000), whtSantim: ETB(27_000), status: 'paid' }],
+      'gregorian',
     );
     expect(rows).toHaveLength(1);
+    expect(rows[0]!.basis).toBe('gregorian');
+    expect(rows[0]!.year).toBe(2025);
+    expect(rows[0]!.month).toBe(9);
     expect(rows[0]!.revenueNetSantim).toBe(ETB(1_500_000));
     expect(rows[0]!.marginSantim).toBe(ETB(600_000));
     expect(rows[0]!.marginBps).toBe(4000);
     expect(rows[0]!.netVatPayableSantim).toBe(ETB(90_000));
   });
 
+  it('aggregates revenue and cost by Ethiopian month', () => {
+    const rows = buildPeriodSeries(
+      [
+        { period: 'EC-2018-01', netSantim: ETB(1_000_000), vatSantim: ETB(150_000), status: 'issued' },
+        { period: 'EC-2018-01', netSantim: ETB(500_000), vatSantim: ETB(75_000), status: 'paid' },
+      ],
+      [{ period: 'EC-2018-01', netSantim: ETB(900_000), supplierVatSantim: ETB(135_000), whtSantim: ETB(27_000), status: 'paid' }],
+      'ethiopian',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.basis).toBe('ethiopian');
+    expect(rows[0]!.year).toBe(2018);
+    expect(rows[0]!.month).toBe(1);
+    expect(rows[0]!.revenueNetSantim).toBe(ETB(1_500_000));
+    expect(rows[0]!.marginBps).toBe(4000);
+  });
+
+  it('refuses a period key from the other calendar', () => {
+    // Every invoice carries both keys and they are easy to swap. A swap must
+    // fail loudly, not draw a chart with the wrong figures under right-looking
+    // month names.
+    expect(() =>
+      buildPeriodSeries(
+        [{ period: 'EC-2018-01', netSantim: ETB(100), vatSantim: 0, status: 'issued' }],
+        [],
+        'gregorian',
+      ),
+    ).toThrow(/not a gregorian month key/);
+
+    expect(() =>
+      buildPeriodSeries(
+        [{ period: '2025-09', netSantim: ETB(100), vatSantim: 0, status: 'issued' }],
+        [],
+        'ethiopian',
+      ),
+    ).toThrow(/not a ethiopian month key/);
+  });
+
   it('emits empty months so a gap reads as a gap', () => {
     // A trend with silently missing months draws a smooth line over a hole.
     const rows = buildPeriodSeries(
       [
-        { periodEc: 'EC-2018-01', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
-        { periodEc: 'EC-2018-04', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
+        { period: '2025-09', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
+        { period: '2025-12', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
       ],
       [],
+      'gregorian',
     );
-    expect(rows.map((r) => r.periodEc)).toEqual([
-      'EC-2018-01', 'EC-2018-02', 'EC-2018-03', 'EC-2018-04',
-    ]);
+    expect(rows.map((r) => r.period)).toEqual(['2025-09', '2025-10', '2025-11', '2025-12']);
     expect(rows[1]!.revenueNetSantim).toBe(0);
     expect(rows[1]!.marginBps).toBeNull(); // no revenue, so no margin — not 0%
   });
 
-  it('spans a year boundary through Pagume', () => {
+  it('rolls a Gregorian year over at 12 months', () => {
     const rows = buildPeriodSeries(
       [
-        { periodEc: 'EC-2017-12', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
-        { periodEc: 'EC-2018-01', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
+        { period: '2025-11', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
+        { period: '2026-01', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
       ],
       [],
+      'gregorian',
     );
-    expect(rows.map((r) => r.periodEc)).toEqual(['EC-2017-12', 'EC-2017-13', 'EC-2018-01']);
+    expect(rows.map((r) => r.period)).toEqual(['2025-11', '2025-12', '2026-01']);
+  });
+
+  it('spans an Ethiopian year boundary through Pagume', () => {
+    const rows = buildPeriodSeries(
+      [
+        { period: 'EC-2017-12', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
+        { period: 'EC-2018-01', netSantim: ETB(100), vatSantim: 0, status: 'issued' },
+      ],
+      [],
+      'ethiopian',
+    );
+    // Pagume is month 13 and is a month like any other here — dropping it would
+    // lose every invoice issued in the five days before New Year.
+    expect(rows.map((r) => r.period)).toEqual(['EC-2017-12', 'EC-2017-13', 'EC-2018-01']);
   });
 
   it('ignores drafts, voids and uncommitted vouchers', () => {
     const rows = buildPeriodSeries(
       [
-        { periodEc: 'EC-2018-01', netSantim: ETB(100), vatSantim: 0, status: 'draft' },
-        { periodEc: 'EC-2018-01', netSantim: ETB(100), vatSantim: 0, status: 'void' },
+        { period: '2025-09', netSantim: ETB(100), vatSantim: 0, status: 'draft' },
+        { period: '2025-09', netSantim: ETB(100), vatSantim: 0, status: 'void' },
       ],
-      [{ periodEc: 'EC-2018-01', netSantim: ETB(50), supplierVatSantim: 0, whtSantim: 0, status: 'draft' }],
+      [{ period: '2025-09', netSantim: ETB(50), supplierVatSantim: 0, whtSantim: 0, status: 'draft' }],
+      'gregorian',
     );
     expect(rows).toEqual([]);
+
   });
 });
 

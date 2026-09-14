@@ -25,6 +25,7 @@ import {
 } from '../lib/reporting.js';
 import { formatETB } from '../lib/money.js';
 import { formatBps } from '../lib/kpi.js';
+import { ethiopianSpanLabel } from '../lib/ethiopic.js';
 import { downloadCsv, money, percent, reportFilename, toCsv } from '../lib/csv.js';
 import { KpiTile } from '../components/KpiTile.js';
 import { TrendChart } from '../components/TrendChart.js';
@@ -98,14 +99,18 @@ export function Reports() {
 
   const series = useMemo(
     () =>
+      // Gregorian: the trend is read by people, not filed with ERCA, so it is
+      // bucketed on the calendar they think in. The VAT returns section below
+      // is the thing that has to reconcile to a filing, and it stays Ethiopian.
       buildPeriodSeries(
         inYear.invoices.map((i) => ({
-          periodEc: i.vatPeriodEc, netSantim: i.netSantim, vatSantim: i.vatSantim, status: i.status,
+          period: i.vatPeriodGc, netSantim: i.netSantim, vatSantim: i.vatSantim, status: i.status,
         })),
         inYear.disbursements.map((d) => ({
-          periodEc: d.whtPeriodEc, netSantim: d.netSantim,
+          period: d.whtPeriodGc, netSantim: d.netSantim,
           supplierVatSantim: d.supplierVatSantim, whtSantim: d.whtSantim, status: d.status,
         })),
+        'gregorian',
       ),
     [inYear],
   );
@@ -157,14 +162,18 @@ export function Reports() {
   function exportSeries() {
     const csv = toCsv(
       [
-        { header: 'Period (EC)', value: (r: (typeof series)[number]) => r.periodEc },
+        { header: 'Month', value: (r: (typeof series)[number]) => r.period },
+        {
+          header: 'Ethiopian months',
+          value: (r: (typeof series)[number]) => `${ethiopianSpanLabel(r.year, r.month)} EC`,
+        },
         { header: 'Revenue net (ETB)', value: (r) => money(r.revenueNetSantim) },
         { header: 'Output VAT (ETB)', value: (r) => money(r.outputVatSantim) },
         { header: 'Cost net (ETB)', value: (r) => money(r.costNetSantim) },
         { header: 'Input VAT (ETB)', value: (r) => money(r.inputVatSantim) },
         { header: 'Margin (ETB)', value: (r) => money(r.marginSantim) },
         { header: 'Margin %', value: (r) => percent(r.marginBps) },
-        { header: 'Net VAT payable (ETB)', value: (r) => money(r.netVatPayableSantim) },
+        { header: 'Output less input VAT (ETB, not a filed return)', value: (r) => money(r.netVatPayableSantim) },
         { header: 'WHT withheld (ETB)', value: (r) => money(r.whtWithheldSantim) },
         { header: 'Invoices', value: (r) => r.invoices },
         { header: 'Vouchers', value: (r) => r.vouchers },
