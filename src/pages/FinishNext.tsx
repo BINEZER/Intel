@@ -10,7 +10,9 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { subscribeProjects } from '../data/projects.js';
 import { subscribeContracts } from '../data/contracts.js';
+import { usePortfolioDetail } from '../data/portfolio.js';
 import { useCollection } from '../data/useCollection.js';
+import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
 import { buildUnlockReport, type UnlockMilestoneInput, type UnlockStageInput } from '../lib/unlock.js';
 import { formatETB } from '../lib/money.js';
 import { formatBps } from '../lib/kpi.js';
@@ -130,18 +132,50 @@ export function FinishNext({
 }
 
 /** Route wrapper: pulls the live stages and milestones this view needs. */
+const DEPENDS_ON = new Map(
+  ELEVATOR_STAGE_TEMPLATE.map((s) => [s.key as string, s.dependsOn as readonly string[]]),
+);
+
 export function FinishNextRoute() {
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
 
-  // Stages and milestones live in subcollections, so a portfolio-wide view needs
-  // them gathered per project. Until a Cloud Function denormalises this, the page
-  // renders from what the project documents already carry.
-  const stages: UnlockStageInput[] = [];
-  const milestones: UnlockMilestoneInput[] = [];
+  // Stages and milestones live in subcollections, which no single Firestore query
+  // spans, so they are fanned out per project and per contract. Before this the
+  // page rendered from two empty arrays and showed a business with no work in it.
+  const detail = usePortfolioDetail(projects.rows, contracts.rows, []);
 
-  const loading = projects.loading || contracts.loading;
-  const error = projects.error ?? contracts.error;
+  const stages: UnlockStageInput[] = detail.stages.map((stage) => {
+    const project = projects.rows.find((p) => p.id === stage.projectId);
+    return {
+      projectId: stage.projectId,
+      projectTitle: project?.title ?? stage.projectId,
+      clientName: project?.clientName ?? '',
+      phaseId: stage.id,
+      stageKey: stage.key,
+      stageName: stage.name,
+      progressBps: stage.progressBps,
+      status: stage.status,
+      // Template dependencies resolved to the ids this project actually has, so a
+      // stage someone deleted cannot leave a phantom predecessor blocking the rest.
+      dependsOnPhaseIds: (DEPENDS_ON.get(stage.key) ?? [])
+        .map((key) => detail.stages.find((s) => s.projectId === stage.projectId && s.key === key)?.id)
+        .filter((id): id is string => id !== undefined),
+      plannedEnd: stage.plannedEnd?.at.toDate() ?? null,
+    };
+  });
+
+  const milestones: UnlockMilestoneInput[] = detail.milestones.map((milestone) => ({
+    milestoneId: milestone.id,
+    contractId: milestone.contractId,
+    name: `${contracts.rows.find((c) => c.id === milestone.contractId)?.contractNo ?? ''}: ${milestone.name}`,
+    phaseId: milestone.phaseId ?? null,
+    grossSantim: milestone.grossSantim,
+    status: milestone.status,
+  }));
+
+  const loading = projects.loading || contracts.loading || detail.loading;
+  const error = projects.error ?? contracts.error ?? detail.error;
 
   return (
     <>
