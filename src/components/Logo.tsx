@@ -1,19 +1,20 @@
 /**
  * The IntelMotion mark.
  *
- * NOT THE REAL ARTWORK. This environment cannot reach intelmotionlifts.com — the
- * proxy refuses the connection — so the official logo file could not be copied.
- * What follows is a wordmark drawn from the brand's own colours, standing in
- * until the real file is dropped in.
+ * HOW TO PUT THE REAL LOGO IN: drop the artwork into `public/logo.svg`,
+ * replacing the file that is there. Nothing else changes — no code, no
+ * rebuilding this component. A PNG works too: name it `logo.png` and change the
+ * one `src` below.
  *
- * TO USE THE REAL LOGO: save it as `public/logo.svg` (or .png) and replace the
- * <svg> below with `<img src="/logo.svg" alt="IntelMotion" height={height} />`.
- * Nothing else in the application needs to change — every place the mark appears
- * renders this component.
- *
- * The glyph is a lift car between two guide rails, with the car mid-travel: the
- * one shape that says "elevator" at sixteen pixels without a caption.
+ * The file currently in `public/` is a RECONSTRUCTION drawn from a screenshot,
+ * because this environment cannot reach intelmotionlifts.com to fetch the
+ * original. If that file is ever missing or fails to load, the component falls
+ * back to an inline copy of the same drawing rather than leaving a broken image
+ * in the header — and the inline copy renders in the page's own Poppins, which
+ * an <img>-loaded SVG cannot reach.
  */
+
+import { useState } from 'react';
 
 export function Logo({
   height = 28,
@@ -22,32 +23,41 @@ export function Logo({
   height?: number;
   withWordmark?: boolean;
 }) {
-  const width = withWordmark ? height * 6.6 : height;
+  const [fileFailed, setFileFailed] = useState(false);
 
+  if (!fileFailed && withWordmark) {
+    return (
+      <img
+        src="/logo.svg"
+        alt="IntelMotion"
+        height={height}
+        className="logo"
+        onError={() => setFileFailed(true)}
+      />
+    );
+  }
+
+  return <InlineMark height={height} withWordmark={withWordmark} />;
+}
+
+/** The same drawing, inline, so the page's webfont applies to the wordmark. */
+function InlineMark({ height, withWordmark }: { height: number; withWordmark: boolean }) {
   return (
     <svg
-      viewBox={withWordmark ? '0 0 264 40' : '0 0 40 40'}
-      width={width}
+      viewBox={withWordmark ? '0 0 330 72' : '0 0 72 72'}
       height={height}
+      width={height * (withWordmark ? 330 / 72 : 1)}
       role="img"
       aria-label="IntelMotion"
       className="logo"
     >
-      {/* Guide rails */}
-      <rect x="4" y="3" width="4" height="34" rx="2" fill="var(--brand-blue)" />
-      <rect x="32" y="3" width="4" height="34" rx="2" fill="var(--brand-blue)" />
-      {/* The car, mid-travel */}
-      <rect x="10" y="12" width="20" height="20" rx="3" fill="var(--brand-teal)" />
-      {/* Travelling upward — the amber arrow is the logo's accent colour */}
-      <path d="M20 4.5 L26 10.5 H14 Z" fill="var(--brand-amber)" />
-
+      <circle cx="17" cy="53" r="11" fill="#F9A825" />
+      <rect x="30" y="17" width="14" height="44" rx="7" fill="#22BFC4" />
+      <rect x="52" y="5" width="16" height="56" rx="8" fill="#2D68E0" />
       {withWordmark && (
-        // ONE text element with two tspans, so the browser lays the halves out
-        // sequentially. Two separate <text> elements at a hand-guessed offset
-        // overlapped and the mark read "InteMotion" — the width of a word is not
-        // something to estimate.
-        <text x="48" y="27" className="logo-word">
-          Intel<tspan className="logo-word-2">Motion</tspan>
+        // Pinned to an exact width, so a missing webfont cannot clip the mark.
+        <text x="86" y="52" className="logo-word" textLength={236} lengthAdjust="spacingAndGlyphs">
+          IntelMotion
         </text>
       )}
     </svg>

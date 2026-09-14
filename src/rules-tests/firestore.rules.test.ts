@@ -694,6 +694,67 @@ describe('units: engineers may update the machine in front of them', () => {
   });
 });
 
+describe('the chase log is append-only', () => {
+  const STEP = {
+    action: 'letter_delivered', at: null, byName: 'Finance',
+    contactName: 'Ato Bekele', note: 'Delivered to the registry.', deliveryRef: 'REG/2026/411',
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'invoices/i1/collectionSteps/s1'), { ...STEP, ...stamped('fin') });
+    });
+  });
+
+  it('lets finance and managers record a step', async () => {
+    await assertSucceeds(
+      setDoc(doc(ctx('fin', 'finance'), 'invoices/i1/collectionSteps/s2'), { ...STEP, ...stamped('fin') }),
+    );
+    await assertSucceeds(
+      setDoc(doc(ctx('mgr', 'manager'), 'invoices/i1/collectionSteps/s3'), { ...STEP, ...stamped('mgr') }),
+    );
+  });
+
+  it('refuses an engineer or viewer recording one', async () => {
+    await assertFails(
+      setDoc(doc(ctx('eng', 'engineer'), 'invoices/i1/collectionSteps/s4'), { ...STEP, ...stamped('eng') }),
+    );
+    await assertFails(
+      setDoc(doc(ctx('u1', 'viewer'), 'invoices/i1/collectionSteps/s5'), { ...STEP, ...stamped('u1') }),
+    );
+  });
+
+  it('refuses ANY edit to a step, by anyone, including an admin', async () => {
+    // What a client said on a date is the thing an escalation later rests on.
+    // A log that can be tidied up afterwards is not evidence of anything.
+    await assertFails(
+      updateDoc(doc(ctx('fin', 'finance'), 'invoices/i1/collectionSteps/s1'), {
+        note: 'Actually it was never delivered.', updatedAt: serverTimestamp(), updatedBy: 'fin',
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(ctx('adm', 'admin'), 'invoices/i1/collectionSteps/s1'), {
+        note: 'Rewritten.', updatedAt: serverTimestamp(), updatedBy: 'adm',
+      }),
+    );
+  });
+
+  it('refuses deletion of a step, by anyone', async () => {
+    await assertFails(deleteDoc(doc(ctx('fin', 'finance'), 'invoices/i1/collectionSteps/s1')));
+    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'invoices/i1/collectionSteps/s1')));
+  });
+
+  it('refuses a step stamped with somebody else', async () => {
+    await assertFails(
+      setDoc(doc(ctx('fin', 'finance'), 'invoices/i1/collectionSteps/s6'), { ...STEP, ...stamped('someone-else') }),
+    );
+  });
+
+  it('lets anyone who can read the app read the log', async () => {
+    await assertSucceeds(getDoc(doc(ctx('u1', 'viewer'), 'invoices/i1/collectionSteps/s1')));
+  });
+});
+
 describe('unmatched collections are closed by default', () => {
   it('denies a collection the rules never mention', async () => {
     const db = ctx('adm', 'admin');

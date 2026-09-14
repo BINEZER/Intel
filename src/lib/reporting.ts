@@ -65,7 +65,7 @@ export interface StatementDisbursement {
   supplierVatSantim: number;
   whtSantim: number;
   netPayableSantim: number;
-  status: 'draft' | 'approved' | 'paid' | 'rejected' | 'void';
+  status: 'draft' | 'requested' | 'checked' | 'approved' | 'paid' | 'rejected' | 'on_hold' | 'void';
 }
 
 export interface PhaseCost {
@@ -141,6 +141,11 @@ export function buildProjectStatement(
   disbursements: readonly StatementDisbursement[],
 ): ProjectStatement {
   const billed = invoices.filter((i) => i.status !== 'draft' && i.status !== 'void');
+  // Cost is recognised once the payment is AUTHORISED, not when it is requested.
+  // A requested or checked voucher can still be refused or reduced; treating it
+  // as cost would overstate the cost of every project with paperwork in flight.
+  // A voucher on hold is deliberately excluded for the same reason: whatever put
+  // it on hold usually changes what is owed.
   const committed = disbursements.filter((d) => d.status === 'approved' || d.status === 'paid');
 
   let collectedGrossSantim = 0;

@@ -181,6 +181,18 @@ service cloud.firestore {
                             && request.resource.data.invoiceNo == resource.data.invoiceNo));
       allow delete: if isAdmin() && resource.data.status == 'draft';
 
+      // --- the chase: who asked, when the letter landed, what they promised --
+      // Any signed-in role that works with clients may record a step, because
+      // the person who made the call is the person who should write it down —
+      // a chase log filled in second-hand by finance is a chase log nobody
+      // trusts. Steps are never edited or deleted: the record of what was said
+      // on a date is exactly the thing an escalation later rests on.
+      match /collectionSteps/{stepId} {
+        allow read:   if canRead();
+        allow create: if has(['admin', 'manager', 'finance']) && stampedCreate();
+        allow update, delete: if false;
+      }
+
       match /receipts/{receiptId} {
         allow read:   if canRead();
         allow create: if isFinance();

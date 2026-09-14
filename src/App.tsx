@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthProvider.js';
 import { RequireAuth, RequireCapability } from './auth/RequireAuth.js';
 import { AppShell } from './components/AppShell.js';
-import { ComingSoon, Dashboard } from './pages/Dashboard.js';
+import { Dashboard } from './pages/Dashboard.js';
 import { Boards } from './pages/Boards.js';
 import { Clients } from './pages/Clients.js';
 import { FinishNextRoute } from './pages/FinishNext.js';
@@ -14,6 +14,9 @@ import { Projects } from './pages/Projects.js';
 import { Contracts } from './pages/Contracts.js';
 import { Priority } from './pages/Priority.js';
 import { Alerts } from './pages/Alerts.js';
+import { Collections } from './pages/Collections.js';
+import { Payouts } from './pages/Payouts.js';
+import { Incentives } from './pages/Incentives.js';
 import { Programs, ProgramDetail } from './pages/Programs.js';
 import { Units, UnitDetail } from './pages/Units.js';
 import { CeoReport } from './pages/CeoReport.js';
@@ -36,6 +39,18 @@ export function App() {
             <Route index element={<Dashboard />} />
             <Route path="priority" element={<Priority />} />
             <Route path="alerts" element={<Alerts />} />
+            <Route
+              path="collections"
+              element={<RequireCapability capability="viewFinancials"><Collections /></RequireCapability>}
+            />
+            <Route
+              path="payouts"
+              element={<RequireCapability capability="viewFinancials"><Payouts /></RequireCapability>}
+            />
+            <Route
+              path="incentives"
+              element={<RequireCapability capability="read"><Incentives /></RequireCapability>}
+            />
             <Route
               path="programs"
               element={<RequireCapability capability="read"><Programs /></RequireCapability>}

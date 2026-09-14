@@ -367,6 +367,43 @@ export interface Receipt extends AuditFields {
   clientWhtCertificateNo?: string;
 }
 
+/**
+ * invoices/{invoiceId}/collectionSteps/{stepId}
+ *
+ * The chase. An ageing report says an invoice is 74 days old; it does not say
+ * whether anyone asked for the money, whether the letter reached the right desk,
+ * or whether the client promised to pay on a date that has since passed. Those
+ * are the facts that decide what to do next.
+ */
+export interface CollectionStep extends AuditFields {
+  action:
+    | 'payment_request'
+    | 'letter_delivered'
+    | 'follow_up_call'
+    | 'follow_up_visit'
+    | 'promise_to_pay'
+    | 'dispute_raised'
+    | 'escalation'
+    | 'legal_notice'
+    | 'part_payment'
+    | 'payment_received'
+    | 'written_off';
+  at: DualDate;
+  /** Who did it, on our side. */
+  byName: string;
+  /** Who it went to, on theirs. */
+  contactName: string;
+  /** What was said, what was handed over, the reference on the stamped copy. */
+  note: string;
+  /** On `promise_to_pay`: what they committed to, and by when. */
+  promisedAmountSantim?: number;
+  promisedDate?: DualDate;
+  /** On `letter_delivered`: their reference on the received copy. */
+  deliveryRef?: string;
+  /** Where a scan of the stamped letter lives. */
+  storagePath?: string;
+}
+
 // ===========================================================================
 // subcontractors/{subcontractorId}
 // ===========================================================================
@@ -432,7 +469,40 @@ export interface Disbursement extends AuditFields {
   whtCertificateNo?: string;
   whtRemittedDate: DualDate | null;
 
-  status: 'draft' | 'approved' | 'paid' | 'rejected' | 'void';
+  /**
+   * Where the voucher is in the payout workflow.
+   *
+   * `requested` and `checked` sit between draft and approval because a voucher
+   * that has been submitted and a voucher nobody has looked at are completely
+   * different things to a subcontractor waiting for money.
+   */
+  status: 'draft' | 'requested' | 'checked' | 'approved' | 'paid' | 'rejected' | 'on_hold' | 'void';
+
+  /**
+   * When each step happened and who did it.
+   *
+   * Waiting time is computed from THESE stamps, never from `updatedAt`, which
+   * moves whenever anyone touches the record for any reason. Separation of
+   * duties is enforced against `checkedBy`: the person who confirmed the work
+   * happened may not be the person who releases the money for it.
+   */
+  workflow: {
+    requestedAt: Timestamp | null;
+    requestedBy: string | null;
+    checkedAt: Timestamp | null;
+    checkedBy: string | null;
+    approvedAt: Timestamp | null;
+    approvedBy: string | null;
+    paidAt: Timestamp | null;
+    paidBy: string | null;
+    rejectedAt: Timestamp | null;
+    rejectedBy: string | null;
+    heldAt: Timestamp | null;
+    heldBy: string | null;
+    /** Why it was rejected or put on hold. Required for either. */
+    reason: string | null;
+  };
+
   approvedBy?: string;
   paymentMethod?: 'bank_transfer' | 'cheque' | 'cash' | 'cpo';
   bankRef?: string;
