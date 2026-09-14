@@ -13,6 +13,7 @@ import { ProjectDetail } from './pages/ProjectDetail.js';
 import { Projects } from './pages/Projects.js';
 import { Contracts } from './pages/Contracts.js';
 import { Priority } from './pages/Priority.js';
+import { CeoReport } from './pages/CeoReport.js';
 import { SignIn } from './pages/SignIn.js';
 
 export function App() {
@@ -77,6 +78,14 @@ export function App() {
               element={
                 <RequireCapability capability="viewFinancials">
                   <Finance />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="reports"
+              element={
+                <RequireCapability capability="viewFinancials">
+                  <CeoReport />
                 </RequireCapability>
               }
             />

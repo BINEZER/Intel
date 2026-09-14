@@ -379,6 +379,15 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
   --viz-grid:    #e6e8ea;
   --viz-ink:     var(--text);
   --viz-ink-mute: var(--muted);
+
+  /* Receivables age buckets are ORDERED, so they get one hue stepped light to
+     dark rather than five identities. Validated as an ordinal ramp: monotone
+     lightness, every adjacent gap >= 0.06, light end at 2.11:1 on white. */
+  --viz-ordinal-1: #86b6ef;
+  --viz-ordinal-2: #5598e7;
+  --viz-ordinal-3: #2a78d6;
+  --viz-ordinal-4: #1c5cab;
+  --viz-ordinal-5: #104281;
 }
 
 :root[data-theme="dark"] .viz-root {
@@ -390,6 +399,14 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
   --viz-grid:    #333330;
   --viz-ink:     #ffffff;
   --viz-ink-mute: #c3c2b7;
+
+  /* Stepped for the dark surface rather than flipped: the dark end stops at
+     step 600, which still clears 2.15:1 against #1a1a19. */
+  --viz-ordinal-1: #9ec5f4;
+  --viz-ordinal-2: #6da7ec;
+  --viz-ordinal-3: #3987e5;
+  --viz-ordinal-4: #256abf;
+  --viz-ordinal-5: #184f95;
 }
 
 .viz-head { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
@@ -629,4 +646,156 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
    the name field down to three characters. */
 @media (max-width: 640px) {
   .stage-manager .stage-table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+
+/* --- CEO report ---------------------------------------------------------- */
+
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.report-toolbar fieldset {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem 0.45rem;
+  margin: 0;
+}
+
+.report-toolbar legend {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0 0.3rem;
+}
+
+.report-toolbar button { padding: 0.3rem 0.65rem; font-size: 0.88rem; }
+
+.period-stepper { display: inline-flex; align-items: center; gap: 0.4rem; }
+.period-stepper .period-label { min-width: 6rem; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* The sheet is deliberately page-shaped: what is on screen is what prints. */
+.report-sheet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2rem 2.25rem;
+  max-width: 60rem;
+}
+
+.report-head { border-bottom: 2px solid var(--brand-blue); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+.report-brand { margin: 0 0 0.35rem; font-size: 0.78rem; letter-spacing: 0.12em; color: var(--brand-blue); font-weight: 700; }
+.report-head h2 { margin: 0 0 0.4rem; }
+.report-head p { margin: 0.15rem 0; }
+
+.report-block { margin-bottom: 2rem; }
+.report-block h3 {
+  font-size: 1.05rem;
+  color: var(--brand-blue);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+.report-block p { line-height: 1.6; max-width: 46rem; }
+
+.report-plan-head h3 { color: var(--brand-teal-dark); border-bottom-color: var(--brand-teal); }
+
+.report-foot { border-top: 1px solid var(--border); padding-top: 0.75rem; font-size: 0.85rem; }
+
+.metric-grid {
+  display: grid;
+  /* Wide enough for "ETB 13,750,550.00" on one line. A money figure broken
+     across two lines reads as two numbers at a glance. */
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.metric-tile {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 6px;
+  padding: 0.65rem 0.8rem;
+  background: var(--bg);
+}
+
+/* Only a metric moving the wrong way FOR WHAT IT MEASURES is coloured. Cost
+   falling is good news, and an arrow alone cannot say that. */
+.metric-tile.tone-good { border-left-color: var(--brand-green); }
+.metric-tile.tone-bad  { border-left-color: var(--danger); }
+
+.metric-label { margin: 0; font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.metric-value { margin: 0.2rem 0; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow-x: auto; }
+.metric-note  { margin: 0; font-size: 0.8rem; line-height: 1.4; }
+
+.report-chart { margin: 1.25rem 0; }
+.viz-empty { padding: 2rem 0; text-align: center; }
+.chart-readout {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-height: 1.2em;
+  font-variant-numeric: tabular-nums;
+}
+.viz-toggle { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+.viz-svg { width: 100%; height: auto; }
+.viz-svg [role='button'] { cursor: pointer; outline: none; }
+.viz-svg [role='button']:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.viz-gridline { stroke: var(--viz-grid); stroke-width: 1; }
+.viz-axis-line { stroke: var(--viz-grid); stroke-width: 1; }
+/* Text wears text tokens, never the series colour. */
+.viz-tick, .viz-axis, .viz-unit { fill: var(--viz-ink-mute); font-size: 11px; }
+.viz-value { fill: var(--viz-ink); font-size: 11px; font-weight: 600; }
+.viz-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+.viz-table th, .viz-table td { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--border); text-align: left; }
+.viz-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .report-sheet { padding: 1.1rem; }
+  .report-toolbar fieldset { width: 100%; }
+}
+
+/* --- Printing, which is also how the PDF is made ------------------------- */
+
+@media print {
+  /* The browser's own print pipeline gives live, selectable, searchable text at
+     the printer's resolution. A PDF library would either rasterise the page or
+     make us lay it out a second time in its coordinate system. */
+  .no-print,
+  .sidebar,
+  .app-header,
+  .viz-toggle,
+  .report-controls {
+    display: none !important;
+  }
+
+  body { background: #fff; }
+
+  .report-sheet {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    max-width: none;
+    background: #fff;
+  }
+
+  /* A section split across a page break loses the heading that explains it. */
+  .report-block { break-inside: avoid; page-break-inside: avoid; }
+  .report-block h3 { break-after: avoid; page-break-after: avoid; }
+  .report-chart, .metric-tile, table { break-inside: avoid; page-break-inside: avoid; }
+  .report-plan-head { break-before: page; page-break-before: always; }
+
+  /* Hover is meaningless on paper; the readout would print as a stale hint. */
+  .chart-readout { display: none; }
+
+  .table-scroll { overflow: visible; }
+
+  @page { margin: 18mm 14mm; }
 }
