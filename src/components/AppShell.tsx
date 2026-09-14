@@ -79,28 +79,65 @@ export function TodayBadge() {
   const utcToday = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
   return (
     <div className="today">
-      <strong>{formatEthiopian(utcDateToEthiopian(utcToday))}</strong>
-      <span className="muted"> EC · {formatGregorianShort(utcToday)}</span>
+      <strong>{formatGregorianShort(utcToday)}</strong>
+      <span className="muted"> · {formatEthiopian(utcDateToEthiopian(utcToday))} EC</span>
     </div>
   );
 }
 
+const NAV_KEY = 'intelmotion.nav.open';
+
+/** Is this a screen where the sidebar sits beside the page rather than over it? */
+function isWideScreen(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches;
+}
+
 export function AppShell() {
   const { user, role, signOut } = useAuth();
-  const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   const toggle = useRef<HTMLButtonElement>(null);
 
-  // Going somewhere closes the drawer. A menu still covering the page you just
-  // asked for is the commonest bug in every hand-rolled mobile nav.
-  useEffect(() => { setNavOpen(false); }, [location.pathname]);
+  /**
+   * One state, two behaviours.
+   *
+   * On a wide screen the sidebar sits in the layout and collapsing it hands the
+   * room to the page — which is the point on a table twelve columns wide. On a
+   * narrow one it is a drawer over the content. Either way the same button
+   * controls it, so there is never a size at which the menu cannot be put away.
+   *
+   * The choice is remembered, because a sidebar that reappears on every
+   * navigation is not collapsible in any useful sense.
+   */
+  const [navOpen, setNavOpen] = useState<boolean>(() => {
+    try {
+      const stored = window.localStorage.getItem(NAV_KEY);
+      if (stored !== null) return stored === 'true';
+    } catch {
+      // Private browsing and blocked site data both throw here. Not a reason
+      // to fail to render an application.
+    }
+    return isWideScreen();
+  });
 
-  // Escape closes it, and the focus goes back to the button that opened it
-  // rather than to the top of the document.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(NAV_KEY, String(navOpen));
+    } catch { /* see above */ }
+  }, [navOpen]);
+
+  // Going somewhere closes the DRAWER. On a wide screen the sidebar is part of
+  // the layout, so closing it there would undo the user's choice on every click.
+  useEffect(() => {
+    if (!isWideScreen()) setNavOpen(false);
+  }, [location.pathname]);
+
+  // Escape closes the drawer, and focus goes back to the button that opened it
+  // rather than to the top of the document. Only where it IS a drawer: Escape
+  // should not collapse a sidebar somebody is reading.
   useEffect(() => {
     if (!navOpen) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || isWideScreen()) return;
       setNavOpen(false);
       toggle.current?.focus();
     };
@@ -117,7 +154,8 @@ export function AppShell() {
           className="nav-toggle"
           aria-expanded={navOpen}
           aria-controls="app-nav"
-          aria-label={navOpen ? 'Close menu' : 'Open menu'}
+          aria-label={navOpen ? 'Hide menu' : 'Show menu'}
+          title={navOpen ? 'Hide the menu' : 'Show the menu'}
           onClick={() => setNavOpen((open) => !open)}
         >
           <span className="nav-toggle-bars" aria-hidden="true"><span /><span /><span /></span>

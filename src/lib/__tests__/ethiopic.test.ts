@@ -94,8 +94,17 @@ describe('fiscal year and period keys', () => {
 });
 
 describe('dual formatting', () => {
-  it('renders both calendars in one label', () => {
-    expect(formatDual(new Date(Date.UTC(2025, 8, 11)))).toBe('1 Meskerem 2018 EC (11 Sep 2025)');
+  it('renders both calendars in one label, Gregorian leading', () => {
+    // The database baseline is Gregorian and it is what people read first; the
+    // Ethiopian reading follows in brackets, present on every date but never
+    // the thing the eye lands on.
+    expect(formatDual(new Date(Date.UTC(2025, 8, 11)))).toBe('11 Sep 2025 (1 Meskerem 2018 EC)');
+  });
+
+  it('still carries the Ethiopian reading on every date', () => {
+    // Demoting it must not mean dropping it: an Ethiopian filing is dated by it.
+    expect(formatDual(new Date(Date.UTC(2025, 8, 11)))).toContain('Meskerem');
+    expect(formatDual(new Date(Date.UTC(2025, 8, 11)))).toContain('EC');
   });
 
   it('supports Amharic month names', () => {

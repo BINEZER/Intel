@@ -39,7 +39,7 @@ export function PrintHeader({ title, subtitle }: { title: string; subtitle?: str
         {subtitle !== undefined && <p className="muted">{subtitle}</p>}
       </div>
       <p className="muted print-date">
-        {formatEthiopian(utcDateToEthiopian(utcToday))} EC · {formatGregorianShort(utcToday)}
+        {formatGregorianShort(utcToday)} · {formatEthiopian(utcDateToEthiopian(utcToday))} EC
       </p>
     </div>
   );

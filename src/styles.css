@@ -929,23 +929,35 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
    destination reachable without a menu to open.
    ------------------------------------------------------------------------- */
 
-/* The toggle and the scrim exist only below the breakpoint. */
-.nav-toggle, .nav-scrim { display: none; }
+/* The toggle is always available: there is no width at which the menu cannot be
+   put away. The scrim only exists where the menu is a drawer over the content. */
+.nav-scrim { display: none; }
+
+.nav-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; padding: 0; flex-shrink: 0;
+}
+.nav-toggle-bars { display: grid; gap: 4px; width: 18px; }
+.nav-toggle-bars > span {
+  display: block; height: 2px; border-radius: 2px; background: var(--text-2);
+  transition: transform .18s var(--ease), opacity .18s var(--ease);
+}
+
+/* On a wide screen collapsing hands the room to the page, which is the point on
+   a table twelve columns wide. The sidebar leaves the layout entirely rather
+   than shrinking to a rail of unlabelled icons nobody can read. */
+@media (min-width: 901px) {
+  .shell:not(.nav-open) .sidebar { display: none; }
+  .nav-open .nav-toggle-bars > span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  .nav-open .nav-toggle-bars > span:nth-child(2) { opacity: 0; }
+  .nav-open .nav-toggle-bars > span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+}
 
 @media (max-width: 900px) {
   /* A drawer, not a horizontal scroller. Seventeen destinations in a strip you
      have to swipe through hides most of them off-screen with no sign they are
      there; a drawer shows the whole grouped menu at once and gets out of the
      way when it is closed. */
-  .nav-toggle {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 40px; height: 40px; padding: 0; flex-shrink: 0;
-  }
-  .nav-toggle-bars { display: grid; gap: 4px; width: 18px; }
-  .nav-toggle-bars > span {
-    display: block; height: 2px; border-radius: 2px; background: var(--text-2);
-    transition: transform .18s var(--ease), opacity .18s var(--ease);
-  }
   .nav-open .nav-toggle-bars > span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
   .nav-open .nav-toggle-bars > span:nth-child(2) { opacity: 0; }
   .nav-open .nav-toggle-bars > span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }

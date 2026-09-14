@@ -193,9 +193,20 @@ export function formatGregorianShort(date: Date): string {
 }
 
 /** `1 Meskerem 2018 EC (11 Sep 2025)` — the dual-calendar label used across the UI. */
+/**
+ * A date in both calendars, GREGORIAN FIRST.
+ *
+ * The database baseline is Gregorian, most clients, suppliers and banks work in
+ * it, and it is what people read first. The Ethiopian reading follows in
+ * brackets — present on every date, never the thing the eye lands on.
+ *
+ * This function is the single place that ordering is decided. Changing it
+ * changes every date in the application at once, which is exactly why it is not
+ * done at the call sites.
+ */
 export function formatDual(date: Date, opts: { script?: 'latin' | 'amharic' } = {}): string {
   const ec = utcDateToEthiopian(date);
-  return `${formatEthiopian(ec, opts)} EC (${formatGregorianShort(date)})`;
+  return `${formatGregorianShort(date)} (${formatEthiopian(ec, opts)} EC)`;
 }
 
 // ---------------------------------------------------------------------------
