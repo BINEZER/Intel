@@ -812,15 +812,14 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
 
 /* --- Brand mark ---------------------------------------------------------- */
 
-.logo { display: block; }
+.logo { display: block; height: 28px; width: auto; }
 .logo-word {
-  font-family: Poppins, 'Segoe UI', system-ui, sans-serif;
-  font-size: 22px;
+  font-family: Poppins, Montserrat, 'Segoe UI', system-ui, sans-serif;
+  font-size: 44px;
   font-weight: 700;
-  fill: var(--brand-blue);
-  letter-spacing: -0.01em;
+  fill: #2E3192;
+  letter-spacing: -0.5px;
 }
-.logo-word tspan.logo-word-2 { fill: var(--brand-teal-dark); }
 
 .brand { display: flex; align-items: center; gap: 0.5rem; }
 .brand-sub { font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -1006,3 +1005,48 @@ button.primary:hover:not(:disabled) { background: var(--brand-teal); border-colo
 .sev-chip-critical, .sev-chip-high, .sev-chip-medium {
   text-transform: none;
 }
+
+/* --- Dashboard ----------------------------------------------------------- */
+
+.dashboard-headline {
+  font-size: 1.02rem;
+  line-height: 1.55;
+  max-width: 52rem;
+  margin: 0.5rem 0;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+  align-items: start;
+}
+.dashboard-grid .card { margin: 0; }
+
+.card-links { margin: 0.75rem 0 0; font-size: 0.88rem; }
+
+.money-tile { display: block; text-decoration: none; color: inherit; }
+.money-tile:hover { border-color: var(--accent); }
+.money-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* "No data yet" is a sentence, not a figure: it must not wear the figure's
+   weight, or an empty system looks like one reporting a very small number. */
+.metric-value.is-empty {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.alert-badge { display: flex; align-items: center; gap: 0.4rem; text-decoration: none; }
+
+.setup-card { border-left: 4px solid var(--brand-teal); }
+
+.setup-list { list-style: none; counter-reset: step; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 0.8rem; }
+.setup-list > li { padding-left: 0.25rem; }
+.setup-list > li.is-done .setup-head a { color: var(--muted); }
+.setup-list > li.is-done .setup-mark { color: var(--brand-green); }
+
+.setup-head { display: flex; align-items: baseline; gap: 0.5rem; font-weight: 600; }
+.setup-mark { color: var(--brand-teal-dark); font-size: 1rem; }
+.setup-list p { margin: 0.15rem 0 0 1.45rem; font-size: 0.88rem; line-height: 1.45; max-width: 46rem; }

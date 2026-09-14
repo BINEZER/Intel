@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 330 72" width="330" height="72" role="img" aria-label="IntelMotion">
+  <!--
+    A RECONSTRUCTION of the IntelMotion mark, drawn from a screenshot because
+    this environment cannot reach intelmotionlifts.com to fetch the original.
+
+    TO USE THE REAL LOGO: replace THIS FILE with it, keeping the name logo.svg
+    (a .png works too — point the img in Logo.tsx at it). No code changes.
+  -->
+  <circle cx="17" cy="53" r="11" fill="#F9A825"/>
+  <rect x="30" y="17" width="14" height="44" rx="7" fill="#22BFC4"/>
+  <rect x="52" y="5" width="16" height="56" rx="8" fill="#2D68E0"/>
+  <!-- textLength pins the wordmark to an exact width. An <img>-loaded SVG
+       cannot reach a webfont, so it renders in whatever the viewer has; without
+       this the mark was clipped to "IntelMotio". -->
+  <text x="86" y="52" textLength="236" lengthAdjust="spacingAndGlyphs"
+        font-family="Poppins, Montserrat, 'Segoe UI', system-ui, sans-serif"
+        font-size="44" font-weight="700" fill="#2E3192">IntelMotion</text>
+</svg>

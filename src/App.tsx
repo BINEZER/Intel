@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthProvider.js';
 import { RequireAuth, RequireCapability } from './auth/RequireAuth.js';
 import { AppShell } from './components/AppShell.js';
-import { ComingSoon, Dashboard } from './pages/Dashboard.js';
+import { Dashboard } from './pages/Dashboard.js';
 import { Boards } from './pages/Boards.js';
 import { Clients } from './pages/Clients.js';
 import { FinishNextRoute } from './pages/FinishNext.js';
