@@ -57,7 +57,7 @@ export type ProjectInput = Omit<
   'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy' | 'progressBps' | 'financials'
 >;
 
-const EMPTY_FINANCIALS = {
+export const EMPTY_FINANCIALS = {
   contractNetSantim: 0,
   contractVatSantim: 0,
   contractGrossSantim: 0,
