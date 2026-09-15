@@ -16,7 +16,12 @@ import { DualDateInput } from '../components/DualDateInput.js';
 import { MoneyInput } from '../components/MoneyInput.js';
 import { MilestoneEditor } from '../components/MilestoneEditor.js';
 import { useAsyncAction } from '../data/useCollection.js';
-import { createContract } from '../data/contracts.js';
+import {
+  createContract,
+  deriveContractFields,
+  replaceMilestones,
+  updateContract,
+} from '../data/contracts.js';
 import { FormPanel } from '../components/FormPanel.js';
 import { ReminderEditor } from '../components/ReminderEditor.js';
 import type { Client, Contract, ContractType, DualDate, Reminder } from '../lib/schema.js';
@@ -24,32 +29,44 @@ import type { WithId } from '../data/repository.js';
 import { DEFAULT_WARRANTY_ALERT_DAYS, DEFAULT_WARRANTY_MONTHS } from '../lib/lifecycle.js';
 
 export function ContractForm({
+  initial,
   clients,
   uid,
   onDone,
 }: {
+  initial: WithId<Contract> | null;
   clients: readonly WithId<Client>[];
   uid: string;
   onDone: () => void;
 }) {
-  const [clientId, setClientId] = useState('');
-  const [title, setTitle] = useState('');
-  const [contractNo, setContractNo] = useState('');
-  const [type, setType] = useState<ContractType>('supply_install');
-  const [valueSantim, setValueSantim] = useState(0);
-  const [inclusive, setInclusive] = useState(false);
-  const [signedDate, setSignedDate] = useState<DualDate | null>(null);
-  const [startDate, setStartDate] = useState<DualDate | null>(null);
-  const [endDate, setEndDate] = useState<DualDate | null>(null);
-  const [renewalWindowDays, setRenewalWindowDays] = useState(60);
-  const [autoRenew, setAutoRenew] = useState(false);
-  const [responseHours, setResponseHours] = useState(4);
-  const [resolutionHours, setResolutionHours] = useState(24);
-  const [visitsPerYear, setVisitsPerYear] = useState(12);
+  const [clientId, setClientId] = useState(initial?.clientId ?? '');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [contractNo, setContractNo] = useState(initial?.contractNo ?? '');
+  const [type, setType] = useState<ContractType>(initial?.type ?? 'supply_install');
+  // The value is shown as it was ENTERED, inclusive or not, so an edit that
+  // touches nothing else cannot silently re-base it.
+  const [valueSantim, setValueSantim] = useState(
+    initial === null
+      ? 0
+      : initial.valueEnteredInclusive
+        ? initial.valueGrossSantim
+        : initial.valueNetSantim,
+  );
+  const [inclusive, setInclusive] = useState(initial?.valueEnteredInclusive ?? false);
+  const [signedDate, setSignedDate] = useState<DualDate | null>(initial?.signedDate ?? null);
+  const [startDate, setStartDate] = useState<DualDate | null>(initial?.startDate ?? null);
+  const [endDate, setEndDate] = useState<DualDate | null>(initial?.endDate ?? null);
+  const [renewalWindowDays, setRenewalWindowDays] = useState(initial?.renewalWindowDays ?? 60);
+  const [autoRenew, setAutoRenew] = useState(initial?.autoRenew ?? false);
+  const [responseHours, setResponseHours] = useState(initial?.sla?.responseHours ?? 4);
+  const [resolutionHours, setResolutionHours] = useState(initial?.sla?.resolutionHours ?? 24);
+  const [visitsPerYear, setVisitsPerYear] = useState(initial?.sla?.preventiveVisitsPerYear ?? 12);
   const [shares, setShares] = useState<MilestoneShare[]>(DEFAULT_SUPPLY_INSTALL_SHARES);
-  const [warrantyMonths, setWarrantyMonths] = useState(DEFAULT_WARRANTY_MONTHS);
-  const [warrantyAlertDays, setWarrantyAlertDays] = useState(DEFAULT_WARRANTY_ALERT_DAYS);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [warrantyMonths, setWarrantyMonths] = useState(initial?.warranty?.months ?? DEFAULT_WARRANTY_MONTHS);
+  const [warrantyAlertDays, setWarrantyAlertDays] = useState(
+    initial?.warranty?.alertDays ?? DEFAULT_WARRANTY_ALERT_DAYS,
+  );
+  const [reminders, setReminders] = useState<Reminder[]>(initial?.reminders ?? []);
 
   const { busy, error, run } = useAsyncAction('create this contract');
 
@@ -77,65 +94,103 @@ export function ContractForm({
     endDate !== null &&
     shareValidation.ok;
 
+  /**
+   * Has the money actually moved? An edit that only fixes a title must not
+   * touch the payment schedule — and on a contract that has been invoiced,
+   * touching it would fail outright.
+   */
+  const valueChanged =
+    initial !== null &&
+    (valueSantim !==
+      (initial.valueEnteredInclusive ? initial.valueGrossSantim : initial.valueNetSantim) ||
+      inclusive !== initial.valueEnteredInclusive);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!ready || client === undefined) return;
 
-    const result = await run(() =>
-      createContract(
-        {
-          contractNo: contractNo.trim() || `C-${Date.now()}`,
-          type,
-          clientId,
-          clientName: client.name,
-          title: title.trim(),
-          currency: 'ETB',
-          valueNetSantim: valueSantim,
-          vatRateBps: VAT_RATE_BPS,
-          valueEnteredInclusive: inclusive,
-          signedDate: signedDate as DualDate,
-          startDate: startDate as DualDate,
-          endDate: endDate as DualDate,
-          autoRenew,
-          renewalWindowDays,
-          reminders,
-          // The warranty clock starts at HANDOVER, which has not happened yet,
-          // so the end date is left null rather than guessed from the contract
-          // end. A warranty dated from the wrong day expires on the wrong day.
-          ...(warrantyMonths > 0
-            ? { warranty: { months: warrantyMonths, startsOn: null, endsOn: null, alertDays: warrantyAlertDays } }
-            : {}),
-          renewalStatus: 'not_due',
-          ...(isMaintenance
-            ? {
-                sla: {
-                  responseHours,
-                  resolutionHours,
-                  preventiveVisitsPerYear: visitsPerYear,
-                  metrics: {
-                    callouts: 0,
-                    breaches: 0,
-                    avgResponseHours: 0,
-                    visitsCompletedThisYear: 0,
-                    lastComputedAt: signedDate.at,
-                  },
-                },
-              }
-            : {}),
-          status: 'draft',
-          attachments: [],
-        },
-        shares,
-        uid,
-      ),
-    );
+    const input = {
+      contractNo: contractNo.trim() || `C-${Date.now()}`,
+      type,
+      clientId,
+      clientName: client.name,
+      title: title.trim(),
+      currency: 'ETB' as const,
+      valueNetSantim: valueSantim,
+      vatRateBps: VAT_RATE_BPS,
+      valueEnteredInclusive: inclusive,
+      signedDate: signedDate as DualDate,
+      startDate: startDate as DualDate,
+      endDate: endDate as DualDate,
+      autoRenew,
+      renewalWindowDays,
+      reminders,
+      // The warranty clock starts at HANDOVER. On an edit the dates already on
+      // the contract are kept — re-deriving them from today would move an
+      // expiry somebody is counting on.
+      ...(warrantyMonths > 0
+        ? {
+            warranty: {
+              months: warrantyMonths,
+              startsOn: initial?.warranty?.startsOn ?? null,
+              endsOn: initial?.warranty?.endsOn ?? null,
+              alertDays: warrantyAlertDays,
+            },
+          }
+        : {}),
+      renewalStatus: initial?.renewalStatus ?? ('not_due' as const),
+      ...(isMaintenance
+        ? {
+            sla: {
+              responseHours,
+              resolutionHours,
+              preventiveVisitsPerYear: visitsPerYear,
+              metrics: initial?.sla?.metrics ?? {
+                callouts: 0,
+                breaches: 0,
+                avgResponseHours: 0,
+                visitsCompletedThisYear: 0,
+                lastComputedAt: signedDate.at,
+              },
+            },
+          }
+        : {}),
+      // An edit must not reset a contract somebody activated or terminated.
+      status: initial?.status ?? ('draft' as const),
+      attachments: initial?.attachments ?? [],
+    };
+
+    const result = await run(async () => {
+      if (initial === null) {
+        await createContract(input, shares, uid);
+      } else {
+        await updateContract(initial.id, input, uid);
+        // Re-proportion the payment schedule to the new value. This refuses
+        // outright once anything has been invoiced, which is the right answer:
+        // a schedule that has been billed against is not a draft any more.
+        if (valueChanged) {
+          const derived = deriveContractFields(input);
+          await replaceMilestones(
+            initial.id,
+            { ...derived, vatRateBps: input.vatRateBps },
+            shares,
+            uid,
+          );
+        }
+      }
+      return true;
+    });
     if (result !== null) onDone();
   }
 
   return (
     <FormPanel
-      title="New contract"
-      description="The contract carries the value, the VAT and the payment milestones. Those milestones are what the whole cash forecast is built from."
+      title={initial === null ? 'New contract' : `Edit ${initial.contractNo}`}
+      description={
+        initial === null
+          ? 'The contract carries the value, the VAT and the payment milestones. Those milestones are what the whole cash forecast is built from.'
+          : 'Changing the value re-proportions the payment schedule — which is refused outright once any of it has been invoiced.'
+      }
       onClose={onDone}
     >
       <form onSubmit={(e) => void submit(e)}>

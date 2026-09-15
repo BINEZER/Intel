@@ -43,6 +43,7 @@ import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { FormPanel } from '../components/FormPanel.js';
 import { DeleteButton } from '../components/DeleteButton.js';
+import { DataTable } from '../components/DataTable.js';
 
 const VERDICT_LABEL: Record<UnitHealth['verdict'], string> = {
   problem: 'Needs attention',
@@ -155,7 +156,7 @@ export function Units() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects') && user !== null;
   const [servicedOnly, setServicedOnly] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<WithId<ElevatorUnit> | 'new' | null>(null);
 
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
   const records = useSiteRecords(units.rows.map((u) => u.siteName));
@@ -192,8 +193,8 @@ export function Units() {
         </div>
         <PrintButton label="Print list" />
         {editable && (
-          <button type="button" className="primary" onClick={() => setCreating((v) => !v)}>
-            {creating ? 'Cancel' : 'Add a lift'}
+          <button type="button" className="primary" onClick={() => setEditing((v) => (v === null ? 'new' : null))}>
+            {editing === null ? 'Add a lift' : 'Cancel'}
           </button>
         )}
       </div>
@@ -201,7 +202,13 @@ export function Units() {
       {units.error !== null && <p className="error" role="alert">{units.error}</p>}
       {(units.loading || records.loading) && <p className="muted">Loading…</p>}
 
-      {creating && user !== null && <UnitForm uid={user.uid} onDone={() => setCreating(false)} />}
+      {editing !== null && user !== null && (
+        <UnitForm
+          initial={editing === 'new' ? null : editing}
+          uid={user.uid}
+          onDone={() => setEditing(null)}
+        />
+      )}
 
       <label className="filter-row">
         <input type="checkbox" checked={servicedOnly} onChange={(e) => setServicedOnly(e.target.checked)} />
@@ -215,55 +222,113 @@ export function Units() {
             : 'No lifts on the register yet.'}
         </p>
       ) : (
-        <div className="table-scroll">
-          <table className="data-table">
-            <caption>Lifts on the register</caption>
-            <thead>
-              <tr>
-                <th scope="col">Lift</th>
-                <th scope="col">Site</th>
-                <th scope="col">Status</th>
-                <th scope="col">Condition</th>
-                <th scope="col" className="num">Callouts (12m)</th>
-                <th scope="col" className="num">PM done</th>
-                <th scope="col">Last visit</th>
-                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ unit, health }) => (
-                <tr key={unit.id} className={health.verdict === 'problem' ? 'row-danger' : ''}>
-                  <td>
-                    <Link to={`/units/${unit.id}`}>{unit.tag}</Link>
-                    <span className="muted"> · {unit.unitCode}</span>
-                  </td>
-                  <td>{unit.siteName}<span className="muted"> · {unit.clientName}</span></td>
-                  <td><span className="chip">{STATUS_LABEL[unit.status]}</span></td>
-                  <td><span className={`chip verdict-${health.verdict}`}>{VERDICT_LABEL[health.verdict]}</span></td>
-                  <td className="num">{health.calloutsLast12Months}</td>
-                  <td className="num">
-                    {health.pmComplianceBps === null ? <span className="muted">—</span> : formatBps(health.pmComplianceBps, 0)}
-                  </td>
-                  <td>{health.lastVisitAt === null ? <span className="muted">never</span> : formatDual(health.lastVisitAt)}</td>
-                  {editable && (
-                    <td>
-                      <DeleteButton
-                        target={{
-                          kind: 'unit',
-                          id: unit.id,
-                          name: `${unit.tag} at ${unit.siteName}`,
-                          // A lift's service history is keyed by tag within a
-                          // client, not by document id.
-                          unit: { tag: unit.tag, clientId: unit.clientId },
-                        }}
-                      />
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={rows}
+          rowKey={({ unit }) => unit.id}
+          caption="Lifts on the register"
+          noun="lifts"
+          rowClass={({ health }) => (health.verdict === 'problem' ? 'row-danger' : undefined)}
+          columns={[
+            {
+              key: 'tag',
+              label: 'Lift',
+              value: ({ unit }) => unit.tag,
+              text: ({ unit }) => `${unit.tag} ${unit.unitCode}`,
+              render: ({ unit }) => (
+                <>
+                  <Link to={`/units/${unit.id}`}>{unit.tag}</Link>
+                  <span className="muted"> · {unit.unitCode}</span>
+                </>
+              ),
+            },
+            {
+              key: 'site',
+              label: 'Site',
+              value: ({ unit }) => unit.siteName,
+              text: ({ unit }) => `${unit.siteName} ${unit.clientName}`,
+              render: ({ unit }) => (
+                <>
+                  {unit.siteName}
+                  <span className="muted"> · {unit.clientName}</span>
+                </>
+              ),
+            },
+            {
+              key: 'client',
+              label: 'Client',
+              value: ({ unit }) => unit.clientName,
+              filterable: true,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: ({ unit }) => STATUS_LABEL[unit.status],
+              filterable: true,
+              render: ({ unit }) => <span className="chip">{STATUS_LABEL[unit.status]}</span>,
+            },
+            {
+              key: 'condition',
+              label: 'Condition',
+              value: ({ health }) => VERDICT_LABEL[health.verdict],
+              filterable: true,
+              render: ({ health }) => (
+                <span className={`chip verdict-${health.verdict}`}>{VERDICT_LABEL[health.verdict]}</span>
+              ),
+            },
+            {
+              key: 'callouts',
+              label: 'Callouts (12m)',
+              numeric: true,
+              value: ({ health }) => health.calloutsLast12Months,
+            },
+            {
+              key: 'pm',
+              label: 'PM done',
+              numeric: true,
+              value: ({ health }) => health.pmComplianceBps,
+              render: ({ health }) =>
+                health.pmComplianceBps === null ? (
+                  <span className="muted">—</span>
+                ) : (
+                  formatBps(health.pmComplianceBps, 0)
+                ),
+            },
+            {
+              key: 'lastVisit',
+              label: 'Last visit',
+              value: ({ health }) => health.lastVisitAt,
+              render: ({ health }) =>
+                health.lastVisitAt === null ? (
+                  <span className="muted">never</span>
+                ) : (
+                  formatDual(health.lastVisitAt)
+                ),
+            },
+            ...(editable
+              ? [
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    unsortable: true,
+                    value: () => '',
+                    render: ({ unit }: (typeof rows)[number]) => (
+                      <div className="row-actions">
+                        <button type="button" onClick={() => setEditing(unit)}>Edit</button>
+                        <DeleteButton
+                          target={{
+                            kind: 'unit',
+                            id: unit.id,
+                            name: `${unit.tag} at ${unit.siteName}`,
+                            unit: { tag: unit.tag, clientId: unit.clientId },
+                          }}
+                        />
+                      </div>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
     </>
   );
@@ -451,19 +516,31 @@ export function UnitDetail() {
 // Adding a lift
 // ---------------------------------------------------------------------------
 
-function UnitForm({ uid, onDone }: { uid: string; onDone: () => void }) {
+function UnitForm({
+  initial,
+  uid,
+  onDone,
+}: {
+  initial: WithId<ElevatorUnit> | null;
+  uid: string;
+  onDone: () => void;
+}) {
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients').rows;
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts').rows;
 
-  const [tag, setTag] = useState('LIFT-01');
-  const [siteName, setSiteName] = useState('');
-  const [city, setCity] = useState('Addis Ababa');
-  const [clientId, setClientId] = useState('');
-  const [contractId, setContractId] = useState('');
-  const [brand, setBrand] = useState('');
-  const [model, setModel] = useState('');
-  const [manufacturerUnitId, setManufacturerUnitId] = useState('');
-  const { busy, error, run } = useAsyncAction('add this lift');
+  const [tag, setTag] = useState(initial?.tag ?? 'LIFT-01');
+  const [siteName, setSiteName] = useState(initial?.siteName ?? '');
+  const [city, setCity] = useState(initial?.city ?? 'Addis Ababa');
+  const [clientId, setClientId] = useState(initial?.clientId ?? '');
+  const [contractId, setContractId] = useState(initial?.maintenanceContractId ?? '');
+  const [brand, setBrand] = useState(initial?.brand ?? '');
+  const [model, setModel] = useState(initial?.model ?? '');
+  const [manufacturerUnitId, setManufacturerUnitId] = useState(initial?.manufacturerUnitId ?? '');
+  // The plate data: what the lift actually is, which the register is for.
+  const [capacityKg, setCapacityKg] = useState(String(initial?.capacityKg ?? ''));
+  const [stops, setStops] = useState(String(initial?.stops ?? ''));
+  const [speedMps, setSpeedMps] = useState(String(initial?.speedMps ?? ''));
+  const { busy, error, run } = useAsyncAction(initial === null ? 'add this lift' : 'save this lift');
 
   const ready = tag.trim() !== '' && siteName.trim() !== '' && clientId !== '';
 
@@ -474,35 +551,49 @@ function UnitForm({ uid, onDone }: { uid: string; onDone: () => void }) {
 
     const contract = contracts.find((c) => c.id === contractId);
 
-    const result = await run(() =>
-      createUnit(
-        {
-          unitCode: `IM-U-${String(Date.now()).slice(-8)}`,
-          tag: tag.trim(),
-          ...(manufacturerUnitId.trim() === '' ? {} : { manufacturerUnitId: manufacturerUnitId.trim() }),
-          ...(brand.trim() === '' ? {} : { brand: brand.trim() }),
-          ...(model.trim() === '' ? {} : { model: model.trim() }),
-          siteName: siteName.trim(),
-          city,
-          clientId,
-          clientName: client.name,
-          installedByProjectId: null,
-          maintenanceContractId: contractId === '' ? null : contractId,
-          maintenanceContractNo: contract?.contractNo ?? null,
-          commissionedOn: null,
-          status: 'in_service',
-          certificate: null,
-          remarks: '',
-        },
-        uid,
-      ),
-    );
+    const number = (text: string): number | undefined => {
+      const parsed = Number(text.trim());
+      return text.trim() === '' || !Number.isFinite(parsed) ? undefined : parsed;
+    };
+    const capacity = number(capacityKg);
+    const stopCount = number(stops);
+    const speed = number(speedMps);
+
+    const input = {
+      unitCode: initial?.unitCode ?? `IM-U-${String(Date.now()).slice(-8)}`,
+      tag: tag.trim(),
+      ...(manufacturerUnitId.trim() === '' ? {} : { manufacturerUnitId: manufacturerUnitId.trim() }),
+      ...(brand.trim() === '' ? {} : { brand: brand.trim() }),
+      ...(model.trim() === '' ? {} : { model: model.trim() }),
+      ...(capacity === undefined ? {} : { capacityKg: capacity }),
+      ...(stopCount === undefined ? {} : { stops: stopCount }),
+      ...(speed === undefined ? {} : { speedMps: speed }),
+      siteName: siteName.trim(),
+      city,
+      clientId,
+      clientName: client.name,
+      // Editing the register must not detach a lift from the project that
+      // installed it, or its history stops being attributable.
+      installedByProjectId: initial?.installedByProjectId ?? null,
+      maintenanceContractId: contractId === '' ? null : contractId,
+      maintenanceContractNo: contract?.contractNo ?? null,
+      commissionedOn: initial?.commissionedOn ?? null,
+      status: initial?.status ?? ('in_service' as ElevatorUnit['status']),
+      certificate: initial?.certificate ?? null,
+      remarks: initial?.remarks ?? '',
+    };
+
+    const result = await run(async () => {
+      if (initial === null) await createUnit(input, uid);
+      else await updateUnit(initial.id, input, uid);
+      return true;
+    });
     if (result !== null) onDone();
   }
 
   return (
     <FormPanel
-      title="Add a lift"
+      title={initial === null ? 'Add a lift' : `Edit ${initial.tag} · ${initial.siteName}`}
       description="The tag is what is painted in the building; the code is ours and never changes. Every building has a LIFT-01, which is why the machine needs an identity of its own."
       onClose={onDone}
     >
@@ -527,6 +618,21 @@ function UnitForm({ uid, onDone }: { uid: string; onDone: () => void }) {
               <option value="">Select a client…</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </div>
+          <div className="field">
+            <label htmlFor="u-capacity">Capacity, kg</label>
+            <input id="u-capacity" type="number" min="0" value={capacityKg}
+              onChange={(e) => setCapacityKg(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="u-stops">Stops</label>
+            <input id="u-stops" type="number" min="0" value={stops}
+              onChange={(e) => setStops(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="u-speed">Speed, m/s</label>
+            <input id="u-speed" type="number" min="0" step="0.01" value={speedMps}
+              onChange={(e) => setSpeedMps(e.target.value)} />
           </div>
           <div className="field">
             <label htmlFor="u-contract">Maintenance contract</label>

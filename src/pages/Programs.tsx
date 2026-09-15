@@ -16,6 +16,7 @@ import {
   deleteProgram,
   setProjectProgram,
   subscribePrograms,
+  updateProgram,
 } from '../data/programs.js';
 import { subscribeProjects } from '../data/projects.js';
 import { subscribeClients } from '../data/clients.js';
@@ -34,6 +35,15 @@ import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { FormPanel } from '../components/FormPanel.js';
 import { DeleteButton } from '../components/DeleteButton.js';
+import { ListControls } from '../components/ListControls.js';
+import {
+  EMPTY_FILTER,
+  filterRows,
+  sortRows,
+  type ColumnSpec,
+  type FilterState,
+  type SortState,
+} from '../lib/table.js';
 
 /** Everything both the list and the detail page need, computed once. */
 function usePrograms() {
@@ -84,10 +94,33 @@ function usePrograms() {
 export function Programs() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects') && user !== null;
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<WithId<Program> | 'new' | null>(null);
+  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
+  const [sort, setSort] = useState<SortState>({ key: null, direction: 'asc' });
   const { rows, loading, error } = usePrograms();
 
-  const sorted = sortPrograms(rows);
+  const columns: ColumnSpec<(typeof ranked)[number]>[] = useMemo(
+    () => [
+      { key: 'name', label: 'Name', value: (r) => r.program.name },
+      { key: 'programNo', label: 'Number', value: (r) => r.program.programNo },
+      { key: 'client', label: 'Client', value: (r) => r.program.clientName ?? '', filterable: true },
+      { key: 'kind', label: 'Kind', value: (r) => r.program.kind, filterable: true },
+      { key: 'status', label: 'Status', value: (r) => r.program.status, filterable: true },
+      { key: 'progress', label: 'Progress', value: (r) => r.rollup.progressBps },
+      { key: 'projects', label: 'Projects', value: (r) => r.rollup.projects },
+      { key: 'value', label: 'Contract value', value: (r) => r.rollup.contractNetSantim },
+      { key: 'danger', label: 'In danger', value: (r) => r.rollup.inDanger },
+    ],
+    [],
+  );
+
+  // Ranked by what needs attention first, then narrowed and re-ordered if the
+  // user asks for a different order.
+  const ranked = sortPrograms(rows);
+  const sorted = useMemo(() => {
+    const narrowed = filterRows(ranked, columns, filter);
+    return sortRows(narrowed, columns, sort);
+  }, [ranked, columns, filter, sort]);
 
   return (
     <>
@@ -103,8 +136,8 @@ export function Programs() {
         </div>
         <PrintButton label="Print list" />
         {editable && (
-          <button type="button" className="primary" onClick={() => setCreating((v) => !v)}>
-            {creating ? 'Cancel' : 'New program'}
+          <button type="button" className="primary" onClick={() => setEditing((v) => (v === null ? 'new' : null))}>
+            {editing === null ? 'New program' : 'Cancel'}
           </button>
         )}
       </div>
@@ -112,7 +145,26 @@ export function Programs() {
       {error !== null && <p className="error" role="alert">{error}</p>}
       {loading && <p className="muted">Loading…</p>}
 
-      {creating && user !== null && <ProgramForm uid={user.uid} onDone={() => setCreating(false)} />}
+      {editing !== null && user !== null && (
+        <ProgramForm
+          initial={editing === 'new' ? null : editing}
+          uid={user.uid}
+          onDone={() => setEditing(null)}
+        />
+      )}
+
+      {ranked.length > 0 && (
+        <ListControls
+          rows={ranked}
+          shown={sorted.length}
+          columns={columns}
+          filter={filter}
+          onFilter={setFilter}
+          sort={sort}
+          onSort={setSort}
+          noun="programs"
+        />
+      )}
 
       {sorted.length === 0 && !loading ? (
         <p className="muted">
@@ -135,6 +187,7 @@ export function Programs() {
               <ProgramFigures rollup={rollup} />
               {editable && (
                 <div className="card-actions">
+                  <button type="button" onClick={() => setEditing(program)}>Edit</button>
                   <DeleteButton
                     target={{ kind: 'program', id: program.id, name: program.name }}
                     label="Delete program"
@@ -320,15 +373,25 @@ export function ProgramDetail() {
   );
 }
 
-function ProgramForm({ uid, onDone }: { uid: string; onDone: () => void }) {
+function ProgramForm({
+  initial,
+  uid,
+  onDone,
+}: {
+  initial: WithId<Program> | null;
+  uid: string;
+  onDone: () => void;
+}) {
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients').rows;
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [kind, setKind] = useState<Program['kind']>('program');
-  const [clientId, setClientId] = useState('');
-  const [plannedStart, setPlannedStart] = useState<DualDate | null>(null);
-  const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(null);
-  const { busy, error, run } = useAsyncAction('create this program');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [kind, setKind] = useState<Program['kind']>(initial?.kind ?? 'program');
+  const [clientId, setClientId] = useState(initial?.clientId ?? '');
+  const [plannedStart, setPlannedStart] = useState<DualDate | null>(initial?.plannedStart ?? null);
+  const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(initial?.plannedEnd ?? null);
+  const { busy, error, run } = useAsyncAction(
+    initial === null ? 'create this program' : 'save this program',
+  );
 
   const ready = name.trim() !== '' && plannedStart !== null && plannedEnd !== null;
 
@@ -337,29 +400,31 @@ function ProgramForm({ uid, onDone }: { uid: string; onDone: () => void }) {
     if (!ready) return;
     const client = clients.find((c) => c.id === clientId);
 
-    const result = await run(() =>
-      createProgram(
-        {
-          programNo: `PG-${Date.now()}`,
-          name: name.trim(),
-          description: description.trim(),
-          clientId: clientId === '' ? null : clientId,
-          clientName: client?.name ?? null,
-          kind,
-          status: 'active',
-          plannedStart: plannedStart as DualDate,
-          plannedEnd: plannedEnd as DualDate,
-          ownerUid: uid,
-        },
-        uid,
-      ),
-    );
+    const input = {
+      programNo: initial?.programNo ?? `PG-${Date.now()}`,
+      name: name.trim(),
+      description: description.trim(),
+      clientId: clientId === '' ? null : clientId,
+      clientName: client?.name ?? null,
+      kind,
+      // An edit must not reset a program somebody closed or put on hold.
+      status: initial?.status ?? 'active',
+      plannedStart: plannedStart as DualDate,
+      plannedEnd: plannedEnd as DualDate,
+      ownerUid: initial?.ownerUid ?? uid,
+    };
+
+    const result = await run(async () => {
+      if (initial === null) await createProgram(input, uid);
+      else await updateProgram(initial.id, input, uid);
+      return true;
+    });
     if (result !== null) onDone();
   }
 
   return (
     <FormPanel
-      title="New program"
+      title={initial === null ? 'New program' : `Edit ${initial.name}`}
       description="Group the lifts of one building or the phases of one development so they report as a single commitment."
       onClose={onDone}
     >

@@ -30,6 +30,7 @@ import { formatConverted, RATE_SCALE } from '../lib/currency.js';
 import type { Disbursement, DualDate, Project, Subcontractor } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
+import { DataTable } from '../components/DataTable.js';
 
 export function Disbursements() {
   const { user, role } = useAuth();
@@ -67,103 +68,134 @@ export function Disbursements() {
       )}
 
       {rows.rows.length > 0 && (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Voucher</th>
-                <th scope="col">Subcontractor</th>
-                <th scope="col">Phase</th>
-                <th scope="col" className="num">Net</th>
-                <th scope="col" className="num">Their VAT</th>
-                <th scope="col" className="num">Invoice</th>
-                <th scope="col" className="num">WHT</th>
-                <th scope="col" className="num">We pay</th>
-                <th scope="col">Status</th>
-                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.rows.map((voucher) => (
-                <VoucherRow key={voucher.id} voucher={voucher}
-                  editable={editable && user !== null} uid={user?.uid ?? ''} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={rows.rows}
+          rowKey={(voucher) => voucher.id}
+          noun="vouchers"
+          columns={[
+            {
+              key: 'voucherNo',
+              label: 'Voucher',
+              value: (v) => v.voucherNo,
+              text: (v) => `${v.voucherNo} ${v.whtCertificateNo ?? ''}`.trim(),
+              render: (v) => (
+                <>
+                  <strong className="mono">{v.voucherNo}</strong>
+                  {v.whtCertificateNo !== undefined && (
+                    <><br /><span className="muted mono">{v.whtCertificateNo}</span></>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: 'subcontractor',
+              label: 'Subcontractor',
+              value: (v) => v.subcontractorName,
+              filterable: true,
+              render: (v) => (
+                <>
+                  {v.subcontractorName}
+                  {v.subcontractorTin.trim() === '' && (
+                    <><br /><span className="danger-text">no TIN</span></>
+                  )}
+                </>
+              ),
+            },
+            { key: 'phase', label: 'Phase', value: (v) => v.phaseName, filterable: true },
+            {
+              key: 'net',
+              label: 'Net',
+              numeric: true,
+              value: (v) => v.netSantim,
+              render: (v) => (
+                <>
+                  {formatETB(v.netSantim, { withSymbol: false })}
+                  {v.foreign !== undefined && (
+                    <><br /><span className="muted">
+                      {v.foreign.currency}{' '}
+                      {(v.foreign.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </span></>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: 'theirVat',
+              label: 'Their VAT',
+              numeric: true,
+              value: (v) => v.supplierVatSantim,
+              render: (v) => <span className="muted">{formatETB(v.supplierVatSantim, { withSymbol: false })}</span>,
+            },
+            {
+              key: 'invoice',
+              label: 'Invoice',
+              numeric: true,
+              value: (v) => v.grossSantim,
+              render: (v) => formatETB(v.grossSantim, { withSymbol: false }),
+            },
+            {
+              key: 'wht',
+              label: 'WHT',
+              numeric: true,
+              value: (v) => v.whtSantim,
+              render: (v) =>
+                v.whtSantim > 0 ? (
+                  <>
+                    {formatETB(v.whtSantim, { withSymbol: false })}
+                    <br /><span className="muted">{formatBps(v.whtRateBps, 0)}</span>
+                  </>
+                ) : (
+                  <span className="muted" title={v.whtExemptReason ?? undefined}>—</span>
+                ),
+            },
+            {
+              key: 'wePay',
+              label: 'We pay',
+              numeric: true,
+              value: (v) => v.netPayableSantim,
+              render: (v) => <span className="strong">{formatETB(v.netPayableSantim, { withSymbol: false })}</span>,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: (v) => v.status,
+              filterable: true,
+              render: (v) => (
+                <>
+                  <span className="chip">{v.status}</span>
+                  {v.paymentDate !== null && (
+                    <><br /><span className="muted"><DualDateText value={v.paymentDate} /></span></>
+                  )}
+                </>
+              ),
+            },
+            ...(editable && user !== null
+              ? [
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    unsortable: true,
+                    value: () => '',
+                    render: (v: WithId<Disbursement>) => (
+                      <div className="row-actions">
+                        <PayoutActions voucher={v} />
+                        <DeleteButton
+                          target={{
+                            kind: 'disbursement',
+                            id: v.id,
+                            name: v.voucherNo || 'this draft',
+                            status: v.status,
+                          }}
+                        />
+                      </div>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
     </>
-  );
-}
-
-function VoucherRow({
-  voucher,
-  editable,
-  uid,
-}: {
-  voucher: WithId<Disbursement>;
-  editable: boolean;
-  uid: string;
-}) {
-  const { busy, error, run } = useAsyncAction('update this voucher');
-
-  return (
-    <tr>
-      <td>
-        <strong className="mono">{voucher.voucherNo}</strong>
-        {voucher.whtCertificateNo !== undefined && (
-          <><br /><span className="muted mono">{voucher.whtCertificateNo}</span></>
-        )}
-        {error && <p className="error">{error}</p>}
-      </td>
-      <td>
-        {voucher.subcontractorName}
-        {voucher.subcontractorTin.trim() === '' && (
-          <><br /><span className="danger-text">no TIN</span></>
-        )}
-      </td>
-      <td>{voucher.phaseName}</td>
-      <td className="num">
-        {formatETB(voucher.netSantim, { withSymbol: false })}
-        {voucher.foreign !== undefined && (
-          <><br /><span className="muted">
-            {voucher.foreign.currency} {(voucher.foreign.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </span></>
-        )}
-      </td>
-      <td className="num muted">{formatETB(voucher.supplierVatSantim, { withSymbol: false })}</td>
-      <td className="num">{formatETB(voucher.grossSantim, { withSymbol: false })}</td>
-      <td className="num">
-        {voucher.whtSantim > 0 ? (
-          <>
-            {formatETB(voucher.whtSantim, { withSymbol: false })}
-            <br /><span className="muted">{formatBps(voucher.whtRateBps, 0)}</span>
-          </>
-        ) : (
-          <span className="muted" title={voucher.whtExemptReason ?? undefined}>—</span>
-        )}
-      </td>
-      <td className="num strong">{formatETB(voucher.netPayableSantim, { withSymbol: false })}</td>
-      <td>
-        <span className="chip">{voucher.status}</span>
-        {voucher.paymentDate !== null && (
-          <><br /><span className="muted"><DualDateText value={voucher.paymentDate} /></span></>
-        )}
-      </td>
-      {editable && (
-        <td className="actions-cell">
-          <PayoutActions voucher={voucher} />
-          <DeleteButton
-            target={{
-              kind: 'disbursement',
-              id: voucher.id,
-              name: voucher.voucherNo || 'this draft',
-              status: voucher.status,
-            }}
-          />
-        </td>
-      )}
-    </tr>
   );
 }
 

@@ -17,11 +17,13 @@ import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
+import { DataTable } from '../components/DataTable.js';
+import { statusLabel } from '../lib/status.js';
 
 export function Contracts() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageContracts');
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<WithId<Contract> | 'new' | null>(null);
 
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
@@ -33,8 +35,8 @@ export function Contracts() {
       {/* print-only */}
       <PrintHeader title="Contracts" subtitle="contracts" />
         <PrintButton label="Print list" />
-        {editable && !creating && (
-          <button type="button" className="primary" onClick={() => setCreating(true)}>
+        {editable && editing === null && (
+          <button type="button" className="primary" onClick={() => setEditing('new')}>
             New contract
           </button>
         )}
@@ -42,8 +44,13 @@ export function Contracts() {
 
       {contracts.error && <p className="error" role="alert">{contracts.error}</p>}
 
-      {creating && user !== null && (
-        <ContractForm clients={clients.rows} uid={user.uid} onDone={() => setCreating(false)} />
+      {editing !== null && user !== null && (
+        <ContractForm
+          initial={editing === 'new' ? null : editing}
+          clients={clients.rows}
+          uid={user.uid}
+          onDone={() => setEditing(null)}
+        />
       )}
 
       <RenewalBoard contracts={contracts.rows} editable={editable} uid={user?.uid ?? null} />
@@ -55,61 +62,98 @@ export function Contracts() {
       )}
 
       {contracts.rows.length > 0 && (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Contract</th>
-                <th scope="col">Client</th>
-                <th scope="col">Type</th>
-                <th scope="col" className="num">Net</th>
-                <th scope="col" className="num">VAT</th>
-                <th scope="col" className="num">Total</th>
-                <th scope="col">Ends</th>
-                <th scope="col">Status</th>
-                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {contracts.rows.map((k) => (
-                <tr key={k.id}>
-                  <td>
-                    <strong>{k.title}</strong>
-                    <br />
-                    <span className="muted mono">{k.contractNo}</span>
-                  </td>
-                  <td>{k.clientName}</td>
-                  <td>{k.type.replace(/_/g, ' ')}</td>
-                  <td className="num">{formatETB(k.valueNetSantim, { withSymbol: false })}</td>
-                  <td className="num muted">{formatETB(k.vatSantim, { withSymbol: false })}</td>
-                  <td className="num strong">{formatETB(k.valueGrossSantim, { withSymbol: false })}</td>
-                  <td><DualDateText value={k.endDate} /></td>
-                  <td>
-                    {editable && user !== null ? (
-                      <StatusSelect
-                        kind="contract"
-                        id={`k-status-${k.id}`}
-                        value={k.status}
-                        onChange={(value) => {
-                          void updateContractStatus(k.id, value as Contract['status'], user.uid);
-                        }}
-                      />
-                    ) : (
-                      <StatusChip kind="contract" value={k.status} />
-                    )}
-                  </td>
-                  {editable && (
-                    <td>
-                      <DeleteButton
-                        target={{ kind: 'contract', id: k.id, name: k.contractNo, status: k.status }}
-                      />
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={contracts.rows}
+          rowKey={(k) => k.id}
+          noun="contracts"
+          columns={[
+            {
+              key: 'contract',
+              label: 'Contract',
+              value: (k) => k.title,
+              text: (k) => `${k.title} ${k.contractNo}`,
+              render: (k) => (
+                <>
+                  <strong>{k.title}</strong>
+                  <br />
+                  <span className="muted mono">{k.contractNo}</span>
+                </>
+              ),
+            },
+            { key: 'client', label: 'Client', value: (k) => k.clientName, filterable: true },
+            {
+              key: 'type',
+              label: 'Type',
+              value: (k) => k.type.replace(/_/g, ' '),
+              filterable: true,
+            },
+            {
+              key: 'net',
+              label: 'Net',
+              numeric: true,
+              value: (k) => k.valueNetSantim,
+              render: (k) => formatETB(k.valueNetSantim, { withSymbol: false }),
+            },
+            {
+              key: 'vat',
+              label: 'VAT',
+              numeric: true,
+              value: (k) => k.vatSantim,
+              render: (k) => <span className="muted">{formatETB(k.vatSantim, { withSymbol: false })}</span>,
+            },
+            {
+              key: 'total',
+              label: 'Total',
+              numeric: true,
+              value: (k) => k.valueGrossSantim,
+              render: (k) => <span className="strong">{formatETB(k.valueGrossSantim, { withSymbol: false })}</span>,
+            },
+            {
+              key: 'ends',
+              label: 'Ends',
+              value: (k) => k.endDate.at.toDate(),
+              render: (k) => <DualDateText value={k.endDate} />,
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: (k) => k.status,
+              filterable: true,
+              text: (k) => statusLabel('contract', k.status),
+              render: (k) =>
+                editable && user !== null ? (
+                  <StatusSelect
+                    kind="contract"
+                    id={`k-status-${k.id}`}
+                    value={k.status}
+                    onChange={(value) => {
+                      void updateContractStatus(k.id, value as Contract['status'], user.uid);
+                    }}
+                  />
+                ) : (
+                  <StatusChip kind="contract" value={k.status} />
+                ),
+            },
+            ...(editable
+              ? [
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    unsortable: true,
+                    value: () => '',
+                    render: (k: WithId<Contract>) => (
+                      <div className="row-actions">
+                        <button type="button" onClick={() => setEditing(k)}>Edit</button>
+                        <DeleteButton
+                          target={{ kind: 'contract', id: k.id, name: k.contractNo, status: k.status }}
+                        />
+                      </div>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
     </>
   );

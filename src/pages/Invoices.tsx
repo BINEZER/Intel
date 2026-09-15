@@ -18,6 +18,7 @@ import { KpiTile } from '../components/KpiTile.js';
 import type { Invoice, Receipt } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
+import { DataTable } from '../components/DataTable.js';
 
 export function Invoices() {
   const { user, role } = useAuth();
@@ -86,35 +87,103 @@ export function Invoices() {
       </section>
 
       {rows.length > 0 && (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Invoice</th>
-                <th scope="col">Client</th>
-                <th scope="col">Issued</th>
-                <th scope="col">Due</th>
-                <th scope="col" className="num">Net</th>
-                <th scope="col" className="num">VAT</th>
-                <th scope="col" className="num">Total</th>
-                <th scope="col" className="num">Balance</th>
-                <th scope="col">Status</th>
-                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((invoice) => (
-                <InvoiceRow
-                  key={invoice.id}
-                  invoice={invoice}
-                  editable={editable && user !== null}
-                  uid={user?.uid ?? ''}
-                  onReceipt={() => setReceipting(invoice)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rows={rows}
+          rowKey={(invoice) => invoice.id}
+          noun="invoices"
+          rowClass={(invoice) => (invoice.status === 'overdue' ? 'row-danger' : undefined)}
+          columns={[
+            {
+              key: 'invoiceNo',
+              label: 'Invoice',
+              value: (invoice) => invoice.invoiceNo,
+              render: (invoice) => (
+                <>
+                  <strong className="mono">{invoice.invoiceNo || '—'}</strong>
+                  {invoice.vatRateBps === 0 && invoice.vatSantim > 0 && (
+                    <><br /><span className="muted">mixed rates</span></>
+                  )}
+                </>
+              ),
+            },
+            { key: 'client', label: 'Client', value: (invoice) => invoice.clientName, filterable: true },
+            {
+              key: 'issued',
+              label: 'Issued',
+              value: (invoice) => invoice.issueDate.at.toDate(),
+              render: (invoice) => <DualDateText value={invoice.issueDate} />,
+            },
+            {
+              key: 'due',
+              label: 'Due',
+              value: (invoice) => invoice.dueDate.at.toDate(),
+              render: (invoice) => <DualDateText value={invoice.dueDate} />,
+            },
+            {
+              key: 'net',
+              label: 'Net',
+              numeric: true,
+              value: (invoice) => invoice.netSantim,
+              render: (invoice) => formatETB(invoice.netSantim, { withSymbol: false }),
+            },
+            {
+              key: 'vat',
+              label: 'VAT',
+              numeric: true,
+              value: (invoice) => invoice.vatSantim,
+              render: (invoice) => (
+                <span className="muted">{formatETB(invoice.vatSantim, { withSymbol: false })}</span>
+              ),
+            },
+            {
+              key: 'total',
+              label: 'Total',
+              numeric: true,
+              value: (invoice) => invoice.grossSantim,
+              render: (invoice) => (
+                <span className="strong">{formatETB(invoice.grossSantim, { withSymbol: false })}</span>
+              ),
+            },
+            {
+              key: 'balance',
+              label: 'Balance',
+              numeric: true,
+              value: (invoice) => invoice.balanceGrossSantim,
+              render: (invoice) =>
+                invoice.balanceGrossSantim > 0 ? (
+                  <span className="danger-text">
+                    {formatETB(invoice.balanceGrossSantim, { withSymbol: false })}
+                  </span>
+                ) : (
+                  <span className="muted">—</span>
+                ),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: (invoice) => invoice.status,
+              filterable: true,
+              render: (invoice) => <span className="chip">{invoice.status.replace(/_/g, ' ')}</span>,
+            },
+            ...(editable && user !== null
+              ? [
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    unsortable: true,
+                    value: () => '',
+                    render: (invoice: WithId<Invoice>) => (
+                      <InvoiceActions
+                        invoice={invoice}
+                        uid={user.uid}
+                        onReceipt={() => setReceipting(invoice)}
+                      />
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
 
       {receipting !== null && user !== null && (
@@ -124,70 +193,52 @@ export function Invoices() {
   );
 }
 
-function InvoiceRow({
+/**
+ * The actions for one invoice.
+ *
+ * Its own component because each row needs its own busy flag and its own error
+ * line: issuing one invoice must not grey out the buttons on every other row.
+ */
+function InvoiceActions({
   invoice,
-  editable,
   uid,
   onReceipt,
 }: {
   invoice: WithId<Invoice>;
-  editable: boolean;
   uid: string;
   onReceipt: () => void;
 }) {
   const { busy, error, run } = useAsyncAction('update this invoice');
 
   return (
-    <tr className={invoice.status === 'overdue' ? 'row-danger' : undefined}>
-      <td>
-        <strong className="mono">{invoice.invoiceNo || '—'}</strong>
-        {invoice.vatRateBps === 0 && invoice.vatSantim > 0 && (
-          <><br /><span className="muted">mixed rates</span></>
-        )}
-        {error && <p className="error">{error}</p>}
-      </td>
-      <td>{invoice.clientName}</td>
-      <td><DualDateText value={invoice.issueDate} /></td>
-      <td><DualDateText value={invoice.dueDate} /></td>
-      <td className="num">{formatETB(invoice.netSantim, { withSymbol: false })}</td>
-      <td className="num muted">{formatETB(invoice.vatSantim, { withSymbol: false })}</td>
-      <td className="num strong">{formatETB(invoice.grossSantim, { withSymbol: false })}</td>
-      <td className="num">
-        {invoice.balanceGrossSantim > 0
-          ? <span className="danger-text">{formatETB(invoice.balanceGrossSantim, { withSymbol: false })}</span>
-          : <span className="muted">—</span>}
-      </td>
-      <td><span className="chip">{invoice.status.replace(/_/g, ' ')}</span></td>
-      {editable && (
-        <td className="actions-cell">
-          {invoice.status === 'draft' && (
-            <button type="button" className="primary" disabled={busy}
-              onClick={() => void run(() => issueInvoice(invoice.id, uid))}>
-              Issue
-            </button>
-          )}
-          {invoice.status !== 'draft' && invoice.status !== 'void' && invoice.balanceGrossSantim > 0 && (
-            <button type="button" onClick={onReceipt}>Record payment</button>
-          )}
-          {invoice.status !== 'void' && (
-            <button type="button" disabled={busy}
-              onClick={() => void run(() => voidInvoice(invoice.id, uid))}>
-              Void
-            </button>
-          )}
-          {/* Only a draft can be deleted. An issued number is part of the VAT
-              sequence, and the button says so rather than disappearing. */}
-          <DeleteButton
-            target={{
-              kind: 'invoice',
-              id: invoice.id,
-              name: invoice.invoiceNo || 'this draft',
-              status: invoice.status,
-            }}
-          />
-        </td>
+    <div className="row-actions">
+      {invoice.status === 'draft' && (
+        <button type="button" className="primary" disabled={busy}
+          onClick={() => void run(() => issueInvoice(invoice.id, uid))}>
+          Issue
+        </button>
       )}
-    </tr>
+      {invoice.status !== 'draft' && invoice.status !== 'void' && invoice.balanceGrossSantim > 0 && (
+        <button type="button" onClick={onReceipt}>Record payment</button>
+      )}
+      {invoice.status !== 'void' && (
+        <button type="button" disabled={busy}
+          onClick={() => void run(() => voidInvoice(invoice.id, uid))}>
+          Void
+        </button>
+      )}
+      {/* Only a draft can be deleted. An issued number is part of the VAT
+          sequence, and the button says so rather than disappearing. */}
+      <DeleteButton
+        target={{
+          kind: 'invoice',
+          id: invoice.id,
+          name: invoice.invoiceNo || 'this draft',
+          status: invoice.status,
+        }}
+      />
+      {error && <p className="error">{error}</p>}
+    </div>
   );
 }
 

@@ -1546,3 +1546,33 @@ button.subtle-danger:hover:not(:disabled) { background: #FDECEB; color: #A32820;
 .followup-choices { display: grid; gap: 10px; margin-top: 4px; }
 .followup-choice { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .followup-choice > span { flex: 1 1 18rem; }
+
+/* --- sortable, filterable tables ---------------------------------------- */
+
+.table-controls {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0 0 10px;
+}
+.table-search { flex: 1 1 14rem; min-width: 0; max-width: 24rem; }
+.table-controls select { width: auto; min-width: 9rem; }
+.table-count { margin-left: auto; white-space: nowrap; }
+
+/* The heading IS the button: a separate sort icon gives a small target and two
+   things to aim at. */
+.th-sort {
+  display: inline-flex; align-items: center; gap: 6px; width: 100%;
+  background: none; border: 0; padding: 0; margin: 0; font: inherit;
+  color: inherit; cursor: pointer; text-align: inherit;
+}
+.th-sort:hover:not(:disabled) { background: none; color: var(--accent); }
+.num .th-sort { justify-content: flex-end; }
+/* The idle arrow is faint but present — a heading that only shows it on hover
+   is a feature nobody on a touchscreen discovers. */
+.th-arrow { font-size: .7em; opacity: .35; }
+.th-sort.is-sorted .th-arrow { opacity: 1; color: var(--accent); }
+.th-sort.is-sorted { color: var(--text); font-weight: 650; }
+
+@media print {
+  /* The filter IS the report: print what is on screen, without the controls. */
+  .table-controls { display: none !important; }
+  .th-arrow { display: none !important; }
+}
