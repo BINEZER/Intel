@@ -1453,3 +1453,48 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .import-chip-skipped  { background: var(--surface-2); border-color: var(--border-strong); color: var(--text-2); }
 .import-chip-warning  { background: #FDF1E3; border-color: #F0DCC0; color: var(--amber-ink); }
 .import-chip-repaired { background: #E9F7F0; border-color: #CBEBDD; color: var(--green-ink); }
+
+/* --- delete, and status vocabulary -------------------------------------- */
+
+/* Delete sits next to Edit, so it must not shout — but it must not look like
+   Edit either. A quiet red that turns solid on hover: findable, not inviting. */
+button.subtle-danger { color: var(--danger); border-color: #F3D2D0; background: var(--surface); }
+button.subtle-danger:hover:not(:disabled) { background: #FDECEB; color: #A32820; border-color: #E9B4B0; }
+
+/* The confirm step replaces the button in place rather than covering the page:
+   the row it belongs to stays visible, which is how you check you are about to
+   delete the right one. */
+.delete-confirm {
+  display: grid; gap: 8px; padding: 12px 14px; max-width: 34rem;
+  border: 1px solid #E9B4B0; border-radius: var(--radius); background: #FDECEB;
+}
+/* A refused delete is not an error and nothing dangerous is about to happen —
+   the app is explaining itself. Red here would read as something the user did
+   wrong, so the blocked panel is neutral and only the armed one is red. */
+.delete-confirm.is-blocked { border-color: var(--border-strong); background: var(--surface-2); }
+.delete-confirm p { margin: 0; }
+.delete-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.field-hint { margin: 4px 0 0; color: var(--muted); font-size: .86rem; }
+
+/* Status tones. Contrast computed against each chip's own background rather
+   than eyeballed: good 4.96:1, warn 5.75:1, bad 6.38:1, idle 4.68:1.
+   The amber is a shade darker than --amber-ink, which lands at 4.51:1 here —
+   over the line, but not by enough to survive anyone nudging the background. */
+.chip-status-good { background: #E9F7F0; border-color: #CBEBDD; color: var(--green-ink); }
+.chip-status-warn { background: #FDF1E3; border-color: #F0DCC0; color: #9A4708; }
+.chip-status-bad  { background: #FDECEB; border-color: #F3D2D0; color: #A32820; }
+.chip-status-idle { background: var(--surface-2); border-color: var(--border-strong); color: var(--muted); }
+
+/* Row and card actions: Edit and Delete sit together, wrapping on a phone
+   rather than pushing the table wider. */
+.row-actions, .card-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+.card-actions { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+/* `.field` is a column, so the direction has to be reset explicitly — without
+   it `align-items: center` centres the stack instead of aligning a row. */
+.field.inline { display: flex; flex-direction: row; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
+.field.inline label { margin: 0; white-space: nowrap; }
+/* Selects are full-width by default so forms line up; beside a label it has to
+   shrink to its content or it wraps onto its own row and the label is orphaned. */
+.field.inline select { width: auto; min-width: 11rem; }
+.field.inline .field-hint { flex-basis: 100%; margin: 0; }

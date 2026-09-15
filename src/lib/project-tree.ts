@@ -18,6 +18,7 @@
 
 import { rateBps } from './kpi.js';
 import type { RateBps } from './schema.js';
+import type { ProjectStatusValue } from './status.js';
 
 export interface TreeProject {
   id: string;
@@ -25,7 +26,7 @@ export interface TreeProject {
   title: string;
   clientName: string;
   parentProjectId: string | null;
-  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  status: ProjectStatusValue;
   progressBps: number;
   contractNetSantim: number;
   plannedEnd: Date;

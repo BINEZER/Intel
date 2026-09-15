@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
-import { createProject, subscribeProjects } from '../data/projects.js';
+import { createProject, subscribeProjects, updateProjectStatus } from '../data/projects.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
 import { formatETB } from '../lib/money.js';
@@ -22,6 +22,8 @@ import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { buildTree, sortTree, type TreeProject } from '../lib/project-tree.js';
 import { ReminderEditor } from '../components/ReminderEditor.js';
 import type { Client, DualDate, Project, Reminder } from '../lib/schema.js';
+import { DeleteButton } from '../components/DeleteButton.js';
+import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 
 export function Projects() {
   const { user, role } = useAuth();
@@ -106,7 +108,7 @@ export function Projects() {
                     {project.units?.length === 1 ? '' : 's'}
                   </p>
                 </div>
-                <span className="chip">{project.status.replace(/_/g, ' ')}</span>
+                <StatusChip kind="project" value={project.status} />
               </div>
 
               <ProgressBar progressBps={project.progressBps} expectedBps={expected} />
@@ -143,6 +145,25 @@ export function Projects() {
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {editable && user !== null && (
+                <div className="card-actions">
+                  <div className="field inline">
+                    <label htmlFor={`p-status-${project.id}`}>Status</label>
+                    <StatusSelect
+                      kind="project"
+                      id={`p-status-${project.id}`}
+                      value={project.status}
+                      onChange={(value) => {
+                        void updateProjectStatus(project.id, value as Project['status'], user.uid);
+                      }}
+                    />
+                  </div>
+                  <DeleteButton
+                    target={{ kind: 'project', id: project.id, name: project.projectNo }}
+                  />
                 </div>
               )}
             </article>

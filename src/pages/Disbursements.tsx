@@ -29,6 +29,7 @@ import { CurrencyAmountInput, emptyAmount, type CurrencyAmount } from '../compon
 import { formatConverted, RATE_SCALE } from '../lib/currency.js';
 import type { Disbursement, DualDate, Project, Subcontractor } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { DeleteButton } from '../components/DeleteButton.js';
 
 export function Disbursements() {
   const { user, role } = useAuth();
@@ -152,6 +153,14 @@ function VoucherRow({
       {editable && (
         <td className="actions-cell">
           <PayoutActions voucher={voucher} />
+          <DeleteButton
+            target={{
+              kind: 'disbursement',
+              id: voucher.id,
+              name: voucher.voucherNo || 'this draft',
+              status: voucher.status,
+            }}
+          />
         </td>
       )}
     </tr>

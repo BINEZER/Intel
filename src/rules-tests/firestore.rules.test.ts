@@ -194,6 +194,21 @@ describe('contracts', () => {
     const db = ctx('fin', 'finance');
     await assertFails(setDoc(doc(db, 'contracts/k6'), { ...CONTRACT, ...stamped('fin') }));
   });
+
+  it('keeps deleting a contract to an admin, whatever its status', async () => {
+    // An import produces wrong contracts that are already 'active', so a
+    // draft-only rule would leave no way to remove them. The reference check in
+    // the app is what refuses a contract with invoices or projects against it;
+    // this rule keeps the act to an admin.
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'contracts/k9'), {
+        ...CONTRACT, status: 'active',
+        createdAt: new Date(), updatedAt: new Date(), createdBy: 'mgr', updatedBy: 'mgr',
+      });
+    });
+    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'contracts/k9')));
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'contracts/k9')));
+  });
 });
 
 describe('disbursements and WHT', () => {
@@ -682,14 +697,15 @@ describe('units: engineers may update the machine in front of them', () => {
     );
   });
 
-  it('refuses deletion of a lift still in service, even by an admin', async () => {
-    // A unit is an identity that callouts and certificates hang off. Deleting
-    // one that is still running would orphan its whole history.
-    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'units/u1')));
-
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'units/u1'), { ...UNIT, status: 'decommissioned', ...stamped('mgr') });
-    });
+  it('keeps deleting a lift to an admin, whatever its status', async () => {
+    // A lift entered by mistake should not have to be decommissioned before it
+    // can be removed — a bulk import produces wrong lifts that are already
+    // 'in_service'. What stops a live machine being deleted out from under its
+    // history is the reference check in the app, which refuses one with
+    // callouts or visits against it. The rule's job is to keep the act to an
+    // admin, so an engineer standing at the machine cannot do it.
+    await assertFails(deleteDoc(doc(ctx('eng', 'engineer'), 'units/u1')));
+    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'units/u1')));
     await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'units/u1')));
   });
 });

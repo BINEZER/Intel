@@ -18,6 +18,7 @@
  */
 
 import type { RateBps } from './schema.js';
+import type { ProjectStatusValue } from './status.js';
 
 const MS_PER_MINUTE = 60_000;
 const MS_PER_DAY = 86_400_000;
@@ -103,7 +104,7 @@ export interface ProjectKpiInput {
   actualEnd: Date | null;
   /** Physical progress, 0-10000. */
   progressBps: number;
-  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  status: ProjectStatusValue;
   contractNetSantim: number;
   subcontractCostNetSantim: number;
   invoicedNetSantim: number;

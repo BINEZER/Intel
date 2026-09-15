@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
-import { setRenewalStatus, subscribeContracts } from '../data/contracts.js';
+import { setRenewalStatus, subscribeContracts, updateContractStatus } from '../data/contracts.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatETB } from '../lib/money.js';
 import { renewalView, sortByUrgency, type RenewalStatus } from '../lib/renewal.js';
@@ -15,6 +15,8 @@ import { ContractForm } from './ContractForm.js';
 import type { Client, Contract } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
+import { DeleteButton } from '../components/DeleteButton.js';
+import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 
 export function Contracts() {
   const { user, role } = useAuth();
@@ -65,6 +67,7 @@ export function Contracts() {
                 <th scope="col" className="num">Total</th>
                 <th scope="col">Ends</th>
                 <th scope="col">Status</th>
+                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -81,7 +84,27 @@ export function Contracts() {
                   <td className="num muted">{formatETB(k.vatSantim, { withSymbol: false })}</td>
                   <td className="num strong">{formatETB(k.valueGrossSantim, { withSymbol: false })}</td>
                   <td><DualDateText value={k.endDate} /></td>
-                  <td><span className="chip">{k.status}</span></td>
+                  <td>
+                    {editable && user !== null ? (
+                      <StatusSelect
+                        kind="contract"
+                        id={`k-status-${k.id}`}
+                        value={k.status}
+                        onChange={(value) => {
+                          void updateContractStatus(k.id, value as Contract['status'], user.uid);
+                        }}
+                      />
+                    ) : (
+                      <StatusChip kind="contract" value={k.status} />
+                    )}
+                  </td>
+                  {editable && (
+                    <td>
+                      <DeleteButton
+                        target={{ kind: 'contract', id: k.id, name: k.contractNo, status: k.status }}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

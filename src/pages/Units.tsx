@@ -42,6 +42,7 @@ import type { Callout, Client, Contract, ElevatorUnit, MaintenanceVisit } from '
 import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { FormPanel } from '../components/FormPanel.js';
+import { DeleteButton } from '../components/DeleteButton.js';
 
 const VERDICT_LABEL: Record<UnitHealth['verdict'], string> = {
   problem: 'Needs attention',
@@ -226,6 +227,7 @@ export function Units() {
                 <th scope="col" className="num">Callouts (12m)</th>
                 <th scope="col" className="num">PM done</th>
                 <th scope="col">Last visit</th>
+                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
               </tr>
             </thead>
             <tbody>
@@ -243,6 +245,20 @@ export function Units() {
                     {health.pmComplianceBps === null ? <span className="muted">—</span> : formatBps(health.pmComplianceBps, 0)}
                   </td>
                   <td>{health.lastVisitAt === null ? <span className="muted">never</span> : formatDual(health.lastVisitAt)}</td>
+                  {editable && (
+                    <td>
+                      <DeleteButton
+                        target={{
+                          kind: 'unit',
+                          id: unit.id,
+                          name: `${unit.tag} at ${unit.siteName}`,
+                          // A lift's service history is keyed by tag within a
+                          // client, not by document id.
+                          unit: { tag: unit.tag, clientId: unit.clientId },
+                        }}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

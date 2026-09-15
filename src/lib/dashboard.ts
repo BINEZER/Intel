@@ -22,6 +22,7 @@ import { summariseChase, type ChaseInvoice, type ChaseState, type ChaseSummary }
 import { rateBps } from './kpi.js';
 import { containsDate, periodContaining, type Period } from './period.js';
 import type { RateBps, RiskSeverity } from './schema.js';
+import type { ProjectStatusValue } from './status.js';
 
 // ---------------------------------------------------------------------------
 // Getting started
@@ -153,7 +154,7 @@ export interface DashboardProject {
   projectNo: string;
   title: string;
   clientName: string;
-  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  status: ProjectStatusValue;
   progressBps: number;
   plannedEnd: Date;
   inDanger: boolean;

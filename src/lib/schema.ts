@@ -12,6 +12,8 @@
  */
 
 /** Firestore Timestamp, structurally typed so this file stays SDK-agnostic. */
+import type { ClientStatus, ContractStatusValue, ProjectStatusValue } from './status.js';
+
 export interface Timestamp {
   toDate(): Date;
   toMillis(): number;
@@ -105,7 +107,8 @@ export interface Client extends AuditFields {
   vatRegNo?: string;
   address: { city: string; subCity?: string; woreda?: string; kebele?: string; poBox?: string; street?: string; landmark?: string };
   contacts: Array<{ name: string; role?: string; phone: string; email?: string }>;
-  status: 'active' | 'inactive';
+  /** See `CLIENT_STATUSES` in lib/status.ts for what each one means. */
+  status: ClientStatus;
   notes?: string;
 }
 
@@ -114,7 +117,8 @@ export interface Client extends AuditFields {
 // ===========================================================================
 
 export type ContractType = 'supply_install' | 'maintenance' | 'modernization' | 'other';
-export type ContractStatus = 'draft' | 'active' | 'suspended' | 'completed' | 'terminated' | 'expired';
+/** See `CONTRACT_STATUSES` in lib/status.ts for what each one means. */
+export type ContractStatus = ContractStatusValue;
 
 /**
  * A date somebody wants to be warned about before it arrives.
@@ -318,7 +322,8 @@ export interface Project extends AuditFields {
   actualStart: DualDate | null;
   actualEnd: DualDate | null;
 
-  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  /** See `PROJECT_STATUSES` in lib/status.ts for what each one means. */
+  status: ProjectStatusValue;
   /** 0-10000 bps, rolled up from phase weights by a Cloud Function. */
   progressBps: number;
 

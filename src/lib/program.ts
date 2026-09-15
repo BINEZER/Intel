@@ -12,13 +12,14 @@
 
 import { rateBps } from './kpi.js';
 import type { RateBps } from './schema.js';
+import type { ProjectStatusValue } from './status.js';
 
 export interface ProgramProject {
   id: string;
   projectNo: string;
   title: string;
   clientName: string;
-  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  status: ProjectStatusValue;
   progressBps: number;
   contractNetSantim: number;
   invoicedNetSantim: number;
