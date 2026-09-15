@@ -9,7 +9,8 @@
 import { useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
-import { setPhaseBlocked, updatePhaseProgress } from '../data/projects.js';
+import { setCheckpoint, setPhaseBlocked, updatePhaseProgress } from '../data/projects.js';
+import { describeCheckpoints, isTracked } from '../lib/checkpoints.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
 import { nextActionablePhase, sequenceWarnings, type PhaseStatus } from '../lib/phases.js';
@@ -91,9 +92,11 @@ function PhaseRow({
   busy: boolean;
   run: <T>(fn: () => Promise<T>) => Promise<T | null>;
 }) {
-  // Local draft so dragging the slider does not fire a write per pixel.
+  // Local draft so dragging the slider does not fire a write per pixel. Only a
+  // hand-made stage still has a slider; see below.
   const [draft, setDraft] = useState(phase.progressBps);
   const dirty = draft !== phase.progressBps;
+  const tracked = isTracked(phase);
 
   const statusClass: Record<PhaseStatus, string> = {
     not_started: 'chip',
@@ -114,28 +117,44 @@ function PhaseRow({
 
       {warning !== null && <p className="warn-text">⚠ {warning}</p>}
 
-      <div className="phase-progress">
-        <input
-          type="range"
-          min={0}
-          max={10_000}
-          step={500}
-          value={draft}
-          disabled={!editable || busy}
-          aria-label={`${phase.name} progress`}
-          onChange={(e) => setDraft(Number(e.target.value))}
+      {tracked ? (
+        <CheckpointList
+          projectId={projectId}
+          phase={phase}
+          editable={editable}
+          uid={uid}
+          busy={busy}
+          run={run}
         />
-        <span className="phase-pct">{formatBps(draft, 0)}</span>
-        {dirty && editable && (
-          <button
-            type="button"
-            className="primary"
-            disabled={busy}
-            onClick={() => void run(() => updatePhaseProgress(projectId, phase.id, draft, uid))}
-          >
-            Save
-          </button>
-        )}
+      ) : (
+        <div className="phase-progress">
+          {/* Only a stage somebody added by hand gets here. Everything on an
+              elevator project is ticked off rather than estimated. */}
+          <input
+            type="range"
+            min={0}
+            max={10_000}
+            step={500}
+            value={draft}
+            disabled={!editable || busy}
+            aria-label={`${phase.name} progress`}
+            onChange={(e) => setDraft(Number(e.target.value))}
+          />
+          <span className="phase-pct">{formatBps(draft, 0)}</span>
+          {dirty && editable && (
+            <button
+              type="button"
+              className="primary"
+              disabled={busy}
+              onClick={() => void run(() => updatePhaseProgress(projectId, phase.id, draft, uid))}
+            >
+              Save
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="phase-progress">
         {editable && (
           <button
             type="button"
@@ -158,5 +177,67 @@ function PhaseRow({
         )}
       </p>
     </li>
+  );
+}
+
+/**
+ * The stage's checkpoints, as things to tick.
+ *
+ * Each tick writes immediately and re-rolls the project figure, because the
+ * alternative — tick several, then press Save — invites somebody to tick four
+ * boxes, get interrupted, and lose them. A checkpoint is one fact; recording it
+ * should cost one click.
+ */
+function CheckpointList({
+  projectId,
+  phase,
+  editable,
+  uid,
+  busy,
+  run,
+}: {
+  projectId: string;
+  phase: WithId<ProjectPhase>;
+  editable: boolean;
+  uid: string;
+  busy: boolean;
+  run: <T>(fn: () => Promise<T>) => Promise<T | null>;
+}) {
+  const checkpoints = phase.checkpoints ?? [];
+  const done = checkpoints.filter((c) => c.doneAt !== null).length;
+
+  return (
+    <div className="checkpoints">
+      <div className="checkpoint-head">
+        <span className="muted">{describeCheckpoints(checkpoints)}</span>
+        <span className="phase-pct">{formatBps(phase.progressBps, 0)}</span>
+      </div>
+      <div
+        className="checkpoint-bar"
+        role="img"
+        aria-label={`${done} of ${checkpoints.length} checkpoints complete`}
+      >
+        <span style={{ width: `${(done / Math.max(1, checkpoints.length)) * 100}%` }} />
+      </div>
+      <ul className="checkpoint-list">
+        {checkpoints.map((checkpoint) => (
+          <li key={checkpoint.key}>
+            <label className={checkpoint.doneAt === null ? undefined : 'is-done'}>
+              <input
+                type="checkbox"
+                checked={checkpoint.doneAt !== null}
+                disabled={!editable || busy}
+                onChange={(event) =>
+                  void run(() =>
+                    setCheckpoint(projectId, phase.id, checkpoint.key, event.target.checked, uid),
+                  )
+                }
+              />
+              <span>{checkpoint.label}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

@@ -22,6 +22,7 @@ import { Units, UnitDetail } from './pages/Units.js';
 import { CeoReport } from './pages/CeoReport.js';
 import { Import } from './pages/Import.js';
 import { People } from './pages/People.js';
+import { FollowUps } from './pages/FollowUps.js';
 import { SignIn } from './pages/SignIn.js';
 
 export function App() {
@@ -70,6 +71,7 @@ export function App() {
               element={<RequireCapability capability="read"><UnitDetail /></RequireCapability>}
             />
             <Route path="finish-next" element={<FinishNextRoute />} />
+            <Route path="follow-ups" element={<FollowUps />} />
             <Route
               path="performance"
               element={

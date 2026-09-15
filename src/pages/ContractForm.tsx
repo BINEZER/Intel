@@ -21,6 +21,7 @@ import { FormPanel } from '../components/FormPanel.js';
 import { ReminderEditor } from '../components/ReminderEditor.js';
 import type { Client, Contract, ContractType, DualDate, Reminder } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { DEFAULT_WARRANTY_ALERT_DAYS, DEFAULT_WARRANTY_MONTHS } from '../lib/lifecycle.js';
 
 export function ContractForm({
   clients,
@@ -46,8 +47,8 @@ export function ContractForm({
   const [resolutionHours, setResolutionHours] = useState(24);
   const [visitsPerYear, setVisitsPerYear] = useState(12);
   const [shares, setShares] = useState<MilestoneShare[]>(DEFAULT_SUPPLY_INSTALL_SHARES);
-  const [warrantyMonths, setWarrantyMonths] = useState(12);
-  const [warrantyAlertDays, setWarrantyAlertDays] = useState(60);
+  const [warrantyMonths, setWarrantyMonths] = useState(DEFAULT_WARRANTY_MONTHS);
+  const [warrantyAlertDays, setWarrantyAlertDays] = useState(DEFAULT_WARRANTY_ALERT_DAYS);
   const [reminders, setReminders] = useState<Reminder[]>([]);
 
   const { busy, error, run } = useAsyncAction('create this contract');

@@ -36,6 +36,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', capability: 'read' },
       { to: '/alerts', label: 'Alerts', capability: 'read' },
+      { to: '/follow-ups', label: 'Follow-ups', capability: 'read' },
       { to: '/priority', label: 'Priority', capability: 'read' },
       { to: '/finish-next', label: 'Finish next', capability: 'read' },
     ],
