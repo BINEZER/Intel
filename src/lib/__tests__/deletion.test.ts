@@ -130,3 +130,25 @@ describe('programs', () => {
     expect(verdict.cascade).toEqual(['4 projects released']);
   });
 });
+
+describe('technicians', () => {
+  it('never allows deletion, and says what to do instead', () => {
+    // Their KPI history is the basis on which they were paid a bonus, so it
+    // has to survive them leaving. The security rules refuse it too.
+    const verdict = assessDeletion({ kind: 'technician', name: 'Fasika' });
+    expect(verdict.allowed).toBe(false);
+    expect(verdict.reason).toContain('KPI history');
+    expect(verdict.alternative).toContain('inactive');
+  });
+
+  it('refuses even when nothing points at them yet', () => {
+    // A technician entered this morning with no callouts is still refused: the
+    // rule is about what the record is for, not how much it has accumulated.
+    const verdict = assessDeletion({
+      kind: 'technician',
+      name: 'New Starter',
+      references: [{ label: 'callouts', count: 0 }],
+    });
+    expect(verdict.allowed).toBe(false);
+  });
+});

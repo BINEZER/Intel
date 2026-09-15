@@ -1489,6 +1489,13 @@ button.subtle-danger:hover:not(:disabled) { background: #FDECEB; color: #A32820;
 /* Row and card actions: Edit and Delete sit together, wrapping on a phone
    rather than pushing the table wider. */
 .row-actions, .card-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+/* Edit and Delete belong on one line: stacked, they read as two separate
+   decisions and double the row height of every table they appear in. There is
+   room for both on anything wider than a phone. */
+@media (min-width: 700px) {
+  .row-actions { flex-wrap: nowrap; }
+  .row-actions > button { white-space: nowrap; }
+}
 .card-actions { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 /* `.field` is a column, so the direction has to be reset explicitly — without
    it `align-items: center` centres the stack instead of aligning a row. */

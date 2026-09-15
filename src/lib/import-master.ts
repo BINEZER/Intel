@@ -40,6 +40,11 @@ import { birrToSantim } from './money.js';
 import { rescaleWeights } from './stage-edit.js';
 import type { ContractStatus } from './schema.js';
 import type { ProjectStatusValue } from './status.js';
+import {
+  buildPeoplePlan,
+  type PlannedSubcontractor,
+  type PlannedTechnician,
+} from './import-people.js';
 
 // ---------------------------------------------------------------------------
 // Input shape
@@ -160,6 +165,8 @@ export interface ImportPlan {
   contracts: PlannedContract[];
   projects: PlannedProject[];
   units: PlannedUnit[];
+  technicians: PlannedTechnician[];
+  subcontractors: PlannedSubcontractor[];
   issues: ImportIssue[];
 }
 
@@ -787,7 +794,20 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
     }
   }
 
-  return { clients: [...clients.values()], programs, contracts, projects, units, issues };
+  // --- people --------------------------------------------------------------
+
+  const people = buildPeoplePlan(workbook, issues);
+
+  return {
+    clients: [...clients.values()],
+    programs,
+    contracts,
+    projects,
+    units,
+    technicians: people.technicians,
+    subcontractors: people.subcontractors,
+    issues,
+  };
 }
 
 /** One row per distinct reason, because 121 rows of twelve sentences is a wall. */
@@ -841,6 +861,8 @@ export function planSummary(plan: ImportPlan) {
     contracts: plan.contracts.length,
     projects: plan.projects.length,
     units: plan.units.length,
+    technicians: plan.technicians.length,
+    subcontractors: plan.subcontractors.length,
     milestones: plan.contracts.reduce((a, c) => a + c.milestones.length, 0),
     contractValueSantim: contractValue,
     collectedSantim: collected,

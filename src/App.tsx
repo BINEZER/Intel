@@ -21,6 +21,7 @@ import { Programs, ProgramDetail } from './pages/Programs.js';
 import { Units, UnitDetail } from './pages/Units.js';
 import { CeoReport } from './pages/CeoReport.js';
 import { Import } from './pages/Import.js';
+import { People } from './pages/People.js';
 import { SignIn } from './pages/SignIn.js';
 
 export function App() {
@@ -130,6 +131,14 @@ export function App() {
               element={
                 <RequireCapability capability="useBoards">
                   <Boards />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="people"
+              element={
+                <RequireCapability capability="read">
+                  <People />
                 </RequireCapability>
               }
             />
