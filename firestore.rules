@@ -119,7 +119,13 @@ service cloud.firestore {
       allow read:   if canRead();
       allow create: if isManager() && stampedCreate() && vatReconciles(request.resource.data);
       allow update: if isManager() && stampedUpdate() && vatReconciles(request.resource.data);
-      allow delete: if isAdmin() && resource.data.status == 'draft';
+      // An admin may delete a contract at any status, not only a draft. A bulk
+      // import produces wrong contracts that are already 'active', and there
+      // has to be a way to remove them. What protects the data is not the
+      // status but the reference check the app runs first: a contract with
+      // invoices or projects against it is refused there, with the reasons
+      // named. This rule keeps the act to an admin.
+      allow delete: if isAdmin();
 
       match /milestones/{milestoneId} {
         allow read:   if canRead();
@@ -135,7 +141,9 @@ service cloud.firestore {
       allow update: if (isManager() && stampedUpdate())
                     || (has(['engineer']) && stampedUpdate()
                         && request.resource.data.financials == resource.data.financials);
-      allow delete: if isAdmin() && resource.data.status in ['planned', 'cancelled'];
+      // As with contracts: the app refuses a project that has money against it,
+      // and this rule keeps the act to an admin.
+      allow delete: if isAdmin();
 
       match /phases/{phaseId} {
         allow read:   if canRead();
@@ -165,7 +173,9 @@ service cloud.firestore {
       allow read:   if canRead();
       allow create: if isManager() && stampedCreate();
       allow update: if has(['admin', 'manager', 'engineer']) && stampedUpdate();
-      allow delete: if isAdmin() && resource.data.status == 'decommissioned';
+      // A lift entered by mistake should not have to be decommissioned first to
+      // be removed. The app refuses one with callouts or visits against it.
+      allow delete: if isAdmin();
     }
 
     // --- invoices: finance only; issued invoices are immutable -------------

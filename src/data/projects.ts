@@ -486,3 +486,12 @@ export async function deleteProject(id: string): Promise<void> {
   await batch.commit();
   await deleteDoc(doc(db, PATH, id));
 }
+
+/** Change only the status, without touching the phases or the rollup. */
+export async function updateProjectStatus(
+  id: string,
+  status: Project['status'],
+  uid: string,
+): Promise<void> {
+  await updateDoc(doc(db, PATH, id), { status, ...stampUpdate(uid) });
+}

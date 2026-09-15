@@ -39,6 +39,7 @@ import { DEFAULT_SUPPLY_INSTALL_SHARES, type MilestoneShare } from './milestones
 import { birrToSantim } from './money.js';
 import { rescaleWeights } from './stage-edit.js';
 import type { ContractStatus } from './schema.js';
+import type { ProjectStatusValue } from './status.js';
 
 // ---------------------------------------------------------------------------
 // Input shape
@@ -292,7 +293,7 @@ const PROJECT_LIFECYCLE: Record<string, ProjectLifecycle> = {
   cancelled: 'cancelled',
 };
 
-export type ProjectLifecycle = 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+export type ProjectLifecycle = ProjectStatusValue;
 
 function projectLifecycleOf(raw: string): ProjectLifecycle {
   return PROJECT_LIFECYCLE[raw.trim().toLowerCase()] ?? 'planned';

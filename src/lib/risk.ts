@@ -11,10 +11,11 @@ import { formatBps } from './kpi.js';
 import type { ProjectKpiResult } from './kpi.js';
 import { formatETB } from './money.js';
 import type { RiskAssessment, RiskFlag, RiskSeverity } from './schema.js';
+import type { ProjectStatusValue } from './status.js';
 
 export interface RiskInput {
   kpi: ProjectKpiResult;
-  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  status: ProjectStatusValue;
   /** Invoiced, unpaid, past due. */
   overdueReceivableSantim: number;
   /** Age of the oldest unpaid invoice, in days. */

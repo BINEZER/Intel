@@ -33,6 +33,7 @@ import type { Client, Contract, DualDate, Invoice, Program, Project } from '../l
 import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { FormPanel } from '../components/FormPanel.js';
+import { DeleteButton } from '../components/DeleteButton.js';
 
 /** Everything both the list and the detail page need, computed once. */
 function usePrograms() {
@@ -132,6 +133,14 @@ export function Programs() {
 
               <p className="muted">{program.description}</p>
               <ProgramFigures rollup={rollup} />
+              {editable && (
+                <div className="card-actions">
+                  <DeleteButton
+                    target={{ kind: 'program', id: program.id, name: program.name }}
+                    label="Delete program"
+                  />
+                </div>
+              )}
             </li>
           ))}
         </ul>

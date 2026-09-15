@@ -17,6 +17,7 @@ import { MoneyInput } from '../components/MoneyInput.js';
 import { KpiTile } from '../components/KpiTile.js';
 import type { Invoice, Receipt } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { DeleteButton } from '../components/DeleteButton.js';
 
 export function Invoices() {
   const { user, role } = useAuth();
@@ -174,6 +175,16 @@ function InvoiceRow({
               Void
             </button>
           )}
+          {/* Only a draft can be deleted. An issued number is part of the VAT
+              sequence, and the button says so rather than disappearing. */}
+          <DeleteButton
+            target={{
+              kind: 'invoice',
+              id: invoice.id,
+              name: invoice.invoiceNo || 'this draft',
+              status: invoice.status,
+            }}
+          />
         </td>
       )}
     </tr>

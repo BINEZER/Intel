@@ -269,3 +269,20 @@ export async function setRenewalStatus(
 export async function deleteDraftContract(id: string): Promise<void> {
   await deleteDoc(doc(db, PATH, id));
 }
+
+/**
+ * Change only the status.
+ *
+ * `updateContract` recomputes the VAT split, so it needs the whole priced
+ * input; changing a contract from active to terminated should not require
+ * re-entering its value. The security rules still check that VAT reconciles —
+ * on a partial update they see the merged document, so the stored figures are
+ * what gets validated, and this cannot be used to slip past them.
+ */
+export async function updateContractStatus(
+  id: string,
+  status: Contract['status'],
+  uid: string,
+): Promise<void> {
+  await updateDoc(doc(db, PATH, id), { status, ...stampUpdate(uid) });
+}

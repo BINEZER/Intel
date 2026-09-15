@@ -11,6 +11,8 @@ import { FormPanel } from '../components/FormPanel.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import type { Client } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
+import { DeleteButton } from '../components/DeleteButton.js';
+import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 
 const EMPTY: ClientInput = {
   name: '',
@@ -94,13 +96,16 @@ export function Clients() {
                     )}
                   </td>
                   <td>
-                    <span className={client.status === 'active' ? 'chip chip-ok' : 'chip'}>
-                      {client.status}
-                    </span>
+                    <StatusChip kind="client" value={client.status} />
                   </td>
                   {editable && (
                     <td>
-                      <button type="button" onClick={() => setEditing(client)}>Edit</button>
+                      <div className="row-actions">
+                        <button type="button" onClick={() => setEditing(client)}>Edit</button>
+                        <DeleteButton
+                          target={{ kind: 'client', id: client.id, name: client.name }}
+                        />
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -260,14 +265,12 @@ function ClientForm({
 
         <div className="field">
           <label htmlFor="c-status">Status</label>
-          <select
+          <StatusSelect
+            kind="client"
             id="c-status"
             value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value as Client['status'] })}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+            onChange={(value) => setForm({ ...form, status: value as Client['status'] })}
+          />
         </div>
 
         <div className="field checkbox">

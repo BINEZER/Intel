@@ -19,6 +19,7 @@ import { formatETB } from './money.js';
 import { renewalView, type RenewalStatus } from './renewal.js';
 import { daysBetween } from './kpi.js';
 import type { RiskFlag, RiskSeverity } from './schema.js';
+import { isClosedProject } from './status.js';
 
 export type AlertKind =
   | 'contract_expiring'
@@ -172,7 +173,10 @@ export function projectAlerts(projects: readonly AlertProject[], asOf: Date): Al
 
   for (const project of projects) {
     if (!project.inDanger || project.severity === 'none') continue;
-    if (project.status === 'completed' || project.status === 'cancelled') continue;
+    // A job that is over cannot be rescued, so it stops raising alerts. This
+    // asks the vocabulary rather than listing the statuses, so a status added
+    // later cannot go on nagging about a project that stopped a year ago.
+    if (isClosedProject(project.status)) continue;
 
     // The worst flag is the headline; the rest are on the project page. An alert
     // that lists six problems is a report, and gets read like one.

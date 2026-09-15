@@ -35,6 +35,7 @@ import {
   type Period,
 } from './period.js';
 import { formatDual } from './ethiopic.js';
+import type { ProjectStatusValue } from './status.js';
 
 // ---------------------------------------------------------------------------
 // Inputs — flat, so the report can be tested without Firestore
@@ -78,7 +79,7 @@ export interface ReportProject {
   projectNo: string;
   title: string;
   clientName: string;
-  status: 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+  status: ProjectStatusValue;
   progressBps: number;
   contractNetSantim: number;
   plannedEnd: Date;
