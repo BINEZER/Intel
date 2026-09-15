@@ -216,6 +216,11 @@ export async function deleteTarget(target: DeletionTarget, uid: string): Promise
       return deleteWithSubcollection(`invoices/${target.id}/receipts`, 'invoices', target.id);
     case 'disbursement':
       return deleteDoc(doc(db, 'disbursements', target.id));
+    case 'technician':
+      // Unreachable: the policy refuses every technician, and the security
+      // rules refuse the write too. Kept so adding a kind cannot silently fall
+      // through to doing nothing.
+      throw new Error('A technician is set to inactive rather than deleted.');
   }
 }
 

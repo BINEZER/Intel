@@ -26,6 +26,7 @@
 
 export type DeletableKind =
   | 'client'
+  | 'technician'
   | 'contract'
   | 'project'
   | 'program'
@@ -56,6 +57,7 @@ export interface DeletionVerdict {
 
 const LABEL: Record<DeletableKind, string> = {
   client: 'client',
+  technician: 'technician',
   contract: 'contract',
   project: 'project',
   program: 'program',
@@ -100,6 +102,22 @@ export function assessDeletion(input: AssessInput): DeletionVerdict {
   const { kind, name } = input;
   const blocking = (input.references ?? []).filter((r) => r.count > 0);
   const noun = LABEL[kind];
+
+  // --- a technician is never deleted --------------------------------------
+
+  if (kind === 'technician') {
+    // Their KPI history, incentive payouts and the callouts they closed are
+    // all recorded against them. Deleting the person leaves the record of
+    // their work pointing at nobody — and that record is the basis on which
+    // they were paid a bonus, so it has to survive them leaving.
+    return {
+      allowed: false,
+      reason: `${name} cannot be deleted: the KPI history, incentive payouts and closed callouts recorded against them would be left pointing at nobody.`,
+      cascade: [],
+      alternative:
+        'Set them to inactive instead. They drop out of the assignment lists and the roster, and everything they did stays attributable.',
+    };
+  }
 
   // --- money documents: the sequence matters more than the tidiness --------
 

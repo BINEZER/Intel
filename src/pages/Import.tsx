@@ -207,6 +207,12 @@ export function Import() {
                 detail={<span className="muted">of {summary.projects} projects</span>}
               />
               <KpiTile label="Payment terms" value={summary.milestones} />
+              <KpiTile label="Technicians" value={summary.technicians} />
+              <KpiTile
+                label="Subcontractors"
+                value={summary.subcontractors}
+                detail={<span className="muted">all need a TIN adding</span>}
+              />
             </div>
             <dl className="figure-list">
               <div>
@@ -281,7 +287,13 @@ export function Import() {
             {result === null ? (
               <>
                 <p className="muted">
-                  Writes {summary.clients + summary.contracts + summary.projects + summary.units}{' '}
+                  Writes{' '}
+                  {summary.clients +
+                    summary.contracts +
+                    summary.projects +
+                    summary.units +
+                    summary.technicians +
+                    summary.subcontractors}{' '}
                   records plus {summary.milestones} payment terms. Records already loaded from a
                   previous run are updated in place; payment schedules on contracts that already
                   exist are left alone, in case they have been invoiced against.

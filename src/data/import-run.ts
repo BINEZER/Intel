@@ -39,6 +39,8 @@ import type {
   ElevatorUnit,
   Program,
   Project,
+  Subcontractor,
+  Technician,
 } from '../lib/schema.js';
 
 /**
@@ -56,6 +58,8 @@ const BATCH_LIMIT = 450;
 
 const ID = {
   client: (key: string) => `im-c-${key}`,
+  technician: (key: string) => `im-${key}`,
+  subcontractor: (key: string) => `im-${key}`,
   program: (key: string) => `im-g-${key}`,
   contract: (key: string) => `im-k-${key}`,
   project: (key: string) => `im-p-${key}`,
@@ -179,13 +183,16 @@ export async function runImport(
     map[key] = (map[key] ?? 0) + 1;
   };
 
-  const [haveClients, havePrograms, haveContracts, haveProjects, haveUnits] = await Promise.all([
-    existingIds('clients'),
-    existingIds('programs'),
-    existingIds('contracts'),
-    existingIds('projects'),
-    existingIds('units'),
-  ]);
+  const [haveClients, havePrograms, haveContracts, haveProjects, haveUnits, haveTechnicians, haveSubcontractors] =
+    await Promise.all([
+      existingIds('clients'),
+      existingIds('programs'),
+      existingIds('contracts'),
+      existingIds('projects'),
+      existingIds('units'),
+      existingIds('technicians'),
+      existingIds('subcontractors'),
+    ]);
 
   const total =
     plan.clients.length +
@@ -196,7 +203,9 @@ export async function runImport(
       0,
     ) +
     plan.projects.length +
-    plan.units.length;
+    plan.units.length +
+    plan.technicians.length +
+    plan.subcontractors.length;
 
   const queue = new BatchQueue(total, onProgress);
   const clientNameByKey = new Map(plan.clients.map((c) => [c.key, c.name]));
@@ -414,6 +423,72 @@ export async function runImport(
     await queue.add((batch) =>
       batch.set(
         doc(db, 'units', id),
+        { ...payload, ...(exists ? stampUpdate(uid) : stampCreate(uid)) },
+        { merge: exists },
+      ),
+    );
+  }
+
+  // --- people --------------------------------------------------------------
+
+  queue.setStage('Technicians');
+  for (const [index, technician] of plan.technicians.entries()) {
+    const id = ID.technician(technician.key);
+    const exists = haveTechnicians.has(id);
+    bump(exists ? updated : created, 'technicians');
+
+    const payload: Payload<Technician> = {
+      employeeNo: `T-${String(index + 1).padStart(3, '0')}`,
+      name: technician.name,
+      uid: null,
+      subcontractorId: null,
+      phone: technician.phone,
+      // The rosters record who is on which site, not whether a person installs
+      // or services. 'both' is the reading that scores nobody on evidence they
+      // were never going to produce.
+      discipline: 'both',
+      trades: [],
+      certifications: [],
+      // 40 hours. The utilisation KPI needs a figure, and a wrong one is
+      // visible on the Performance page where a zero would just read as broken.
+      contractedMinutesPerWeek: 40 * 60,
+      status: 'active',
+    };
+    await queue.add((batch) =>
+      batch.set(
+        doc(db, 'technicians', id),
+        { ...payload, ...(exists ? stampUpdate(uid) : stampCreate(uid)) },
+        { merge: exists },
+      ),
+    );
+  }
+
+  queue.setStage('Subcontractors');
+  for (const subcontractor of plan.subcontractors) {
+    const id = ID.subcontractor(subcontractor.key);
+    const exists = haveSubcontractors.has(id);
+    bump(exists ? updated : created, 'subcontractors');
+
+    const payload: Payload<Subcontractor> = {
+      name: subcontractor.name,
+      // No TIN anywhere in the workbook. `hasTin: false` is the truth, and it
+      // is what drives the 30% penalty withholding rate — which is why every
+      // one of these is flagged in the issue report.
+      tin: '',
+      hasTin: false,
+      vatRegistered: false,
+      defaultWhtCategory: 'services',
+      trades: subcontractor.trades,
+      bank: { name: '', accountName: '', accountNo: '' },
+      contacts:
+        subcontractor.phone === ''
+          ? []
+          : [{ name: subcontractor.name, phone: subcontractor.phone }],
+      status: 'active',
+    };
+    await queue.add((batch) =>
+      batch.set(
+        doc(db, 'subcontractors', id),
         { ...payload, ...(exists ? stampUpdate(uid) : stampCreate(uid)) },
         { merge: exists },
       ),

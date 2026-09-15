@@ -62,6 +62,7 @@ const NAV: NavGroup[] = [
     label: 'People & partners',
     items: [
       { to: '/clients', label: 'Clients', capability: 'read' },
+      { to: '/people', label: 'People', capability: 'read' },
       { to: '/contracts', label: 'Contracts', capability: 'read' },
       { to: '/performance', label: 'Performance', capability: 'read' },
       { to: '/incentives', label: 'Incentives', capability: 'read' },
