@@ -32,6 +32,11 @@ import {
 } from '../lib/phases.js';
 import { DEFAULT_TEMPLATE_KEY, templateStages } from '../lib/project-templates.js';
 import {
+  checkpointProgressBps,
+  checkpointsForStage,
+  phaseProgressBps,
+} from '../lib/checkpoints.js';
+import {
   addStage,
   diffStages,
   moveStage,
@@ -166,6 +171,10 @@ export async function createProject(
       actualEnd: null,
       status: 'not_started' satisfies PhaseStatus,
       progressBps: 0,
+      // Seeded from the template so an elevator stage can never fall back to a
+      // typed percentage. A stage the template does not know gets none, and
+      // keeps the manual figure.
+      checkpoints: checkpointsForStage(template.key).map((c) => ({ ...c, doneAt: null })),
       // The certification block lives only on the inspection phase.
       ...(template.key === 'authority_inspection'
         ? {
@@ -213,7 +222,7 @@ export async function updatePhaseProgress(
     phases.map((p) =>
       p.id === phaseId
         ? { key: p.key, weightBps: p.weightBps, progressBps: clamped, status }
-        : { key: p.key, weightBps: p.weightBps, progressBps: p.progressBps, status: p.status },
+        : { key: p.key, weightBps: p.weightBps, progressBps: phaseProgressBps(p), status: p.status },
     ),
   );
 
@@ -494,4 +503,68 @@ export async function updateProjectStatus(
   uid: string,
 ): Promise<void> {
   await updateDoc(doc(db, PATH, id), { status, ...stampUpdate(uid) });
+}
+
+/**
+ * Tick or untick one checkpoint, and re-roll everything that depends on it.
+ *
+ * The phase percentage and the project percentage are both DERIVED here rather
+ * than typed anywhere: the checkpoint is the only thing a person changes, and
+ * the two figures follow from it in the same batch. That is what stops them
+ * disagreeing — there is no path that writes one without the other.
+ */
+export async function setCheckpoint(
+  projectId: string,
+  phaseId: string,
+  checkpointKey: string,
+  done: boolean,
+  uid: string,
+): Promise<{ phaseProgressBps: number; projectProgressBps: number }> {
+  const phases = await getPhases(projectId);
+  const current = phases.find((p) => p.id === phaseId);
+  if (current === undefined) throw new Error('That stage no longer exists on this project.');
+  if (current.checkpoints === undefined || current.checkpoints.length === 0) {
+    throw new Error('That stage has no checkpoints, so its progress is entered by hand.');
+  }
+
+  const now = Timestamp.now();
+  const checkpoints = current.checkpoints.map((c) =>
+    c.key === checkpointKey
+      ? { ...c, doneAt: done ? now : null, ...(done ? { doneBy: uid } : {}) }
+      : c,
+  );
+  if (!checkpoints.some((c) => c.key === checkpointKey)) {
+    throw new Error('That checkpoint is not on this stage.');
+  }
+
+  const phaseProgress = checkpointProgressBps(checkpoints);
+  const status = derivePhaseStatus(phaseProgress, current.status);
+
+  const projectProgressBps = rollUpProgress(
+    phases.map((p) =>
+      p.id === phaseId
+        ? { key: p.key, weightBps: p.weightBps, progressBps: phaseProgress, status }
+        : { key: p.key, weightBps: p.weightBps, progressBps: phaseProgressBps(p), status: p.status },
+    ),
+  );
+
+  const batch = writeBatch(db);
+  const today = dualDateFromGregorian(new Date(), toTimestamp, 'GC');
+
+  batch.update(doc(db, phasePath(projectId), phaseId), {
+    checkpoints,
+    progressBps: phaseProgress,
+    status,
+    ...(current.actualStart === null && phaseProgress > 0 ? { actualStart: today } : {}),
+    ...(status === 'completed' && current.actualEnd === null ? { actualEnd: today } : {}),
+    // Un-ticking back below complete clears the completion date, or the phase
+    // duration KPI keeps measuring against a date that no longer means anything.
+    ...(status !== 'completed' && current.actualEnd !== null ? { actualEnd: null } : {}),
+    ...stampUpdate(uid),
+  });
+
+  batch.update(doc(db, PATH, projectId), { progressBps: projectProgressBps, ...stampUpdate(uid) });
+
+  await batch.commit();
+  return { phaseProgressBps: phaseProgress, projectProgressBps };
 }

@@ -7,7 +7,12 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
-import { createProject, subscribeProjects, updateProjectStatus } from '../data/projects.js';
+import {
+  createProject,
+  subscribeProjects,
+  updateProject,
+  updateProjectStatus,
+} from '../data/projects.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
 import { formatETB } from '../lib/money.js';
@@ -22,13 +27,26 @@ import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { buildTree, sortTree, type TreeProject } from '../lib/project-tree.js';
 import { ReminderEditor } from '../components/ReminderEditor.js';
 import type { Client, DualDate, Project, Reminder } from '../lib/schema.js';
+import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
+import { ListControls } from '../components/ListControls.js';
+import {
+  EMPTY_FILTER,
+  filterRows,
+  sortRows,
+  type ColumnSpec,
+  type FilterState,
+  type SortState,
+} from '../lib/table.js';
+import { statusLabel } from '../lib/status.js';
 
 export function Projects() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects');
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<WithId<Project> | 'new' | null>(null);
+  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
+  const [sort, setSort] = useState<SortState>({ key: null, direction: 'asc' });
 
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
@@ -41,11 +59,42 @@ export function Projects() {
    * A tower is one job commercially and several operationally. Flattened, the
    * page shows five unrelated projects where there is one commitment.
    */
+  const columns: ColumnSpec<WithId<Project>>[] = useMemo(
+    () => [
+      { key: 'title', label: 'Name', value: (p) => p.title },
+      { key: 'projectNo', label: 'Number', value: (p) => p.projectNo },
+      { key: 'client', label: 'Client', value: (p) => p.clientName, filterable: true },
+      { key: 'status', label: 'Status', value: (p) => p.status, filterable: true },
+      { key: 'city', label: 'City', value: (p) => p.site?.city ?? '', filterable: true },
+      { key: 'progress', label: 'Progress', value: (p) => p.progressBps },
+      { key: 'plannedEnd', label: 'Planned end', value: (p) => p.plannedEnd.at.toDate() },
+      {
+        key: 'value',
+        label: 'Contract value',
+        value: (p) => p.financials?.contractNetSantim ?? 0,
+      },
+    ],
+    [],
+  );
+
+  /**
+   * Narrowed and ordered BEFORE the tree is built.
+   *
+   * Filtering afterwards would leave a sub-project whose parent was filtered
+   * out floating at the top level, which reads as a separate job.
+   */
+  const visible = useMemo(() => {
+    const narrowed = filterRows(projects.rows, columns, filter, (row, column) =>
+      column.key === 'status' ? statusLabel('project', row.status) : String(column.value(row) ?? ''),
+    );
+    return sortRows(narrowed, columns, sort);
+  }, [projects.rows, columns, filter, sort]);
+
   const tree = useMemo(
     () =>
       sortTree(
         buildTree(
-          projects.rows.map<TreeProject & { source: typeof projects.rows[number] }>((p) => ({
+          visible.map<TreeProject & { source: typeof projects.rows[number] }>((p) => ({
             id: p.id,
             projectNo: p.projectNo,
             title: p.title,
@@ -61,7 +110,7 @@ export function Projects() {
           asOf,
         ),
       ),
-    [projects.rows, asOf],
+    [visible, asOf],
   );
 
   return (
@@ -70,8 +119,8 @@ export function Projects() {
         <h1>Projects</h1>
         <div className="page-actions">
           <PrintButton label="Print list" />
-          {editable && !creating && (
-            <button type="button" className="primary" onClick={() => setCreating(true)}>New project</button>
+          {editable && editing === null && (
+            <button type="button" className="primary" onClick={() => setEditing('new')}>New project</button>
           )}
         </div>
       </div>
@@ -80,8 +129,26 @@ export function Projects() {
 
       {projects.error && <p className="error" role="alert">{projects.error}</p>}
 
-      {creating && user !== null && (
-        <ProjectForm clients={clients.rows} uid={user.uid} onDone={() => setCreating(false)} />
+      {editing !== null && user !== null && (
+        <ProjectForm
+          initial={editing === 'new' ? null : editing}
+          clients={clients.rows}
+          uid={user.uid}
+          onDone={() => setEditing(null)}
+        />
+      )}
+
+      {projects.rows.length > 0 && (
+        <ListControls
+          rows={projects.rows}
+          shown={visible.length}
+          columns={columns}
+          filter={filter}
+          onFilter={setFilter}
+          sort={sort}
+          onSort={setSort}
+          noun="projects"
+        />
       )}
 
       {projects.loading && <p className="muted">Loading…</p>}
@@ -161,6 +228,7 @@ export function Projects() {
                       }}
                     />
                   </div>
+                  <button type="button" onClick={() => setEditing(project)}>Edit</button>
                   <DeleteButton
                     target={{ kind: 'project', id: project.id, name: project.projectNo }}
                   />
@@ -175,29 +243,33 @@ export function Projects() {
 }
 
 function ProjectForm({
+  initial,
   clients,
   uid,
   onDone,
 }: {
+  initial: WithId<Project> | null;
   clients: readonly { id: string; name: string }[];
   uid: string;
   onDone: () => void;
 }) {
-  const [title, setTitle] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [siteName, setSiteName] = useState('');
-  const [city, setCity] = useState('Addis Ababa');
-  const [units, setUnits] = useState(1);
-  const [templateKey, setTemplateKey] = useState(DEFAULT_TEMPLATE_KEY);
-  const [programId, setProgramId] = useState('');
-  const [parentProjectId, setParentProjectId] = useState('');
-  const [subCity, setSubCity] = useState('');
-  const [address, setAddress] = useState('');
-  const [landmark, setLandmark] = useState('');
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [plannedStart, setPlannedStart] = useState<DualDate | null>(null);
-  const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(null);
-  const { busy, error, run } = useAsyncAction('create this project');
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [clientId, setClientId] = useState(initial?.clientId ?? '');
+  const [siteName, setSiteName] = useState(initial?.site?.name ?? '');
+  const [city, setCity] = useState(initial?.site?.city ?? 'Addis Ababa');
+  const [units, setUnits] = useState(initial?.units?.length ?? 1);
+  const [templateKey, setTemplateKey] = useState(initial?.templateKey ?? DEFAULT_TEMPLATE_KEY);
+  const [programId, setProgramId] = useState(initial?.programId ?? '');
+  const [parentProjectId, setParentProjectId] = useState(initial?.parentProjectId ?? '');
+  const [subCity, setSubCity] = useState(initial?.site?.subCity ?? '');
+  const [address, setAddress] = useState(initial?.site?.address ?? '');
+  const [landmark, setLandmark] = useState(initial?.site?.landmark ?? '');
+  const [reminders, setReminders] = useState<Reminder[]>(initial?.reminders ?? []);
+  const [plannedStart, setPlannedStart] = useState<DualDate | null>(initial?.plannedStart ?? null);
+  const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(initial?.plannedEnd ?? null);
+  const { busy, error, run } = useAsyncAction(
+    initial === null ? 'create this project' : 'save this project',
+  );
 
   const programs = useCollection<Program>((d, e) => subscribePrograms(d, e, { status: 'active' }), [], 'load programs').rows;
   const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
@@ -208,7 +280,10 @@ function ProjectForm({
    * second level is a program, and there is a Programs page for that.
    */
   const parentCandidates = allProjects.filter(
-    (p) => p.parentProjectId === null || p.parentProjectId === undefined,
+    (p) =>
+      (p.parentProjectId === null || p.parentProjectId === undefined) &&
+      // A project cannot be its own parent.
+      p.id !== initial?.id,
   );
 
   const ready = title.trim() !== '' && clientId !== '' && plannedStart !== null && plannedEnd !== null;
@@ -218,47 +293,69 @@ function ProjectForm({
     const client = clients.find((c) => c.id === clientId);
     if (!ready || client === undefined) return;
 
-    const result = await run(() =>
-      createProject(
-        {
-          projectNo: `P-${Date.now()}`,
-          // A project built from a lift template is elevator work; anything else
-          // is not, and forcing it into the elevator reports would misstate them.
-          type: templateKey === 'elevator_install' || templateKey === 'modernisation' ? 'elevator' : 'non_elevator',
-          title: title.trim(),
-          clientId,
-          clientName: client.name,
-          contractId: null,
-          site: {
-            name: siteName.trim() || title.trim(),
-            city,
-            ...(subCity.trim() === '' ? {} : { subCity: subCity.trim() }),
-            ...(address.trim() === '' ? {} : { address: address.trim() }),
-            ...(landmark.trim() === '' ? {} : { landmark: landmark.trim() }),
-          },
-          programId: programId === '' ? null : programId,
-          parentProjectId: parentProjectId === '' ? null : parentProjectId,
-          reminders,
-          units: Array.from({ length: Math.max(1, units) }, (_, i) => ({
-            tag: `LIFT-${String(i + 1).padStart(2, '0')}`,
-          })),
+    const input = {
+      projectNo: initial?.projectNo ?? `P-${Date.now()}`,
+      // A project built from a lift template is elevator work; anything else
+      // is not, and forcing it into the elevator reports would misstate them.
+      type: (templateKey === 'elevator_install' || templateKey === 'modernisation'
+        ? 'elevator'
+        : 'non_elevator') as Project['type'],
+      title: title.trim(),
+      clientId,
+      clientName: client.name,
+      contractId: initial?.contractId ?? null,
+      site: {
+        name: siteName.trim() || title.trim(),
+        city,
+        ...(subCity.trim() === '' ? {} : { subCity: subCity.trim() }),
+        ...(address.trim() === '' ? {} : { address: address.trim() }),
+        ...(landmark.trim() === '' ? {} : { landmark: landmark.trim() }),
+      },
+      programId: programId === '' ? null : programId,
+      parentProjectId: parentProjectId === '' ? null : parentProjectId,
+      reminders,
+      // On an edit the existing lifts are kept: they carry per-unit progress,
+      // and rebuilding the list from a count would throw that away.
+      units:
+        initial === null
+          ? Array.from({ length: Math.max(1, units) }, (_, i) => ({
+              tag: `LIFT-${String(i + 1).padStart(2, '0')}`,
+            }))
+          : initial.units,
+      plannedStart: plannedStart as DualDate,
+      plannedEnd: plannedEnd as DualDate,
+      actualStart: initial?.actualStart ?? null,
+      actualEnd: initial?.actualEnd ?? null,
+      // An edit must not reset a project somebody paused or completed.
+      status: initial?.status ?? ('planned' as Project['status']),
+    };
+
+    const result = await run(async () => {
+      if (initial === null) {
+        await createProject(input, uid, {
           plannedStart: plannedStart as DualDate,
           plannedEnd: plannedEnd as DualDate,
-          actualStart: null,
-          actualEnd: null,
-          status: 'planned',
-        },
-        uid,
-        { plannedStart: plannedStart as DualDate, plannedEnd: plannedEnd as DualDate, templateKey },
-      ),
-    );
+          templateKey,
+        });
+      } else {
+        // The stages are NOT rebuilt from the template on an edit — they carry
+        // ticked checkpoints and recorded dates. Stages are changed on the
+        // project page, where the consequences are visible.
+        await updateProject(initial.id, input, uid);
+      }
+      return true;
+    });
     if (result !== null) onDone();
   }
 
   return (
     <FormPanel
-      title="New project"
-      description="Pick the kind of job and its stages are created for you. Every stage can be renamed, reweighted, reordered or deleted afterwards — the template is a starting point, not a rule."
+      title={initial === null ? 'New project' : `Edit ${initial.title}`}
+      description={
+        initial === null
+          ? 'Pick the kind of job and its stages are created for you. Every stage can be renamed, reweighted, reordered or deleted afterwards — the template is a starting point, not a rule.'
+          : 'The stages are not touched by this form — they carry ticked checkpoints and recorded dates. Change them on the project page.'
+      }
       onClose={onDone}
     >
       <form onSubmit={(e) => void submit(e)}>

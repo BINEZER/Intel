@@ -26,6 +26,7 @@ import {
 } from '../data/subcontractors.js';
 import { createTechnician, subscribeTechnicians, updateTechnician } from '../data/technicians.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
+import { DataTable } from '../components/DataTable.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { FormPanel } from '../components/FormPanel.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
@@ -118,59 +119,85 @@ function Technicians({ editable }: { editable: boolean }) {
       {rows.length === 0 && !loading ? (
         <p className="muted">Nobody yet.</p>
       ) : (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Phone</th>
-                <th scope="col">Does</th>
-                <th scope="col">Trades</th>
-                <th scope="col">Cards</th>
-                <th scope="col">Status</th>
-                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((technician) => (
-                <tr key={technician.id}>
-                  <td>
-                    <strong>{technician.name}</strong>
-                    <br />
-                    <span className="muted mono">{technician.employeeNo}</span>
-                  </td>
-                  <td>{technician.phone || <span className="muted">—</span>}</td>
-                  <td>{DISCIPLINE_LABEL[technician.discipline]}</td>
-                  <td className="muted">
-                    {technician.trades.length === 0 ? '—' : technician.trades.join(', ')}
-                  </td>
-                  <td className="num">
-                    {technician.certifications.length === 0 ? (
-                      <span className="muted">none</span>
-                    ) : (
-                      technician.certifications.length
-                    )}
-                  </td>
-                  <td>
-                    <span className={`chip chip-status-${technician.status === 'active' ? 'good' : 'idle'}`}>
-                      {technician.status.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  {editable && (
-                    <td>
+        <DataTable
+          rows={rows}
+          rowKey={(technician) => technician.id}
+          noun="technicians"
+          columns={[
+            {
+              key: 'name',
+              label: 'Name',
+              value: (t) => t.name,
+              text: (t) => `${t.name} ${t.employeeNo}`,
+              render: (t) => (
+                <>
+                  <strong>{t.name}</strong>
+                  <br />
+                  <span className="muted mono">{t.employeeNo}</span>
+                </>
+              ),
+            },
+            {
+              key: 'phone',
+              label: 'Phone',
+              value: (t) => t.phone,
+              render: (t) => t.phone || <span className="muted">—</span>,
+            },
+            {
+              key: 'discipline',
+              label: 'Does',
+              value: (t) => DISCIPLINE_LABEL[t.discipline],
+              filterable: true,
+            },
+            {
+              key: 'trades',
+              label: 'Trades',
+              value: (t) => t.trades.join(', '),
+              render: (t) => (
+                <span className="muted">{t.trades.length === 0 ? '—' : t.trades.join(', ')}</span>
+              ),
+            },
+            {
+              key: 'cards',
+              label: 'Cards',
+              numeric: true,
+              value: (t) => t.certifications.length,
+              render: (t) =>
+                t.certifications.length === 0 ? (
+                  <span className="muted">none</span>
+                ) : (
+                  t.certifications.length
+                ),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: (t) => t.status,
+              filterable: true,
+              render: (t) => (
+                <span className={`chip chip-status-${t.status === 'active' ? 'good' : 'idle'}`}>
+                  {t.status.replace(/_/g, ' ')}
+                </span>
+              ),
+            },
+            ...(editable
+              ? [
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    unsortable: true,
+                    value: () => '',
+                    render: (t: WithId<Technician>) => (
                       <div className="row-actions">
-                        <button type="button" onClick={() => setEditing(technician)}>Edit</button>
-                        <DeleteButton
-                          target={{ kind: 'technician', id: technician.id, name: technician.name }}
-                        />
+                        <button type="button" onClick={() => setEditing(t)}>Edit</button>
+                        <DeleteButton target={{ kind: 'technician', id: t.id, name: t.name }} />
                       </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
     </section>
   );
@@ -379,69 +406,109 @@ function Subcontractors({ editable }: { editable: boolean }) {
       {rows.length === 0 && !loading ? (
         <p className="muted">None yet.</p>
       ) : (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">TIN</th>
-                <th scope="col">Withholding</th>
-                <th scope="col">Trades</th>
-                <th scope="col">Bank</th>
-                <th scope="col">Status</th>
-                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((sub) => (
-                <tr key={sub.id} className={sub.hasTin ? undefined : 'row-danger'}>
-                  <td>
-                    <strong>{sub.name}</strong>
-                    {sub.contacts[0] !== undefined && (
-                      <>
-                        <br />
-                        <span className="muted">{sub.contacts[0].phone}</span>
-                      </>
-                    )}
-                  </td>
-                  <td>
-                    {sub.hasTin ? (
-                      <span className="mono">{sub.tin}</span>
-                    ) : (
-                      <span className="danger-text">none</span>
-                    )}
-                  </td>
-                  <td>
-                    {sub.hasTin ? (
-                      WHT_LABEL[sub.defaultWhtCategory]
-                    ) : (
-                      <span className="danger-text">{pct(WHT.NO_TIN_BPS)}% — no TIN</span>
-                    )}
-                  </td>
-                  <td className="muted">{sub.trades.length === 0 ? '—' : sub.trades.join(', ')}</td>
-                  <td className="muted">
-                    {sub.bank.accountNo === '' ? '—' : `${sub.bank.name} ${sub.bank.accountNo}`}
-                  </td>
-                  <td>
-                    <span className={`chip chip-status-${sub.status === 'active' ? 'good' : sub.status === 'suspended' ? 'warn' : 'bad'}`}>
-                      {sub.status}
-                    </span>
-                  </td>
-                  {editable && (
-                    <td>
+        <DataTable
+          rows={rows}
+          rowKey={(sub) => sub.id}
+          noun="subcontractors"
+          rowClass={(sub) => (sub.hasTin ? undefined : 'row-danger')}
+          columns={[
+            {
+              key: 'name',
+              label: 'Name',
+              value: (sub) => sub.name,
+              text: (sub) => `${sub.name} ${sub.contacts[0]?.phone ?? ''}`.trim(),
+              render: (sub) => (
+                <>
+                  <strong>{sub.name}</strong>
+                  {sub.contacts[0] !== undefined && (
+                    <>
+                      <br />
+                      <span className="muted">{sub.contacts[0].phone}</span>
+                    </>
+                  )}
+                </>
+              ),
+            },
+            {
+              key: 'tin',
+              label: 'TIN',
+              value: (sub) => (sub.hasTin ? sub.tin : ''),
+              text: (sub) => (sub.hasTin ? sub.tin : 'none'),
+              render: (sub) =>
+                sub.hasTin ? (
+                  <span className="mono">{sub.tin}</span>
+                ) : (
+                  <span className="danger-text">none</span>
+                ),
+            },
+            {
+              key: 'wht',
+              label: 'Withholding',
+              value: (sub) =>
+                sub.hasTin
+                  ? sub.defaultWhtCategory === 'goods'
+                    ? WHT.GOODS_BPS
+                    : sub.defaultWhtCategory === 'services'
+                      ? WHT.SERVICES_BPS
+                      : 0
+                  : WHT.NO_TIN_BPS,
+              numeric: true,
+              render: (sub) =>
+                sub.hasTin ? (
+                  WHT_LABEL[sub.defaultWhtCategory]
+                ) : (
+                  <span className="danger-text">{pct(WHT.NO_TIN_BPS)}% — no TIN</span>
+                ),
+            },
+            {
+              key: 'trades',
+              label: 'Trades',
+              value: (sub) => sub.trades.join(', '),
+              render: (sub) => (
+                <span className="muted">{sub.trades.length === 0 ? '—' : sub.trades.join(', ')}</span>
+              ),
+            },
+            {
+              key: 'bank',
+              label: 'Bank',
+              value: (sub) => sub.bank.name,
+              render: (sub) => (
+                <span className="muted">
+                  {sub.bank.accountNo === '' ? '—' : `${sub.bank.name} ${sub.bank.accountNo}`}
+                </span>
+              ),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: (sub) => sub.status,
+              filterable: true,
+              render: (sub) => (
+                <span
+                  className={`chip chip-status-${sub.status === 'active' ? 'good' : sub.status === 'suspended' ? 'warn' : 'bad'}`}
+                >
+                  {sub.status}
+                </span>
+              ),
+            },
+            ...(editable
+              ? [
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    unsortable: true,
+                    value: () => '',
+                    render: (sub: WithId<Subcontractor>) => (
                       <div className="row-actions">
                         <button type="button" onClick={() => setEditing(sub)}>Edit</button>
-                        <DeleteButton
-                          target={{ kind: 'subcontractor', id: sub.id, name: sub.name }}
-                        />
+                        <DeleteButton target={{ kind: 'subcontractor', id: sub.id, name: sub.name }} />
                       </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
     </section>
   );

@@ -208,6 +208,26 @@ export interface Contract extends AuditFields {
     alertDays: number;
   };
 
+  /**
+   * The service agreement that took over when this contract's warranty ended.
+   *
+   * An installation contract does not simply stop: either it becomes a paying
+   * maintenance agreement or the client declines. Both outcomes are recorded,
+   * because "neither" is the state where we service lifts for nothing.
+   */
+  succeededByContractId?: string | null;
+  /** The installation contract this service agreement grew out of. */
+  supersedesContractId?: string;
+  /** Set where the client was offered service after warranty and said no. */
+  serviceDeclined?: boolean;
+
+  /** Maintenance contracts are priced per month, not as a lump sum. */
+  serviceFee?: {
+    monthlyNetSantim: number;
+    /** How many lifts the fee covers, so a per-lift rate can be read off it. */
+    unitCount: number;
+  };
+
   /** Dates on this contract somebody wants warning about. */
   reminders?: Reminder[];
 
@@ -356,7 +376,25 @@ export interface ProjectPhase extends AuditFields {
   actualStart: DualDate | null;
   actualEnd: DualDate | null;
   status: 'not_started' | 'in_progress' | 'blocked' | 'completed';
+  /**
+   * 0-10000. DERIVED from `checkpoints` wherever a stage has them, which is
+   * every stage on an elevator project. Only a hand-made stage on other work
+   * keeps a figure somebody typed. See lib/checkpoints.ts for why.
+   */
   progressBps: number;
+  /**
+   * The facts that make up this stage, each either signed off or not.
+   *
+   * Absent on a stage added by hand, which then falls back to the stored
+   * percentage.
+   */
+  checkpoints?: Array<{
+    key: string;
+    label: string;
+    /** Null until it is ticked. The instant is kept, not just the fact. */
+    doneAt: Timestamp | null;
+    doneBy?: string;
+  }>;
   assigneeUid?: string;
 
   /**

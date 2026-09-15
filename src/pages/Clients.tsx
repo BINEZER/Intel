@@ -13,6 +13,8 @@ import type { Client } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
+import { DataTable } from '../components/DataTable.js';
+import { statusLabel } from '../lib/status.js';
 
 const EMPTY: ClientInput = {
   name: '',
@@ -64,55 +66,81 @@ export function Clients() {
       )}
 
       {rows.length > 0 && (
-        <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">TIN</th>
-                <th scope="col">VAT</th>
-                <th scope="col">City</th>
-                <th scope="col">Contact</th>
-                <th scope="col">Status</th>
-                {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((client) => (
-                <tr key={client.id}>
-                  <td><strong>{client.name}</strong></td>
-                  <td className="mono">{client.tin || <span className="muted">—</span>}</td>
-                  <td>{client.vatRegistered ? 'Registered' : <span className="muted">Not registered</span>}</td>
-                  <td>{client.address?.city ?? '—'}</td>
-                  <td>
-                    {client.contacts?.[0] ? (
-                      <>
-                        {client.contacts[0].name}
-                        <br />
-                        <span className="muted">{client.contacts[0].phone}</span>
-                      </>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td>
-                    <StatusChip kind="client" value={client.status} />
-                  </td>
-                  {editable && (
-                    <td>
+        <DataTable
+          rows={rows}
+          rowKey={(client) => client.id}
+          noun="clients"
+          columns={[
+            {
+              key: 'name',
+              label: 'Name',
+              value: (client) => client.name,
+              render: (client) => <strong>{client.name}</strong>,
+            },
+            {
+              key: 'tin',
+              label: 'TIN',
+              value: (client) => client.tin,
+              render: (client) =>
+                client.tin === '' ? <span className="muted">—</span> : <span className="mono">{client.tin}</span>,
+            },
+            {
+              key: 'vat',
+              label: 'VAT',
+              value: (client) => (client.vatRegistered ? 'Registered' : 'Not registered'),
+              filterable: true,
+              render: (client) =>
+                client.vatRegistered ? 'Registered' : <span className="muted">Not registered</span>,
+            },
+            {
+              key: 'city',
+              label: 'City',
+              value: (client) => client.address?.city ?? '',
+              filterable: true,
+            },
+            {
+              key: 'contact',
+              label: 'Contact',
+              value: (client) => client.contacts?.[0]?.name ?? '',
+              text: (client) =>
+                `${client.contacts?.[0]?.name ?? ''} ${client.contacts?.[0]?.phone ?? ''}`.trim(),
+              render: (client) =>
+                client.contacts?.[0] === undefined ? (
+                  <span className="muted">—</span>
+                ) : (
+                  <>
+                    {client.contacts[0].name}
+                    <br />
+                    <span className="muted">{client.contacts[0].phone}</span>
+                  </>
+                ),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              value: (client) => client.status,
+              filterable: true,
+              text: (client) => statusLabel('client', client.status),
+              render: (client) => <StatusChip kind="client" value={client.status} />,
+            },
+            ...(editable
+              ? [
+                  {
+                    key: 'actions',
+                    label: 'Actions',
+                    unsortable: true,
+                    value: () => '',
+                    render: (client: WithId<Client>) => (
                       <div className="row-actions">
                         <button type="button" onClick={() => setEditing(client)}>Edit</button>
-                        <DeleteButton
-                          target={{ kind: 'client', id: client.id, name: client.name }}
-                        />
+                        <DeleteButton target={{ kind: 'client', id: client.id, name: client.name }} />
                       </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    ),
+                  },
+                ]
+              : []),
+          ]}
+        />
       )}
 
     </>

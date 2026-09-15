@@ -30,6 +30,7 @@ import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { addVat, extractVat } from '../lib/money.js';
 import { allocateMilestones } from '../lib/milestones.js';
 import { EMPTY_FINANCIALS } from './projects.js';
+import { DEFAULT_WARRANTY_ALERT_DAYS, DEFAULT_WARRANTY_MONTHS } from '../lib/lifecycle.js';
 import type { ImportPlan, PlannedContract } from '../lib/import-master.js';
 import type {
   AuditFields,
@@ -300,6 +301,19 @@ export async function runImport(
       reminders: [],
       status: contract.status,
       attachments: [],
+      // The workbook records no warranty term, but every one of these contracts
+      // carries one. Without a term the service decision never comes up at all,
+      // so the standard year is set and left to be corrected per contract.
+      // `startsOn` stays null: the clock starts at handover, and dating it from
+      // anything else makes it expire on the wrong day.
+      warranty: {
+        months: DEFAULT_WARRANTY_MONTHS,
+        startsOn: null,
+        endsOn: null,
+        alertDays: DEFAULT_WARRANTY_ALERT_DAYS,
+      },
+      succeededByContractId: null,
+      serviceDeclined: false,
     };
     await queue.add((batch) =>
       batch.set(
