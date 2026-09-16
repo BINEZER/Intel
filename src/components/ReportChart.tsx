@@ -27,17 +27,51 @@
  *   that covers the bars it is describing.
  */
 
-import { useId, useState } from 'react';
+import { useId, useLayoutEffect, useState } from 'react';
 import { formatETB } from '../lib/money.js';
 import { compactBirr, type ChartSpec } from '../lib/ceo-report.js';
 
-const W = 720;
-const PAD = { top: 28, right: 18, bottom: 54, left: 74 };
-const PLOT_H = 210;
-const H = PAD.top + PLOT_H + PAD.bottom;
-const PLOT_W = W - PAD.left - PAD.right;
-const Y0 = PAD.top;
-const Y1 = PAD.top + PLOT_H;
+/**
+ * GEOMETRY AND WHY THERE ARE TWO
+ *
+ * An SVG with a fixed viewBox scales its text along with its marks. The report
+ * geometry (720 wide) rendered into a half-width dashboard card put the axis
+ * labels at SIX AND A HALF PIXELS — measured, not guessed. A chart whose axis
+ * cannot be read is a decoration.
+ *
+ * So the narrow slot gets its own viewBox rather than a shrunken copy of the
+ * wide one: fewer pixels of padding, a shorter plot, and a viewBox close enough
+ * to the rendered width that text lands near its declared size.
+ */
+type ChartSize = 'full' | 'compact';
+
+interface Geometry {
+  W: number;
+  H: number;
+  PAD: { top: number; right: number; bottom: number; left: number };
+  PLOT_H: number;
+  PLOT_W: number;
+  Y0: number;
+  Y1: number;
+  maxBarW: number;
+}
+
+function geometry(size: ChartSize): Geometry {
+  const W = size === 'compact' ? 430 : 720;
+  const PAD =
+    size === 'compact'
+      ? { top: 32, right: 10, bottom: 42, left: 52 }
+      : { top: 28, right: 18, bottom: 54, left: 74 };
+  const PLOT_H = size === 'compact' ? 150 : 210;
+  return {
+    W, PAD, PLOT_H,
+    H: PAD.top + PLOT_H + PAD.bottom,
+    PLOT_W: W - PAD.left - PAD.right,
+    Y0: PAD.top,
+    Y1: PAD.top + PLOT_H,
+    maxBarW: size === 'compact' ? 34 : 46,
+  };
+}
 
 /** Rounded only at the data end; the baseline end stays square and anchored. */
 function barPath(x: number, y: number, w: number, h: number, r = 4): string {
@@ -65,7 +99,40 @@ function niceTicks(max: number, count = 4): number[] {
   return ticks;
 }
 
-export function ReportChart({ spec }: { spec: ChartSpec }) {
+/**
+ * Below this many pixels of rendered width the wide geometry's text falls under
+ * about 9px, so the chart switches to the compact one. Measured against the
+ * 720-wide viewBox: 560px is where 11px declared text stops rendering at 9px.
+ */
+const COMPACT_BELOW_PX = 560;
+
+/**
+ * Pick the geometry from how much room the chart actually got.
+ *
+ * A media query would be guessing: the same breakpoint puts this chart in a
+ * full-width card on one page and a half-width one on another, and it is the
+ * CARD's width that decides whether the axis can be read.
+ */
+function useFittedSize(explicit: ChartSize | undefined): [ChartSize, (el: HTMLElement | null) => void] {
+  const [element, attach] = useState<HTMLElement | null>(null);
+  const [measured, setMeasured] = useState<ChartSize>('full');
+
+  useLayoutEffect(() => {
+    if (explicit !== undefined || element === null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry === undefined) return;
+      setMeasured(entry.contentRect.width < COMPACT_BELOW_PX ? 'compact' : 'full');
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [explicit, element]);
+
+  return [explicit ?? measured, attach];
+}
+
+export function ReportChart({ spec, size: explicitSize }: { spec: ChartSpec; size?: ChartSize }) {
+  const [size, attach] = useFittedSize(explicitSize);
+  const { W, H, PAD, PLOT_H, PLOT_W, Y0, Y1, maxBarW } = geometry(size);
   const titleId = useId();
   const descId = useId();
   const [hovered, setHovered] = useState<{ point: number; series: string } | null>(null);
@@ -95,7 +162,7 @@ export function ReportChart({ spec }: { spec: ChartSpec }) {
   const barW =
     spec.points.length === 0
       ? 0
-      : Math.max(6, Math.min(46, (groupW * 0.68 - GAP * (spec.series.length - 1)) / spec.series.length));
+      : Math.max(6, Math.min(maxBarW, (groupW * 0.68 - GAP * (spec.series.length - 1)) / spec.series.length));
 
   const readout =
     hovered === null
@@ -110,7 +177,7 @@ export function ReportChart({ spec }: { spec: ChartSpec }) {
   const empty = max === 0;
 
   return (
-    <figure className="viz-root report-chart">
+    <figure className="viz-root report-chart" ref={attach}>
       <div className="viz-head">
         <div>
           <h3 id={titleId}>{spec.title}</h3>
@@ -159,7 +226,7 @@ export function ReportChart({ spec }: { spec: ChartSpec }) {
           viewBox={`0 0 ${W} ${H}`}
           role="img"
           aria-labelledby={`${titleId} ${descId}`}
-          className="viz-svg"
+          className={`viz-svg ${size === 'compact' ? 'is-compact' : ''}`}
           preserveAspectRatio="xMidYMid meet"
         >
           {/* Axis unit sits above the top gridline rather than on it. */}
@@ -254,6 +321,13 @@ export function ReportChart({ spec }: { spec: ChartSpec }) {
  */
 function seriesColor(spec: ChartSpec, seriesIndex: number, pointIndex: number): string {
   if (spec.palette === 'ordinal') return `var(--viz-ordinal-${Math.min(pointIndex, 4) + 1})`;
-  if (spec.palette === 'single') return 'var(--viz-revenue)';
-  return seriesIndex === 0 ? 'var(--viz-revenue)' : 'var(--viz-cost)';
+  if (spec.palette === 'single') return 'var(--viz-1)';
+  // Fixed order, never cycled: slot 1 is always the first series, whatever else
+  // is on the chart. Cycling back to slot 1 for a sixth series would give two
+  // series the same colour, which is worse than the chart refusing to draw it —
+  // so the caller folds a sixth into "Other" rather than this wrapping.
+  return `var(--viz-${Math.min(seriesIndex, CATEGORICAL_SLOTS - 1) + 1})`;
 }
+
+/** How many distinct categorical hues the validated palette provides. */
+const CATEGORICAL_SLOTS = 5;

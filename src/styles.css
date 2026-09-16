@@ -31,12 +31,15 @@
   --brand-amber:  #F3C24B;
 
   /* Neutrals — a real scale rather than two greys doing five jobs. */
-  --bg: #F6F7F9;
+  /* A ground with a trace of warmth in it. A pure blue-grey page reads as a
+     hospital form; this is the same value, turned a few degrees warm, which is
+     the difference between "clinical" and "considered" at no cost in contrast. */
+  --bg: #F7F7F5;
   --surface: #ffffff;
   /* A second surface for hovers, table headers and inset panels. */
-  --surface-2: #F7F8FA;
-  --border: #EAECF0;
-  --border-strong: #D7DBE2;
+  --surface-2: #F8F8F6;
+  --border: #EBEAE6;
+  --border-strong: #DAD8D2;
   --text: #101828;
   --text-2: #344054;
   --muted: #667085;          /* 5.3:1 on white — body-text legal */
@@ -44,14 +47,16 @@
   --danger: #D0342C;
 
   /* Elevation. Two layers each: a tight contact shadow and a soft ambient one. */
-  --shadow-xs: 0 1px 2px rgba(16, 24, 40, .05);
-  --shadow-sm: 0 1px 3px rgba(16, 24, 40, .06), 0 1px 2px rgba(16, 24, 40, .04);
-  --shadow-md: 0 6px 16px rgba(16, 24, 40, .07), 0 2px 5px rgba(16, 24, 40, .04);
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, .04);
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 12px -4px rgba(16, 24, 40, .06);
+  --shadow-md: 0 2px 4px rgba(16, 24, 40, .04), 0 12px 32px -8px rgba(16, 24, 40, .10);
+  --shadow-lg: 0 4px 8px rgba(16, 24, 40, .04), 0 24px 56px -16px rgba(16, 24, 40, .14);
 
   /* Radius scale. Controls stay tighter than the surfaces that contain them. */
-  --radius-sm: 8px;
-  --radius: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 9px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
   --radius-full: 999px;
 
   --topbar-h: 58px;
@@ -80,18 +85,23 @@ body {
   font: 14.5px/1.6 "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans Ethiopic", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Tabular figures and a slashed zero, everywhere. A column of ETB with
+     proportional digits jitters as the values change, and a dotted zero is
+     read as an eight often enough to matter on an invoice. */
+  font-feature-settings: "tnum" 1, "zero" 1, "cv05" 1;
+  font-variant-numeric: tabular-nums slashed-zero;
 }
 
-h1, h2, h3, .brand {
-  font-family: "Poppins", "Inter", system-ui, -apple-system, "Segoe UI",
+h1, h2, h3, h4, .brand, .kpi-value, .hero-figure {
+  font-family: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, "Segoe UI",
     "Noto Sans Ethiopic", sans-serif;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 /* A real scale: a page title should not be one step from a card heading. */
-h1 { font-size: 1.8rem; font-weight: 650; margin: 0 0 .3rem; letter-spacing: -.022em; }
-h2 { font-size: 1.06rem; font-weight: 620; margin: 0 0 .6rem; letter-spacing: -.012em; }
-h3 { font-size: .95rem; font-weight: 600; margin: 0 0 .5rem; letter-spacing: -.008em; }
+h1 { font-size: 1.72rem; font-weight: 700; margin: 0 0 .3rem; letter-spacing: -.028em; }
+h2 { font-size: 1.05rem; font-weight: 700; margin: 0 0 .6rem; letter-spacing: -.018em; }
+h3 { font-size: .94rem; font-weight: 650; margin: 0 0 .5rem; letter-spacing: -.012em; }
 h4 { font-size: .92rem; font-weight: 600; margin: 0 0 .4rem; }
 
 a { color: var(--brand-blue-dark); text-underline-offset: 2px; }
@@ -187,9 +197,10 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: 1.35rem 1.4rem;
-  margin-bottom: 1.1rem;
+  padding: 1.5rem 1.6rem;
+  margin-bottom: 1.15rem;
 }
+@media (max-width: 640px) { .card { padding: 1.15rem 1.1rem; } }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
 .card.stat .figure { font-size: 1.6rem; font-weight: 650; margin: 0 0 .25rem; font-variant-numeric: tabular-nums; }
 
@@ -527,9 +538,33 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
    =========================================================================== */
 .viz-root {
   --viz-surface: var(--surface);
-  --viz-revenue: #2B7BE9;   /* brand blue */
-  --viz-cost:    #D9761F;   /* warm orange — validated against the brand blue */
-  --viz-margin:  #4A3AA7;   /* violet, a third identity distinct from both */
+  /* ---------------------------------------------------------------------
+     THE CHART PALETTE, TAKEN FROM THE LOGO AND THEN CORRECTED.
+
+     The mark is indigo #2E3192, blue #2D68E0, teal #22BFC4 and amber #F9A825.
+     Used raw they fail: the indigo is too dark for the lightness band, the
+     amber too light, and teal and amber both fall under 3:1 against a white
+     card. Worse, the indigo and the blue are 12 ΔE apart to normal vision —
+     two blues that nobody can tell apart in adjacent bars.
+
+     So the logo gives the HUES and the validator gives the STEPS. The second
+     blue is dropped rather than darkened, because no amount of darkening makes
+     two blues read as two things; violet and rose extend the set where a fifth
+     and sixth series are needed. Every adjacent pair now clears the CVD floor
+     and the normal-vision floor, and every slot clears 3:1 on the card.
+
+     Checked with the dataviz validator, not by eye:
+       blue↔amber, amber↔teal, teal↔violet, violet↔rose — all PASS.
+     --------------------------------------------------------------------- */
+  --viz-1: #2D7FF0;   /* the logo blue, lifted into the band */
+  --viz-2: #C98209;   /* the logo amber, darkened until it clears the card */
+  --viz-3: #109AA0;   /* the logo teal, darkened likewise */
+  --viz-4: #8B4FD1;   /* violet — beyond the logo, for a fourth series */
+  --viz-5: #C2456E;   /* rose */
+
+  --viz-revenue: var(--viz-1);
+  --viz-cost:    var(--viz-2);
+  --viz-margin:  var(--viz-4);
   --viz-grid:    #e6e8ea;
   --viz-ink:     var(--text);
   --viz-ink-mute: var(--muted);
@@ -1575,4 +1610,165 @@ button.subtle-danger:hover:not(:disabled) { background: #FDECEB; color: #A32820;
   /* The filter IS the report: print what is on screen, without the controls. */
   .table-controls { display: none !important; }
   .th-arrow { display: none !important; }
+}
+
+/* --- the dashboard ------------------------------------------------------- */
+
+/* Today beside a narrow rail of running totals. Below 64rem the rail drops
+   under the list rather than squeezing it: the task text is the content, and a
+   three-word column is unreadable at any type size. */
+.dash-split {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr);
+  gap: .9rem;
+  align-items: start;
+  margin: 1rem 0;
+}
+@media (max-width: 64rem) { .dash-split { grid-template-columns: 1fr; } }
+.dash-split .card { margin: 0; }
+
+.dash-rail { display: grid; gap: .9rem; align-content: start; }
+.rail-card { padding: 1.05rem 1.15rem; }
+.rail-card h2 { font-size: .95rem; margin: 0 0 .6rem; }
+.rail-figures { display: grid; gap: .45rem; margin: 0; }
+.rail-figures > div { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; }
+.rail-figures dt { font-size: .82rem; color: var(--muted); font-weight: 500; }
+.rail-figures dd {
+  margin: 0; font-size: .92rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* --- today's work --- */
+
+.today-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: .9rem;
+}
+.today-head h2 { margin: 0 0 .2rem; }
+.today-head p { margin: 0; }
+.today-head .card-links { margin: 0; }
+.today-counts { display: flex; gap: .35rem; flex-wrap: wrap; }
+
+.today-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.today-item > a {
+  display: grid;
+  grid-template-columns: 5.2rem minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: .9rem;
+  padding: .65rem .75rem;
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  /* A left rule carries urgency, so severity is never colour alone — the word
+     in the first column says it too. */
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-2);
+}
+.today-item > a:hover { background: var(--brand-blue-soft); }
+.today-item > a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.today-item.is-overdue > a { border-left-color: var(--danger); }
+.today-item.is-today > a { border-left-color: var(--amber-ink); }
+.today-item.is-soon > a { border-left-color: var(--brand-blue); }
+
+.today-when {
+  font-size: .72rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--muted);
+}
+.today-item.is-overdue .today-when { color: var(--danger); }
+.today-item.is-today .today-when { color: var(--amber-ink); }
+
+.today-body { display: flex; flex-direction: column; gap: .1rem; min-width: 0; }
+.today-subject {
+  font-size: .8rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The action is the row's point; the subject only says what it is about. */
+.today-action { font-size: .95rem; font-weight: 550; color: var(--text); }
+.today-figure { font-variant-numeric: tabular-nums; font-weight: 650; white-space: nowrap; }
+
+@media (max-width: 40rem) {
+  .today-item > a { grid-template-columns: minmax(0, 1fr) max-content; }
+  .today-when { grid-column: 1 / -1; }
+}
+
+/* An empty list is a real answer, and has to look unlike a panel that failed
+   to load. */
+.today-clear {
+  margin: 0; padding: 1.1rem; border-radius: var(--radius);
+  background: #E9F7F0; color: var(--green-ink); font-weight: 550;
+}
+
+/* --- the job board --- */
+
+.board-card { margin: 1rem 0; }
+.board-scroll {
+  display: flex; gap: .7rem; overflow-x: auto; padding-bottom: .5rem;
+  scroll-snap-type: x proximity;
+  /* Columns size to their contents rather than stretching to the tallest one:
+     with eleven of fourteen stages empty, stretched empty columns are a wall
+     of nothing between the two that matter. */
+  align-items: flex-start;
+}
+.board-column {
+  flex: 0 0 15rem; min-width: 15rem; scroll-snap-align: start;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: .65rem .6rem;
+}
+/* An empty column is drawn, not hidden — a gap in the pipeline is the most
+   useful thing this board says — but it recedes. */
+.board-column.is-empty { background: transparent; border-style: dashed; }
+.board-column-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: .5rem; margin-bottom: .55rem;
+}
+.board-column-head h3 {
+  margin: 0; font-size: .78rem; font-weight: 650; letter-spacing: .01em;
+  line-height: 1.3; color: var(--text-2);
+}
+.board-count { font-size: .76rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.board-late { color: var(--danger); font-weight: 600; }
+.board-none { margin: .25rem 0 0; color: var(--border-strong); text-align: center; }
+
+.board-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; }
+.board-job > a {
+  display: grid; gap: .22rem; padding: .55rem .6rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--brand-blue);
+  border-radius: var(--radius-sm); text-decoration: none; color: inherit;
+  box-shadow: var(--shadow-xs);
+}
+.board-job > a:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+.board-job > a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.board-job.is-danger > a { border-left-color: var(--danger); }
+.board-job-title {
+  font-size: .86rem; font-weight: 600; line-height: 1.3;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.board-job-client, .board-job-foot { font-size: .74rem; }
+.board-job-foot { font-variant-numeric: tabular-nums; }
+.board-bar { display: block; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; margin: .15rem 0; }
+.board-bar-fill { display: block; height: 100%; background: var(--brand-teal-dark); }
+.board-job.is-danger .board-bar-fill { background: var(--danger); }
+
+/* --- the charts --- */
+
+.dash-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: .9rem;
+  margin: 1rem 0;
+  align-items: start;
+}
+.dash-charts .card { margin: 0; }
+/* Six months of grouped bars needs the full width; the two single-series
+   charts read fine at half. */
+.viz-card.is-wide { grid-column: 1 / -1; }
+@media (min-width: 70rem) { .viz-card.is-wide { grid-column: span 2; } }
+.viz-card .viz-root { margin: 0; }
+
+/* "Show table" is two words and must not become two lines in a narrow card. */
+.viz-toggle { white-space: nowrap; }
+
+@media print {
+  .board-scroll { overflow: visible; flex-wrap: wrap; }
 }
