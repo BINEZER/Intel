@@ -220,6 +220,7 @@ export function Projects() {
                   <div className="field inline">
                     <label htmlFor={`p-status-${project.id}`}>Status</label>
                     <StatusSelect
+                      compact
                       kind="project"
                       id={`p-status-${project.id}`}
                       value={project.status}

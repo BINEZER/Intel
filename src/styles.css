@@ -133,7 +133,9 @@ a:hover { color: var(--brand-blue); }
 .muted { color: var(--muted); }
 code { background: var(--surface-2); border: 1px solid var(--border); padding: .12em .38em; border-radius: 6px; font-size: .88em; }
 
-.visually-hidden {
+/* `.sr-only` is the name the chart and the status control use; it was never
+   defined, so a caption meant for screen readers was rendering on screen. */
+.visually-hidden, .sr-only {
   position: absolute; width: 1px; height: 1px;
   margin: -1px; padding: 0; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -250,6 +252,7 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
 
 /* --- surfaces --- */
 .card {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -272,14 +275,16 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
 
 /* --- forms --- */
 input, select, button { font: inherit; }
+/* A field is a recess, not a raised tile. The inset shadow reads as somewhere
+   to type; the drop shadow that used to be here read as a button. */
 input[type="date"], input[type="text"], input[type="email"], input[type="password"],
 input[type="number"], input[type="search"], select, textarea {
-  padding: .55rem .7rem;
+  padding: .5rem .7rem;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: #fff;
   color: var(--text);
-  box-shadow: var(--shadow-xs);
+  box-shadow: inset 0 1px 2px rgba(16, 24, 40, .04);
 }
 input::placeholder, textarea::placeholder { color: #98A2B3; }
 
@@ -303,12 +308,14 @@ select {
 input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--danger); }
 
 button {
-  padding: .5rem .85rem;
+  padding: .45rem .9rem;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background: #fff;
   color: var(--text-2);
-  font-weight: 550;
+  font-weight: 600;
+  font-size: .88rem;
+  letter-spacing: -.005em;
   box-shadow: var(--shadow-xs);
   cursor: pointer;
 }
@@ -363,28 +370,43 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
   margin-top: 1rem;
 }
 
+/* The figure leads and the label sits above it in micro-caps. A tile whose
+   label is nearly as loud as its number makes you read both to find out which
+   is which. The 3px left stripe that used to grade these is gone: a coloured
+   edge on every tile in a row of five is a barcode, not a signal. */
 .kpi {
   border: 1px solid var(--border);
-  border-left: 3px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: .85rem 1rem;
+  padding: 1rem 1.1rem;
   background: #fff;
+  position: relative;
+  overflow: hidden;
 }
-.kpi h3 { margin-bottom: .3rem; font-size: .76rem; font-weight: 550; color: var(--muted); letter-spacing: .01em; }
+.kpi h3 {
+  margin-bottom: .45rem;
+  font-size: .68rem; font-weight: 700; color: var(--muted);
+  letter-spacing: .07em; text-transform: uppercase;
+}
 .kpi-value {
   margin: 0;
-  font-size: 1.35rem;
-  font-weight: 650;
+  font-family: "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .kpi-detail { margin: .3rem 0 0; font-size: .82rem; }
 
-/* Grading. `unknown` stays neutral on purpose: no data is not a failure. */
-.kpi-good { border-left-color: #12805c; }
-.kpi-warn { border-left-color: #b5691a; }
-.kpi-bad  { border-left-color: var(--danger); }
+/* Grading is a bar on the top edge, drawn only where there IS a grade —
+   `unknown` stays bare on purpose: no data is not a failure. */
+.kpi-good::before, .kpi-warn::before, .kpi-bad::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+}
+.kpi-good::before { background: #12805c; }
+.kpi-warn::before { background: #b5691a; }
+.kpi-bad::before  { background: var(--danger); }
 .kpi-good .kpi-value { color: #12805c; }
 .kpi-warn .kpi-value { color: #b5691a; }
 .kpi-bad  .kpi-value { color: var(--danger); }
@@ -439,7 +461,23 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .banner-danger { background: #fdeceb; color: #7a1c14; border-left: 4px solid #b42318; }
 
 /* --- priority table --- */
-.table-scroll { overflow-x: auto; margin-bottom: 1rem; border-radius: var(--radius-sm); }
+.table-scroll {
+  overflow-x: auto; margin-bottom: 1rem; border-radius: var(--radius-sm);
+  max-width: 100%;
+  min-width: 0;
+  /*
+   * `overflow-x: auto` alone does NOT stop a wide table widening the page.
+   * An auto-layout table's intrinsic width propagates up through the scroller
+   * and into the root scroll area, so on a phone the whole page slid 421px
+   * sideways into empty space — measured, and narrowed down by disabling one
+   * candidate at a time until only this one changed the number.
+   *
+   * `contain: layout` stops that propagation. Deliberately NOT `contain:
+   * content`, which also adds paint containment and would clip the delete
+   * confirmation panel that opens inside a row.
+   */
+  contain: layout;
+}
 .priority-table {
   width: 100%; border-collapse: collapse;
   background: var(--surface);
@@ -467,7 +505,7 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .driver-amount { font-variant-numeric: tabular-nums; font-weight: 650; }
 
 /* --- page chrome --- */
-.page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.4rem; }
 .page-head h1 { margin: 0; }
 .page-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
@@ -485,10 +523,32 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; align-items: start; }
 .form-grid.dates { margin: 1rem 0; }
 .form-wide { grid-column: 1 / -1; }
-.field { display: flex; flex-direction: column; gap: .3rem; }
+/* `min-width: 0` lets a field shrink below its content's natural width inside a
+   grid column — without it a long label makes the whole form-grid wider than
+   the card it sits in. */
+.field { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
 .field > label { font-weight: 550; color: var(--text-2); font-size: .88rem; }
 .field.checkbox { justify-content: center; }
-.field.checkbox label { display: flex; align-items: center; gap: .5rem; font-weight: 450; }
+/* ANY label that wraps its own checkbox, whether or not the field carries the
+   `checkbox` class. Seven pages write the plain form, and under `.field`'s
+   column flex the box was ending up on its own line, right-aligned, above the
+   words it belongs to — a checkbox detached from its label is not a checkbox.
+   The box leads, the text follows and wraps under itself. */
+.field.checkbox label,
+.field > label:has(> input[type="checkbox"]),
+.field > label:has(> input[type="radio"]) {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: .5rem;
+  font-weight: 450;
+  min-width: 0;
+}
+.field.checkbox label > input,
+.field > label:has(> input[type="checkbox"]) > input,
+.field > label:has(> input[type="radio"]) > input {
+  margin: 0; justify-self: start; align-self: center;
+}
 .field input, .field select { width: 100%; }
 .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: 1.25rem; }
 .req { color: var(--danger); }
@@ -513,27 +573,48 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .sla-fields, .milestones { border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin: 1rem 0; }
 .sla-fields legend, .milestones legend { font-weight: 550; padding: 0 .35rem; }
 
-/* --- tables --- */
+/* --- tables ---------------------------------------------------------------
+
+   A table is the app's densest surface and the one people actually work in, so
+   it gets the most care: micro-caps headings that read as a label rather than
+   as a first row, generous row height, and a hairline between rows instead of
+   a full-strength rule. The rules used to be as dark as the text, which is
+   what makes a table read as a spreadsheet grid rather than as a list.        */
 .data-table, .milestone-table {
   width: 100%; border-collapse: collapse; background: var(--surface);
+  font-size: .89rem;
 }
 .data-table caption, .milestone-table caption, .stage-table caption {
   text-align: left; padding: 0 0 .5rem; font-weight: 600; color: var(--text-2);
 }
 .data-table th, .data-table td, .milestone-table th, .milestone-table td {
-  padding: .65rem .75rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top;
+  padding: .7rem .8rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle;
 }
 .data-table thead th, .milestone-table thead th {
   background: var(--surface-2);
-  font-size: .78rem; letter-spacing: 0; text-transform: none;
-  color: var(--muted); font-weight: 600;
-  border-bottom: 1px solid var(--border);
+  font-size: .68rem; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
 }
 .data-table thead th:first-child { border-top-left-radius: var(--radius-sm); }
 .data-table thead th:last-child { border-top-right-radius: var(--radius-sm); }
 /* Row hover is the cheapest way to keep your eye on one row across ten columns. */
-.data-table tbody tr:hover { background: var(--surface-2); }
+.data-table tbody tr:hover { background: var(--brand-blue-soft); }
 .data-table tbody tr:last-child td { border-bottom: none; }
+/* On a table too wide for its card, the first thing to scroll out of reach was
+   the Edit/Delete column — the one you were reaching for. It is pinned to the
+   right edge instead, with a hairline and a soft gradient so it reads as
+   floating above the columns sliding under it. */
+.data-table th.actions-col,
+.data-table td.actions-col {
+  position: sticky; right: 0; z-index: 1;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+.data-table thead th.actions-col { background: var(--surface-2); }
+.data-table tbody tr:hover td.actions-col { background: var(--brand-blue-soft); }
+
 .data-table .num, .milestone-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .data-table .strong, .milestone-table .strong { font-weight: 650; }
 
@@ -564,28 +645,49 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 /* Two across on a wide screen, and each card tightened. One project per
    full-width card meant a hundred and sixty jobs was a fifteen-thousand-pixel
    scroll — a list you cannot scan is a list nobody reads. */
-.project-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(27rem, 1fr)); gap: .85rem; }
-.project-card { margin: 0; padding: 1.05rem 1.15rem; }
+/* `min(27rem, 100%)` so the track never demands more than the screen has —
+   a bare 27rem minimum pushes the whole page sideways on a phone. */
+.project-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(27rem, 100%), 1fr));
+  gap: .85rem;
+}
+.project-card { margin: 0; padding: 1.05rem 1.15rem; min-width: 0; }
 .project-card .page-head { margin-bottom: .55rem; gap: .6rem; }
 .project-card h2 { margin: 0 0 .15rem; font-size: 1rem; }
 .project-card h2 a { color: inherit; text-decoration: none; }
 .project-card h2 a:hover { text-decoration: underline; }
 .kv.compact { margin-top: .6rem; gap: .15rem 1rem; font-size: .86rem; }
-/* Both pairs on one row rather than two stacked rows. */
-.project-card .kv.compact { grid-template-columns: max-content 1fr max-content auto; }
+/* Both pairs on one row rather than two stacked rows — but only where there is
+   room. On a phone a dual-calendar date and an ETB figure do not share a line. */
+@media (min-width: 34rem) {
+  .project-card .kv.compact { grid-template-columns: max-content 1fr max-content auto; }
+}
 .project-card .card-actions { margin-top: .7rem; padding-top: .7rem; }
 .project-card .field.inline label { font-size: .82rem; }
 .assign-row { align-items: end; margin-top: 1rem; }
 .assign-row .primary { margin-top: 0; }
 
 /* --- finance --- */
-.subnav { display: flex; gap: .25rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
-.subnav a {
-  padding: .5rem .9rem; color: var(--muted); text-decoration: none;
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
+/* A segmented control rather than underlined tabs: the group reads as one
+   control with one thing selected, which is what it is. */
+.subnav {
+  display: inline-flex; gap: .15rem; margin-bottom: 1.4rem;
+  padding: .25rem; border-radius: var(--radius-full);
+  background: var(--surface-2); border: 1px solid var(--border);
+  flex-wrap: wrap;
 }
-.subnav a:hover { color: var(--text); }
-.subnav a.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 550; }
+.subnav a {
+  padding: .4rem 1rem; color: var(--muted); text-decoration: none;
+  border-radius: var(--radius-full); font-size: .88rem; font-weight: 550;
+  border-bottom: 0; margin-bottom: 0;
+}
+.subnav a:hover { color: var(--text); background: rgba(16, 24, 40, .04); }
+.subnav a.active {
+  background: var(--surface); color: var(--text);
+  border-bottom-color: transparent; font-weight: 650;
+  box-shadow: var(--shadow-xs);
+}
 
 .actions-cell { white-space: nowrap; }
 .actions-cell button { margin-right: .35rem; }
@@ -752,9 +854,16 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 }
 
 /* --- kanban --- */
-.subnav .tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); padding: .5rem .9rem; border-radius: 0; }
-.subnav .tab:hover { background: none; color: var(--text); }
-.subnav .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 550; }
+.subnav .tab {
+  background: none; border: 0; box-shadow: none; color: var(--muted);
+  padding: .4rem 1rem; border-radius: var(--radius-full);
+  font-size: .88rem; font-weight: 550;
+}
+.subnav .tab:hover { background: rgba(16, 24, 40, .04); color: var(--text); }
+.subnav .tab.active {
+  background: var(--surface); color: var(--text); font-weight: 650;
+  box-shadow: var(--shadow-xs);
+}
 
 .board { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: .5rem; align-items: start; }
 .board-column {
@@ -1169,7 +1278,7 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 
   .content { padding: 0 !important; overflow: visible !important; max-width: none; }
   .content > * { max-width: none; }
-  .body { display: block !important; }
+  .main { display: block !important; }
 
   /* Tables are the point of most printouts: keep rows whole and repeat the
      header on every page, or a three-page list is unreadable after page one. */
@@ -1918,3 +2027,19 @@ button.subtle-danger:hover:not(:disabled) { background: #FDECEB; color: #A32820;
   color: #7A3A06; font-size: .9rem;
 }
 .form-problems li { margin: .15rem 0; }
+
+/* A page that failed, explained. Not red: the user did not cause this, and a
+   wall of danger colour makes a recoverable state look like data loss. */
+.page-error { max-width: 46rem; border-left: 3px solid var(--amber-ink); }
+.page-error h1 { font-size: 1.25rem; margin-bottom: .6rem; }
+.page-error-detail {
+  margin: .75rem 0 0; padding: .7rem .85rem;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .82rem; white-space: pre-wrap; word-break: break-word; color: var(--text-2);
+}
+
+/* A range slider inherits none of the text-input styling and defaults to a
+   width wider than its column. */
+input[type="range"] { width: 100%; max-width: 100%; accent-color: var(--brand-teal-dark); }

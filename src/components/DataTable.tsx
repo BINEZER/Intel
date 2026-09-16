@@ -141,7 +141,7 @@ export function DataTable<Row>({
                   <th
                     key={column.key}
                     scope="col"
-                    className={column.numeric === true ? 'num' : undefined}
+                    className={cellClass(column)}
                     aria-sort={
                       !sorted ? 'none' : sort.direction === 'asc' ? 'ascending' : 'descending'
                     }
@@ -169,7 +169,7 @@ export function DataTable<Row>({
             {shown.map((row) => (
               <tr key={rowKey(row)} className={rowClass?.(row)}>
                 {columns.map((column) => (
-                  <td key={column.key} className={column.numeric === true ? 'num' : undefined}>
+                  <td key={column.key} className={cellClass(column)}>
                     {column.render === undefined ? textOf(row, column) : column.render(row)}
                   </td>
                 ))}
@@ -186,4 +186,19 @@ export function DataTable<Row>({
       )}
     </>
   );
+}
+
+/**
+ * The class a header or body cell wears.
+ *
+ * The actions column is pinned to the right edge by CSS, because on a table too
+ * wide for its card the first thing to scroll out of reach was the Edit/Delete
+ * column — the one you were reaching for.
+ */
+function cellClass<T>(column: { key: string; numeric?: boolean }): string | undefined {
+  const classes = [
+    column.numeric === true ? 'num' : '',
+    column.key === 'actions' ? 'actions-col' : '',
+  ].filter((c) => c !== '');
+  return classes.length === 0 ? undefined : classes.join(' ');
 }

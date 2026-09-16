@@ -61,47 +61,49 @@ export function PriorityBoard({ rows, horizonDays }: { rows: readonly PriorityRo
       </section>
 
       <div className="table-scroll">
-        <table className="priority-table">
-          <caption className="visually-hidden">
-            Projects ranked by expected receivable within {horizonDays} days
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Project</th>
-              <th scope="col" className="num">Expected</th>
-              <th scope="col" className="num">Overdue</th>
-              <th scope="col" className="num">Billable soon</th>
-              <th scope="col" className="num">Left to bill</th>
-              <th scope="col" className="num">Impact</th>
-              <th scope="col">Risk</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.projectId} className={row.risk.inDanger ? 'row-danger' : undefined}>
-                <td className="num">{row.rank}</td>
-                <td>
-                  <strong>{row.title}</strong>
-                  <br />
-                  <span className="muted">{row.clientName}</span>
-                </td>
-                <td className="num strong">{formatETB(row.expectedReceivableSantim)}</td>
-                <td className="num">
-                  {row.overdueReceivableSantim > 0 ? (
-                    <span className="danger-text">{formatETB(row.overdueReceivableSantim)}</span>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
-                <td className="num">{formatETB(row.nearTermBillableSantim)}</td>
-                <td className="num muted">{formatETB(row.unbilledContractSantim)}</td>
-                <td className="num">{formatBps(row.impactScoreBps, 0)}</td>
-                <td><RiskBadge risk={row.risk} /></td>
+        <div className="table-scroll">
+          <table className="priority-table">
+            <caption className="visually-hidden">
+              Projects ranked by expected receivable within {horizonDays} days
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Project</th>
+                <th scope="col" className="num">Expected</th>
+                <th scope="col" className="num">Overdue</th>
+                <th scope="col" className="num">Billable soon</th>
+                <th scope="col" className="num">Left to bill</th>
+                <th scope="col" className="num">Impact</th>
+                <th scope="col">Risk</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.projectId} className={row.risk.inDanger ? 'row-danger' : undefined}>
+                  <td className="num">{row.rank}</td>
+                  <td>
+                    <strong>{row.title}</strong>
+                    <br />
+                    <span className="muted">{row.clientName}</span>
+                  </td>
+                  <td className="num strong">{formatETB(row.expectedReceivableSantim)}</td>
+                  <td className="num">
+                    {row.overdueReceivableSantim > 0 ? (
+                      <span className="danger-text">{formatETB(row.overdueReceivableSantim)}</span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td className="num">{formatETB(row.nearTermBillableSantim)}</td>
+                  <td className="num muted">{formatETB(row.unbilledContractSantim)}</td>
+                  <td className="num">{formatBps(row.impactScoreBps, 0)}</td>
+                  <td><RiskBadge risk={row.risk} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {rows.map((row) => (

@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { ErrorBoundary } from './ErrorBoundary.js';
 import { Logo } from './Logo.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can, type Capability } from '../auth/roles.js';
@@ -233,7 +234,11 @@ export function AppShell() {
         </header>
 
         <main className="content">
-          <Outlet />
+          {/* Keyed on the path so navigating away from a page that failed
+              clears the error rather than stranding you on it. */}
+          <ErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -97,90 +97,92 @@ export function StageManager({
           </p>
         )}
 
-        <table className="stage-table">
-          <caption className="sr-only">Project stages, their share of the work, and who has to move</caption>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Stage</th>
-              <th scope="col">Share of project</th>
-              <th scope="col">Waiting on</th>
-              <th scope="col">Payment</th>
-              <th scope="col"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {phases.map((phase, index) => {
-              const payments = paymentsByPhase.get(phase.id) ?? [];
-              return (
-                <tr key={phase.id}>
-                  <td className="num">{phase.seq}</td>
-                  <td>
-                    <StageNameField
-                      name={phase.name}
-                      busy={busy}
-                      onSave={(name) => apply(() => renameProjectStage(projectId, phase.id, name, uid))}
-                    />
-                  </td>
-                  <td>
-                    <StageWeightField
-                      name={phase.name}
-                      weightBps={phase.weightBps}
-                      busy={busy}
-                      onSave={(weightBps) => apply(() => setProjectStageWeight(projectId, phase.id, weightBps, uid))}
-                    />
-                  </td>
-                  <td><span className="chip">{OWNER_LABEL[stageOwner(phase.key)]}</span></td>
-                  <td>
-                    {payments.length === 0
-                      ? <span className="muted">—</span>
-                      : <span className="chip chip-ok" title={payments.join('\n')}>{payments.length} tied</span>}
-                  </td>
-                  <td className="stage-actions">
-                    <button
-                      type="button"
-                      disabled={busy || index === 0}
-                      aria-label={`Move ${phase.name} earlier`}
-                      onClick={() => apply(() => moveProjectStage(projectId, phase.id, 'up', uid))}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy || index === phases.length - 1}
-                      aria-label={`Move ${phase.name} later`}
-                      onClick={() => apply(() => moveProjectStage(projectId, phase.id, 'down', uid))}
-                    >
-                      ↓
-                    </button>
-                    {confirmingId === phase.id ? (
-                      <>
-                        <button
-                          type="button"
-                          className="danger"
-                          disabled={busy}
-                          onClick={() => apply(() => removeProjectStage(projectId, phase.id, uid, payments))}
-                        >
-                          Delete for good
-                        </button>
-                        <button type="button" disabled={busy} onClick={() => setConfirmingId(null)}>Keep</button>
-                      </>
-                    ) : (
+        <div className="table-scroll">
+          <table className="stage-table">
+            <caption className="sr-only">Project stages, their share of the work, and who has to move</caption>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Stage</th>
+                <th scope="col">Share of project</th>
+                <th scope="col">Waiting on</th>
+                <th scope="col">Payment</th>
+                <th scope="col"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {phases.map((phase, index) => {
+                const payments = paymentsByPhase.get(phase.id) ?? [];
+                return (
+                  <tr key={phase.id}>
+                    <td className="num">{phase.seq}</td>
+                    <td>
+                      <StageNameField
+                        name={phase.name}
+                        busy={busy}
+                        onSave={(name) => apply(() => renameProjectStage(projectId, phase.id, name, uid))}
+                      />
+                    </td>
+                    <td>
+                      <StageWeightField
+                        name={phase.name}
+                        weightBps={phase.weightBps}
+                        busy={busy}
+                        onSave={(weightBps) => apply(() => setProjectStageWeight(projectId, phase.id, weightBps, uid))}
+                      />
+                    </td>
+                    <td><span className="chip">{OWNER_LABEL[stageOwner(phase.key)]}</span></td>
+                    <td>
+                      {payments.length === 0
+                        ? <span className="muted">—</span>
+                        : <span className="chip chip-ok" title={payments.join('\n')}>{payments.length} tied</span>}
+                    </td>
+                    <td className="stage-actions">
                       <button
                         type="button"
-                        disabled={busy}
-                        aria-label={`Delete ${phase.name}`}
-                        onClick={() => { setNote(null); setConfirmingId(phase.id); }}
+                        disabled={busy || index === 0}
+                        aria-label={`Move ${phase.name} earlier`}
+                        onClick={() => apply(() => moveProjectStage(projectId, phase.id, 'up', uid))}
                       >
-                        Delete
+                        ↑
                       </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      <button
+                        type="button"
+                        disabled={busy || index === phases.length - 1}
+                        aria-label={`Move ${phase.name} later`}
+                        onClick={() => apply(() => moveProjectStage(projectId, phase.id, 'down', uid))}
+                      >
+                        ↓
+                      </button>
+                      {confirmingId === phase.id ? (
+                        <>
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={busy}
+                            onClick={() => apply(() => removeProjectStage(projectId, phase.id, uid, payments))}
+                          >
+                            Delete for good
+                          </button>
+                          <button type="button" disabled={busy} onClick={() => setConfirmingId(null)}>Keep</button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          aria-label={`Delete ${phase.name}`}
+                          onClick={() => { setNote(null); setConfirmingId(phase.id); }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {confirmingId !== null && (
           <p className="warn-text">

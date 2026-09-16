@@ -75,36 +75,38 @@ export function Incentives() {
           {weightTotal !== 10_000 && ' — this will be refused on save.'}
         </p>
 
-        <table className="stage-table">
-          <caption className="sr-only">KPI weights</caption>
-          <thead>
-            <tr><th scope="col">Measure</th><th scope="col">Weight</th></tr>
-          </thead>
-          <tbody>
-            {Object.entries(scheme.weights).map(([key, value]) => (
-              <tr key={key}>
-                <td>{key.replace(/([A-Z])/g, ' $1').toLowerCase()}</td>
-                <td>
-                  <span className="weight-field">
-                    <input
-                      type="number" className="inline-edit num" min={0} max={100} step={0.5}
-                      value={value / 100}
-                      disabled={!editable || busy}
-                      aria-label={`Weight for ${key}, in percent`}
-                      onChange={(e) =>
-                        setScheme({
-                          ...scheme,
-                          weights: { ...scheme.weights, [key]: Math.round(Number(e.target.value) * 100) },
-                        })
-                      }
-                    />
-                    <span aria-hidden="true">%</span>
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="stage-table">
+            <caption className="sr-only">KPI weights</caption>
+            <thead>
+              <tr><th scope="col">Measure</th><th scope="col">Weight</th></tr>
+            </thead>
+            <tbody>
+              {Object.entries(scheme.weights).map(([key, value]) => (
+                <tr key={key}>
+                  <td>{key.replace(/([A-Z])/g, ' $1').toLowerCase()}</td>
+                  <td>
+                    <span className="weight-field">
+                      <input
+                        type="number" className="inline-edit num" min={0} max={100} step={0.5}
+                        value={value / 100}
+                        disabled={!editable || busy}
+                        aria-label={`Weight for ${key}, in percent`}
+                        onChange={(e) =>
+                          setScheme({
+                            ...scheme,
+                            weights: { ...scheme.weights, [key]: Math.round(Number(e.target.value) * 100) },
+                          })
+                        }
+                      />
+                      <span aria-hidden="true">%</span>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="card">
@@ -114,49 +116,51 @@ export function Incentives() {
           about a curve. Payout is a share of base pay.
         </p>
 
-        <table className="stage-table">
-          <caption className="sr-only">Incentive bands</caption>
-          <thead>
-            <tr>
-              <th scope="col">Band</th>
-              <th scope="col">From score</th>
-              <th scope="col">Pays</th>
-              <th scope="col">What it says</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...scheme.bands].sort((a, b) => a.fromBps - b.fromBps).map((band) => (
-              <tr key={band.key}>
-                <td><strong>{band.label}</strong></td>
-                <td>
-                  <span className="weight-field">
-                    <input
-                      type="number" className="inline-edit num" min={0} max={100} step={1}
-                      value={band.fromBps / 100}
-                      disabled={!editable || busy}
-                      aria-label={`Score threshold for ${band.label}`}
-                      onChange={(e) => setScheme(patchBand(scheme, band.key, { fromBps: Math.round(Number(e.target.value) * 100) }))}
-                    />
-                    <span aria-hidden="true">%</span>
-                  </span>
-                </td>
-                <td>
-                  <span className="weight-field">
-                    <input
-                      type="number" className="inline-edit num" min={0} max={100} step={0.5}
-                      value={band.payoutBps / 100}
-                      disabled={!editable || busy}
-                      aria-label={`Payout for ${band.label}, as a percent of base pay`}
-                      onChange={(e) => setScheme(patchBand(scheme, band.key, { payoutBps: Math.round(Number(e.target.value) * 100) }))}
-                    />
-                    <span aria-hidden="true">% of base</span>
-                  </span>
-                </td>
-                <td className="muted">{band.meaning}</td>
+        <div className="table-scroll">
+          <table className="stage-table">
+            <caption className="sr-only">Incentive bands</caption>
+            <thead>
+              <tr>
+                <th scope="col">Band</th>
+                <th scope="col">From score</th>
+                <th scope="col">Pays</th>
+                <th scope="col">What it says</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {[...scheme.bands].sort((a, b) => a.fromBps - b.fromBps).map((band) => (
+                <tr key={band.key}>
+                  <td><strong>{band.label}</strong></td>
+                  <td>
+                    <span className="weight-field">
+                      <input
+                        type="number" className="inline-edit num" min={0} max={100} step={1}
+                        value={band.fromBps / 100}
+                        disabled={!editable || busy}
+                        aria-label={`Score threshold for ${band.label}`}
+                        onChange={(e) => setScheme(patchBand(scheme, band.key, { fromBps: Math.round(Number(e.target.value) * 100) }))}
+                      />
+                      <span aria-hidden="true">%</span>
+                    </span>
+                  </td>
+                  <td>
+                    <span className="weight-field">
+                      <input
+                        type="number" className="inline-edit num" min={0} max={100} step={0.5}
+                        value={band.payoutBps / 100}
+                        disabled={!editable || busy}
+                        aria-label={`Payout for ${band.label}, as a percent of base pay`}
+                        onChange={(e) => setScheme(patchBand(scheme, band.key, { payoutBps: Math.round(Number(e.target.value) * 100) }))}
+                      />
+                      <span aria-hidden="true">% of base</span>
+                    </span>
+                  </td>
+                  <td className="muted">{band.meaning}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <div className="form-grid">
           <div className="field">
@@ -347,33 +351,35 @@ function SchemePreview({ scheme, people }: { scheme: IncentiveScheme; people: nu
       <p>{result.explanation}</p>
 
       {result.eligible && (
-        <table className="stage-table">
-          <caption>Where the payout comes from</caption>
-          <thead>
-            <tr>
-              <th scope="col">Measure</th>
-              <th scope="col" className="num">Weight</th>
-              <th scope="col" className="num">Achieved</th>
-              <th scope="col" className="num">Earns</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.contributions.map((c) => (
-              <tr key={c.key}>
-                <td>{c.label}</td>
-                <td className="num">{formatBps(c.weightBps, 0)}</td>
-                <td className="num">{c.achievementBps === null ? '—' : formatBps(c.achievementBps, 0)}</td>
-                <td className="num">{formatETB(c.santim)}</td>
+        <div className="table-scroll">
+          <table className="stage-table">
+            <caption>Where the payout comes from</caption>
+            <thead>
+              <tr>
+                <th scope="col">Measure</th>
+                <th scope="col" className="num">Weight</th>
+                <th scope="col" className="num">Achieved</th>
+                <th scope="col" className="num">Earns</th>
               </tr>
-            ))}
-            <tr>
-              <th scope="row" colSpan={3}>Total</th>
-              <td className="num strong">
-                {santimToBirr(result.contributions.reduce((a, c) => a + c.santim, 0)).toLocaleString('en-ET', { minimumFractionDigits: 2 })}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {result.contributions.map((c) => (
+                <tr key={c.key}>
+                  <td>{c.label}</td>
+                  <td className="num">{formatBps(c.weightBps, 0)}</td>
+                  <td className="num">{c.achievementBps === null ? '—' : formatBps(c.achievementBps, 0)}</td>
+                  <td className="num">{formatETB(c.santim)}</td>
+                </tr>
+              ))}
+              <tr>
+                <th scope="row" colSpan={3}>Total</th>
+                <td className="num strong">
+                  {santimToBirr(result.contributions.reduce((a, c) => a + c.santim, 0)).toLocaleString('en-ET', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       )}
 
       {!result.eligible && result.blockedBy.length > 0 && (
