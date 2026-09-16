@@ -22,12 +22,23 @@ export function StatusSelect({
   onChange,
   id,
   disabled,
+  compact = false,
 }: {
   kind: StatusKind;
   value: string;
   onChange: (value: string) => void;
   id: string;
   disabled?: boolean;
+  /**
+   * In a table, print no hint.
+   *
+   * The hint is right in a form and wrong in a list: repeated down a hundred
+   * and sixty rows it tripled the row height and pushed the Edit and Delete
+   * buttons off the right-hand edge. It stays available — as the control's
+   * tooltip and, for a screen reader, in the same `aria-describedby` element
+   * as before — it just stops being printed once per row.
+   */
+  compact?: boolean;
 }) {
   const options = statusOptions(kind);
   const hint = statusHint(kind, value);
@@ -41,6 +52,7 @@ export function StatusSelect({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
         aria-describedby={hint === null ? undefined : `${id}-hint`}
+        title={compact && hint !== null ? hint : undefined}
       >
         {/* A stored value the vocabulary does not know still has to be
             selectable, or opening the form would silently change it. */}
@@ -52,7 +64,7 @@ export function StatusSelect({
         ))}
       </select>
       {hint !== null && (
-        <p className="field-hint" id={`${id}-hint`}>
+        <p className={compact ? 'sr-only' : 'field-hint'} id={`${id}-hint`}>
           {hint}
         </p>
       )}

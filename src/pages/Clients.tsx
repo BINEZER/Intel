@@ -294,6 +294,7 @@ function ClientForm({
         <div className="field">
           <label htmlFor="c-status">Status</label>
           <StatusSelect
+            compact
             kind="client"
             id="c-status"
             value={form.status}

@@ -123,6 +123,7 @@ export function Contracts() {
               render: (k) =>
                 editable && user !== null ? (
                   <StatusSelect
+                    compact
                     kind="contract"
                     id={`k-status-${k.id}`}
                     value={k.status}

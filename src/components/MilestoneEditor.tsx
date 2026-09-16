@@ -55,77 +55,79 @@ export function MilestoneEditor({
     <fieldset className="milestones" disabled={disabled}>
       <legend>Payment schedule</legend>
 
-      <table className="milestone-table">
-        <thead>
-          <tr>
-            <th scope="col">#</th>
-            <th scope="col">Milestone</th>
-            <th scope="col" className="num">Share %</th>
-            <th scope="col" className="num">Net</th>
-            <th scope="col" className="num">VAT</th>
-            <th scope="col" className="num">Gross</th>
-            <th scope="col"><span className="visually-hidden">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {shares.map((share, index) => {
-            const row = allocated?.[index];
-            return (
-              <tr key={index}>
-                <td className="num muted">{index + 1}</td>
-                <td>
-                  <label className="visually-hidden" htmlFor={`ms-name-${index}`}>
-                    Milestone {index + 1} name
-                  </label>
-                  <input
-                    id={`ms-name-${index}`}
-                    type="text"
-                    value={share.name}
-                    onChange={(e) => update(index, { name: e.target.value })}
-                  />
-                </td>
-                <td className="num">
-                  <label className="visually-hidden" htmlFor={`ms-share-${index}`}>
-                    Milestone {index + 1} share percent
-                  </label>
-                  <input
-                    id={`ms-share-${index}`}
-                    className="share-input"
-                    type="text"
-                    inputMode="decimal"
-                    value={share.shareBps === 0 ? '' : String(share.shareBps / 100)}
-                    onChange={(e) => {
-                      const percent = Number(e.target.value.replace(/,/g, ''));
-                      update(index, {
-                        shareBps: Number.isFinite(percent) ? Math.round(percent * 100) : 0,
-                      });
-                    }}
-                  />
-                </td>
-                <td className="num">{row ? formatETB(row.netSantim, { withSymbol: false }) : '—'}</td>
-                <td className="num muted">{row ? formatETB(row.vatSantim, { withSymbol: false }) : '—'}</td>
-                <td className="num strong">{row ? formatETB(row.grossSantim, { withSymbol: false }) : '—'}</td>
-                <td>
-                  <button type="button" onClick={() => remove(index)} aria-label={`Remove milestone ${index + 1}`}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr className={validation.ok ? 'total-ok' : 'total-bad'}>
-            <td />
-            <td><strong>Total</strong></td>
-            <td className="num strong">{formatBps(totalBps, 2)}</td>
-            <td className="num strong">{formatETB(contract.netSantim, { withSymbol: false })}</td>
-            <td className="num strong">{formatETB(contract.vatSantim, { withSymbol: false })}</td>
-            <td className="num strong">{formatETB(contract.grossSantim, { withSymbol: false })}</td>
-            <td />
-          </tr>
-        </tfoot>
-      </table>
+      <div className="table-scroll">
+        <table className="milestone-table">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Milestone</th>
+              <th scope="col" className="num">Share %</th>
+              <th scope="col" className="num">Net</th>
+              <th scope="col" className="num">VAT</th>
+              <th scope="col" className="num">Gross</th>
+              <th scope="col"><span className="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {shares.map((share, index) => {
+              const row = allocated?.[index];
+              return (
+                <tr key={index}>
+                  <td className="num muted">{index + 1}</td>
+                  <td>
+                    <label className="visually-hidden" htmlFor={`ms-name-${index}`}>
+                      Milestone {index + 1} name
+                    </label>
+                    <input
+                      id={`ms-name-${index}`}
+                      type="text"
+                      value={share.name}
+                      onChange={(e) => update(index, { name: e.target.value })}
+                    />
+                  </td>
+                  <td className="num">
+                    <label className="visually-hidden" htmlFor={`ms-share-${index}`}>
+                      Milestone {index + 1} share percent
+                    </label>
+                    <input
+                      id={`ms-share-${index}`}
+                      className="share-input"
+                      type="text"
+                      inputMode="decimal"
+                      value={share.shareBps === 0 ? '' : String(share.shareBps / 100)}
+                      onChange={(e) => {
+                        const percent = Number(e.target.value.replace(/,/g, ''));
+                        update(index, {
+                          shareBps: Number.isFinite(percent) ? Math.round(percent * 100) : 0,
+                        });
+                      }}
+                    />
+                  </td>
+                  <td className="num">{row ? formatETB(row.netSantim, { withSymbol: false }) : '—'}</td>
+                  <td className="num muted">{row ? formatETB(row.vatSantim, { withSymbol: false }) : '—'}</td>
+                  <td className="num strong">{row ? formatETB(row.grossSantim, { withSymbol: false }) : '—'}</td>
+                  <td>
+                    <button type="button" onClick={() => remove(index)} aria-label={`Remove milestone ${index + 1}`}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className={validation.ok ? 'total-ok' : 'total-bad'}>
+              <td />
+              <td><strong>Total</strong></td>
+              <td className="num strong">{formatBps(totalBps, 2)}</td>
+              <td className="num strong">{formatETB(contract.netSantim, { withSymbol: false })}</td>
+              <td className="num strong">{formatETB(contract.vatSantim, { withSymbol: false })}</td>
+              <td className="num strong">{formatETB(contract.grossSantim, { withSymbol: false })}</td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
 
       <div className="milestone-actions">
         <button type="button" onClick={add}>Add milestone</button>

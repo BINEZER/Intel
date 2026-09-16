@@ -154,19 +154,19 @@ function Technicians({ editable }: { editable: boolean }) {
               label: 'Trades',
               value: (t) => t.trades.join(', '),
               render: (t) => (
-                <span className="muted">{t.trades.length === 0 ? '—' : t.trades.join(', ')}</span>
+                <span className="muted">{(t.trades ?? []).length === 0 ? '—' : (t.trades ?? []).join(', ')}</span>
               ),
             },
             {
               key: 'cards',
               label: 'Cards',
               numeric: true,
-              value: (t) => t.certifications.length,
+              value: (t) => (t.certifications ?? []).length,
               render: (t) =>
-                t.certifications.length === 0 ? (
+                (t.certifications ?? []).length === 0 ? (
                   <span className="muted">none</span>
                 ) : (
-                  t.certifications.length
+                  (t.certifications ?? []).length
                 ),
             },
             {
@@ -328,10 +328,10 @@ function TechnicianForm({
           <p className="field-hint">Separate with commas.</p>
         </div>
 
-        {initial !== null && initial.certifications.length > 0 && (
+        {initial !== null && (initial.certifications ?? []).length > 0 && (
           <p className="muted">
-            {initial.certifications.length} competency card
-            {initial.certifications.length === 1 ? '' : 's'} on file:{' '}
+            {(initial.certifications ?? []).length} competency card
+            {(initial.certifications ?? []).length === 1 ? '' : 's'} on file:{' '}
             {initial.certifications.map((c) => c.name).join(', ')}.
           </p>
         )}
@@ -465,7 +465,7 @@ function Subcontractors({ editable }: { editable: boolean }) {
               label: 'Trades',
               value: (sub) => sub.trades.join(', '),
               render: (sub) => (
-                <span className="muted">{sub.trades.length === 0 ? '—' : sub.trades.join(', ')}</span>
+                <span className="muted">{(sub.trades ?? []).length === 0 ? '—' : (sub.trades ?? []).join(', ')}</span>
               ),
             },
             {
