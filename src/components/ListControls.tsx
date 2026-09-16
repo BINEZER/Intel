@@ -9,6 +9,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { NumberListsToggle } from './NumberListsToggle.js';
 import {
   EMPTY_FILTER,
   activeFilterCount,
@@ -99,6 +100,7 @@ export function ListControls<Row>({
           Clear {filtersOn === 1 ? 'filter' : 'filters'}
         </button>
       )}
+      <NumberListsToggle />
       <span className="muted table-count">
         {filtersOn > 0 ? `Showing ${shown} of ${rows.length} ${noun}` : `${rows.length} ${noun}`}
       </span>

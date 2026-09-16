@@ -2043,3 +2043,72 @@ button.subtle-danger:hover:not(:disabled) { background: #FDECEB; color: #A32820;
 /* A range slider inherits none of the text-input styling and defaults to a
    width wider than its column. */
 input[type="range"] { width: 100%; max-width: 100%; accent-color: var(--brand-teal-dark); }
+
+/* --- numbered lists ------------------------------------------------------- */
+
+/* The switch sits with the filters, because that is where the list is being
+   shaped. Pressing it anywhere sets it everywhere — see lib/list-numbering.ts. */
+.number-toggle { display: inline-flex; align-items: center; gap: .4rem; }
+.number-toggle-mark {
+  font-variant-numeric: tabular-nums; font-weight: 700;
+  color: var(--muted); letter-spacing: -.02em;
+}
+.number-toggle.is-on {
+  background: var(--brand-blue-soft);
+  border-color: #BFD6F8;
+  color: var(--brand-blue-dark);
+}
+.number-toggle.is-on .number-toggle-mark { color: var(--brand-blue-dark); }
+
+/* A counter, not content: it must not be draggable into a copied cell as if it
+   were part of the record, and it must never be the widest thing in the row. */
+.data-table th.row-number-col,
+.data-table td.row-number-col {
+  width: 1%;
+  padding-right: .5rem;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* Sized by the widest number the list reaches, so ones line up under
+     hundreds instead of the column twitching as you scroll. */
+  min-width: calc(var(--row-number-ch, 2) * 1ch + 1rem);
+}
+.data-table th.row-number-col { font-size: .8rem; }
+
+/* Card lists are numbered by a CSS counter off a root attribute, so no page has
+   to thread the preference through its own markup. */
+:root[data-numbered-lists='on'] .project-cards,
+:root[data-numbered-lists='on'] .program-list {
+  counter-reset: listrow;
+}
+:root[data-numbered-lists='on'] .project-cards > .project-card,
+:root[data-numbered-lists='on'] .program-list > li {
+  counter-increment: listrow;
+  position: relative;
+}
+:root[data-numbered-lists='on'] .project-cards > .project-card::before,
+:root[data-numbered-lists='on'] .program-list > li::before {
+  content: counter(listrow);
+  position: absolute;
+  top: .55rem; left: .6rem;
+  min-width: 1.35rem;
+  padding: 0 .3rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .72rem; font-weight: 700; line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+/* The badge sits where the title starts, so the title moves over to meet it. */
+:root[data-numbered-lists='on'] .project-cards > .project-card > .page-head,
+:root[data-numbered-lists='on'] .program-list > li > .program-head {
+  padding-left: 2rem;
+}
+
+@media print {
+  /* The switch is a control; the numbers are the point of printing it. */
+  .number-toggle { display: none !important; }
+}

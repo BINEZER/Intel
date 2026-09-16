@@ -16,7 +16,9 @@
  *   expects that client's rows, not all 129 — the filter IS the report.
  */
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { NumberListsToggle, useListsNumbered } from './NumberListsToggle.js';
+import { rowNumberWidth } from '../lib/list-numbering.js';
 import {
   EMPTY_FILTER,
   activeFilterCount,
@@ -56,6 +58,7 @@ export function DataTable<Row>({
 }) {
   const [sort, setSort] = useState<SortState>({ key: null, direction: 'asc' });
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
+  const numbered = useListsNumbered();
 
   const textOf = (row: Row, column: ColumnSpec<Row>) => {
     const full = columns.find((c) => c.key === column.key);
@@ -122,6 +125,7 @@ export function DataTable<Row>({
             Clear {filtersOn === 1 ? 'filter' : 'filters'}
           </button>
         )}
+        <NumberListsToggle />
         <span className="muted table-count">
           {filtersOn > 0
             ? `Showing ${shown.length} of ${rows.length} ${noun}`
@@ -134,6 +138,13 @@ export function DataTable<Row>({
           {caption !== undefined && <caption>{caption}</caption>}
           <thead>
             <tr>
+              {/* Not a column of data: nothing sorts or filters by it, and the
+                  heading is a symbol rather than a word so it takes no room. */}
+              {numbered && (
+                <th scope="col" className="row-number-col" aria-label="Row number">
+                  #
+                </th>
+              )}
               {columns.map((column) => {
                 const sorted = sort.key === column.key;
                 const canSort = column.unsortable !== true;
@@ -166,8 +177,16 @@ export function DataTable<Row>({
             </tr>
           </thead>
           <tbody>
-            {shown.map((row) => (
+            {shown.map((row, index) => (
               <tr key={rowKey(row)} className={rowClass?.(row)}>
+                {numbered && (
+                  <td
+                    className="row-number-col"
+                    style={{ '--row-number-ch': rowNumberWidth(shown.length) } as CSSProperties}
+                  >
+                    {index + 1}
+                  </td>
+                )}
                 {columns.map((column) => (
                   <td key={column.key} className={cellClass(column)}>
                     {column.render === undefined ? textOf(row, column) : column.render(row)}
