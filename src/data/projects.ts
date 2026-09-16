@@ -154,6 +154,19 @@ export async function createProject(
     templateKey,
     progressBps: 0,
     financials: { ...EMPTY_FINANCIALS, lastComputedAt: Timestamp.now() },
+    // The first stage of the template, so a new job appears on the board
+    // immediately rather than after somebody first ticks something.
+    currentStage: (() => {
+      const first = templateStages(templateKey)[0];
+      return first === undefined
+        ? null
+        : {
+            key: first.key,
+            name: first.name,
+            plannedEnd: options.plannedEnd,
+            nextCheckpoint: checkpointsForStage(first.key)[0]?.label ?? null,
+          };
+    })(),
     ...stampCreate(uid),
   });
 
@@ -204,6 +217,43 @@ export async function createProject(
  * `project.progressBps` is always the weighted roll-up of what is actually
  * stored — not a stale figure from whenever someone last remembered to refresh.
  */
+
+/**
+ * The stage a project is actually at, from the phases we already hold.
+ *
+ * Written alongside `progressBps` so the two can never disagree. Returns null
+ * once every stage is finished — a job with nothing left to do is not "at" a
+ * stage, and reporting the last one would leave finished work sitting in the
+ * final column of the board forever.
+ */
+function currentStageOf(
+  phases: readonly WithId<ProjectPhase>[],
+  override?: { id: string; progressBps: number; checkpoints?: ProjectPhase['checkpoints'] },
+): Project['currentStage'] {
+  const resolved = phases
+    .map((phase) => {
+      if (override === undefined || phase.id !== override.id) return phase;
+      const checkpoints = override.checkpoints ?? phase.checkpoints;
+      // Spreading an absent `checkpoints` back in would set it to undefined,
+      // which under exactOptionalPropertyTypes is not the same as absent.
+      return checkpoints === undefined
+        ? { ...phase, progressBps: override.progressBps }
+        : { ...phase, progressBps: override.progressBps, checkpoints };
+    })
+    .sort((a, b) => a.seq - b.seq);
+
+  const next = resolved.find((phase) => phaseProgressBps(phase) < 10_000);
+  if (next === undefined) return null;
+
+  const pending = (next.checkpoints ?? []).find((c) => c.doneAt === null);
+  return {
+    key: next.key,
+    name: next.name,
+    plannedEnd: next.plannedEnd,
+    nextCheckpoint: pending?.label ?? null,
+  };
+}
+
 export async function updatePhaseProgress(
   projectId: string,
   phaseId: string,
@@ -242,7 +292,11 @@ export async function updatePhaseProgress(
     ...stampUpdate(uid),
   });
 
-  batch.update(doc(db, PATH, projectId), { progressBps: projectProgressBps, ...stampUpdate(uid) });
+  batch.update(doc(db, PATH, projectId), {
+    progressBps: projectProgressBps,
+    currentStage: currentStageOf(phases, { id: phaseId, progressBps: clamped }),
+    ...stampUpdate(uid),
+  });
 
   await batch.commit();
   return { projectProgressBps };
@@ -563,7 +617,11 @@ export async function setCheckpoint(
     ...stampUpdate(uid),
   });
 
-  batch.update(doc(db, PATH, projectId), { progressBps: projectProgressBps, ...stampUpdate(uid) });
+  batch.update(doc(db, PATH, projectId), {
+    progressBps: projectProgressBps,
+    currentStage: currentStageOf(phases, { id: phaseId, progressBps: phaseProgress, checkpoints }),
+    ...stampUpdate(uid),
+  });
 
   await batch.commit();
   return { phaseProgressBps: phaseProgress, projectProgressBps };

@@ -347,6 +347,27 @@ export interface Project extends AuditFields {
   /** 0-10000 bps, rolled up from phase weights by a Cloud Function. */
   progressBps: number;
 
+  /**
+   * The stage this job is actually at, denormalised from the phases.
+   *
+   * The dashboard board and today's list both need it for every live project,
+   * and reading each project's phase subcollection to find it would be one
+   * query per project on the landing page. It is written in the same batch as
+   * `progressBps`, by the only two functions that can change which stage is
+   * current — so it cannot drift from the phases it summarises.
+   *
+   * The FIRST unfinished stage, not the furthest started: work does not really
+   * run in parallel on one shaft, and taking the furthest reports a job as
+   * "testing" because somebody ticked a box early while the rails are down.
+   */
+  currentStage?: {
+    key: string;
+    name: string;
+    plannedEnd: DualDate;
+    /** The next unticked checkpoint — the specific thing to go and do. */
+    nextCheckpoint: string | null;
+  } | null;
+
   /** Denormalized financial rollup; recomputed on disbursement/invoice writes. */
   financials: {
     contractNetSantim: number;
