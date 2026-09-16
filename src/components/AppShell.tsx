@@ -151,45 +151,37 @@ export function AppShell() {
   }, [navOpen]);
 
   return (
+    /*
+     * The rail runs the FULL height of the window and carries the brand; the
+     * top bar sits only over the content beside it. A top bar spanning the
+     * whole width above a sidebar is the 2010 admin-template shape — it cuts
+     * the page into two stacked strips and puts the logo in a bar that has
+     * nothing else to do.
+     */
     <div className={`shell ${navOpen ? 'nav-open' : ''}`}>
-      <header className="topbar">
-        <button
-          type="button"
-          ref={toggle}
-          className="nav-toggle"
-          aria-expanded={navOpen}
-          aria-controls="app-nav"
-          aria-label={navOpen ? 'Hide menu' : 'Show menu'}
-          title={navOpen ? 'Hide the menu' : 'Show the menu'}
-          onClick={() => setNavOpen((open) => !open)}
-        >
-          <span className="nav-toggle-bars" aria-hidden="true"><span /><span /><span /></span>
-        </button>
+      {/* The overlay is a button so dismissing by tapping outside is a real,
+          announced action rather than a click handler on a div. */}
+      <button
+        type="button"
+        className="nav-scrim"
+        tabIndex={navOpen ? 0 : -1}
+        aria-label="Close menu"
+        onClick={() => setNavOpen(false)}
+      />
 
-        <div className="brand">
-          <Logo height={28} />
-          <span className="muted brand-sub">PCM</span>
+      <nav className="sidebar" id="app-nav" aria-label="Sections">
+        <div className="rail-head">
+          {/* The mark only. The wordmark inside logo.svg is dark indigo, which
+              is invisible on the rail — so the name is HTML text here and its
+              colour is ours to set. */}
+          <div className="brand">
+            <Logo height={26} withWordmark={false} />
+            <span className="brand-word">IntelMotion</span>
+            <span className="brand-sub">PCM</span>
+          </div>
         </div>
-        <TodayBadge />
-        <div className="account">
-          <span className="muted">{user?.email}</span>
-          <span className="role-chip">{role ?? 'no role'}</span>
-          <button type="button" onClick={() => void signOut()}>Sign out</button>
-        </div>
-      </header>
 
-      <div className="body">
-        {/* The overlay is a button so dismissing by tapping outside is a real,
-            announced action rather than a click handler on a div. */}
-        <button
-          type="button"
-          className="nav-scrim"
-          tabIndex={navOpen ? 0 : -1}
-          aria-label="Close menu"
-          onClick={() => setNavOpen(false)}
-        />
-
-        <nav className="sidebar" id="app-nav" aria-label="Sections">
+        <div className="rail-nav">
           {NAV.map((group) => {
             const visible = group.items.filter((item) => can(role, item.capability));
             if (visible.length === 0) return null;
@@ -210,7 +202,35 @@ export function AppShell() {
               </div>
             );
           })}
-        </nav>
+        </div>
+
+        <div className="rail-foot">
+          <p className="rail-user" title={user?.email ?? ''}>{user?.email}</p>
+          <span className="role-chip">{role ?? 'no role'}</span>
+        </div>
+      </nav>
+
+      <div className="main">
+        <header className="topbar">
+          <button
+            type="button"
+            ref={toggle}
+            className="nav-toggle"
+            aria-expanded={navOpen}
+            aria-controls="app-nav"
+            aria-label={navOpen ? 'Hide menu' : 'Show menu'}
+            title={navOpen ? 'Hide the menu' : 'Show the menu'}
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            <span className="nav-toggle-bars" aria-hidden="true"><span /><span /><span /></span>
+          </button>
+
+          <TodayBadge />
+
+          <div className="account">
+            <button type="button" onClick={() => void signOut()}>Sign out</button>
+          </div>
+        </header>
 
         <main className="content">
           <Outlet />

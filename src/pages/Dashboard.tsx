@@ -310,6 +310,20 @@ export function Dashboard() {
     [invoices.rows, vouchers.rows, model.ageing.byBucket, asOf],
   );
 
+  /**
+   * What each part of the page needs, asked separately.
+   *
+   * There used to be ONE gate on all of it — `setup.ready`, which is false
+   * until an invoice exists. The workbook import creates clients, contracts,
+   * projects, lifts and people but no invoices, so a system with a hundred and
+   * sixty real jobs in it rendered the empty-system dashboard. A section must
+   * answer for its OWN inputs: the job board needs projects, not invoices.
+   */
+  const has = {
+    projects: projects.rows.length > 0,
+    money: invoices.rows.length > 0 || vouchers.rows.length > 0,
+  };
+
   const loading =
     clients.loading || contracts.loading || projects.loading || invoices.loading ||
     vouchers.loading || subcontractors.loading || technicians.loading || units.loading;
@@ -349,7 +363,7 @@ export function Dashboard() {
 
       {!model.setup.ready && <SetupChecklist steps={model.setup.steps} completed={model.setup.completed} />}
 
-      {model.setup.ready && (
+      {!loading && (
         <>
           {/* Today comes first. A tile is something you read; a task is
               something you do, and a page that opens with figures gets read
@@ -397,7 +411,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <JobBoard columns={work.board} />
+          {has.projects && <JobBoard columns={work.board} />}
         </>
       )}
 
@@ -405,26 +419,38 @@ export function Dashboard() {
         {model.money.map((figure) => <MoneyTile key={figure.key} figure={figure} />)}
       </section>
 
-      {model.setup.ready && (
-        <>
-          <div className="dash-charts">
-            {/* Each chart picks its own geometry from the room it gets — see
-                ReportChart. Nothing here has to know how wide a card is. */}
-            <div className="card viz-card is-wide"><ReportChart spec={charts.cashflow} /></div>
-            <div className="card viz-card"><ReportChart spec={charts.ageing} /></div>
-            <div className="card viz-card"><ReportChart spec={charts.debtors} /></div>
-          </div>
+      {!loading && !has.money && (
+        /* Three charts of zero are three ways of saying the same nothing. One
+           line says it once, and says what to do about it. */
+        <section className="card">
+          <h2>The charts</h2>
+          <p className="muted">
+            Nothing has been invoiced or paid out yet, so there is nothing to plot.{' '}
+            <Link to="/finance">Raise the first invoice</Link> and the money charts appear here.
+          </p>
+        </section>
+      )}
 
-          <section className="card">
-            <h2>Where to look next</h2>
-            <ul className="pick-list">
-              <li><span>Which unfinished work releases the most money</span><Link to="/finish-next">Finish next</Link></li>
-              <li><span>Contracts expiring, projects in danger, certificates running out</span><Link to="/alerts">Alerts</Link></li>
-              <li><span>A weekly, monthly, quarterly or annual report to the CEO</span><Link to="/reports">Reports</Link></li>
-              <li><span>Every lift on the register and its service history</span><Link to="/units">Lifts</Link></li>
-            </ul>
-          </section>
-        </>
+      {has.money && (
+        <div className="dash-charts">
+          {/* Each chart picks its own geometry from the room it gets — see
+              ReportChart. Nothing here has to know how wide a card is. */}
+          <div className="card viz-card is-wide"><ReportChart spec={charts.cashflow} /></div>
+          <div className="card viz-card"><ReportChart spec={charts.ageing} /></div>
+          <div className="card viz-card"><ReportChart spec={charts.debtors} /></div>
+        </div>
+      )}
+
+      {!loading && (
+        <section className="card">
+          <h2>Where to look next</h2>
+          <ul className="pick-list">
+            <li><span>Which unfinished work releases the most money</span><Link to="/finish-next">Finish next</Link></li>
+            <li><span>Contracts expiring, projects in danger, certificates running out</span><Link to="/alerts">Alerts</Link></li>
+            <li><span>A weekly, monthly, quarterly or annual report to the CEO</span><Link to="/reports">Reports</Link></li>
+            <li><span>Every lift on the register and its service history</span><Link to="/units">Lifts</Link></li>
+          </ul>
+        </section>
       )}
     </>
   );
@@ -516,6 +542,9 @@ function RailCard({
   );
 }
 
+/** Cards drawn per column before the rest go behind a link. */
+const CARDS_PER_COLUMN = 6;
+
 /**
  * Every live job, under the stage it is at.
  *
@@ -525,6 +554,7 @@ function RailCard({
  */
 function JobBoard({ columns }: { columns: readonly BoardColumn[] }) {
   const total = columns.reduce((a, c) => a + c.projects.length, 0);
+  const untracked = columns.find((c) => c.untracked)?.projects.length ?? 0;
 
   return (
     <section className="card board-card">
@@ -533,8 +563,12 @@ function JobBoard({ columns }: { columns: readonly BoardColumn[] }) {
           <h2>Where the work is</h2>
           <p className="muted">
             {total === 0
-              ? 'No job is at a tracked stage yet.'
-              : `${total} live job${total === 1 ? '' : 's'}, each under the stage it has reached.`}
+              ? 'No live job to place.'
+              : untracked === total
+                ? `${total} live job${total === 1 ? '' : 's'}. None has a stage recorded yet — open one and tick its first checkpoint, and it moves into the pipeline below.`
+                : untracked > 0
+                  ? `${total} live jobs. ${untracked} have no stage recorded yet.`
+                  : `${total} live job${total === 1 ? '' : 's'}, each under the stage it has reached.`}
           </p>
         </div>
         <p className="card-links"><Link to="/projects">All projects</Link></p>
@@ -542,7 +576,14 @@ function JobBoard({ columns }: { columns: readonly BoardColumn[] }) {
 
       <div className="board-scroll">
         {columns.map((column) => (
-          <div key={column.key} className={`board-column ${column.projects.length === 0 ? 'is-empty' : ''}`}>
+          <div
+            key={column.key}
+            className={[
+              'board-column',
+              column.projects.length === 0 ? 'is-empty' : '',
+              column.untracked === true ? 'is-untracked' : '',
+            ].join(' ').trim()}
+          >
             <div className="board-column-head">
               <h3>{column.label}</h3>
               <span className="board-count">
@@ -550,12 +591,26 @@ function JobBoard({ columns }: { columns: readonly BoardColumn[] }) {
                 {column.overdue > 0 && <span className="board-late"> · {column.overdue} late</span>}
               </span>
             </div>
+            {/* Said in words, so nobody reads "Stage not set" as somewhere the
+                work has actually got to. */}
+            {column.untracked === true && <p className="board-note">not a stage — nobody has set these yet</p>}
             {column.projects.length === 0 ? (
               <p className="board-none" aria-hidden="true">—</p>
             ) : (
-              <ul className="board-cards">
-                {column.projects.map((project) => <BoardCard key={project.id} project={project} />)}
-              </ul>
+              <>
+                <ul className="board-cards">
+                  {column.projects.slice(0, CARDS_PER_COLUMN).map((project) => (
+                    <BoardCard key={project.id} project={project} />
+                  ))}
+                </ul>
+                {column.projects.length > CARDS_PER_COLUMN && (
+                  <p className="board-more">
+                    <Link to="/projects">
+                      {column.projects.length - CARDS_PER_COLUMN} more in this column
+                    </Link>
+                  </p>
+                )}
+              </>
             )}
           </div>
         ))}
