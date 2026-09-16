@@ -19,6 +19,7 @@ import type { Invoice, Receipt } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { DataTable } from '../components/DataTable.js';
+import { InvoiceForm } from './InvoiceForm.js';
 
 export function Invoices() {
   const { user, role } = useAuth();
@@ -29,6 +30,7 @@ export function Invoices() {
     'load invoices',
   );
   const [receipting, setReceipting] = useState<WithId<Invoice> | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const asOf = new Date();
   // Receipts live in a subcollection, so this ages on the denormalized balance
@@ -48,9 +50,39 @@ export function Invoices() {
 
   return (
     <>
-      <h1>Invoices</h1>
+      <div className="page-head">
+        <h1>Invoices</h1>
+        {editable && !creating && (
+          <button type="button" className="primary" onClick={() => setCreating(true)}>
+            New invoice
+          </button>
+        )}
+      </div>
       {error && <p className="error" role="alert">{error}</p>}
       {loading && <p className="muted">Loading…</p>}
+
+      {creating && <InvoiceForm onDone={() => setCreating(false)} />}
+
+      {!loading && rows.length === 0 && !creating && (
+        /* Nothing billed yet is not an error, and it is not a blank page: it is
+           the one thing standing between this system and every money figure in
+           it. */
+        <section className="card">
+          <h2>No invoice has been raised yet</h2>
+          <p className="muted">
+            Revenue, VAT, receivables, the collections ladder and the dashboard charts all start
+            with an issued invoice. Most invoices here settle a payment milestone agreed in the
+            contract — pick the client and the contract and the figure fills itself in.
+          </p>
+          {editable && (
+            <p className="form-actions">
+              <button type="button" className="primary" onClick={() => setCreating(true)}>
+                Raise the first invoice
+              </button>
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="kpis">
         <KpiTile

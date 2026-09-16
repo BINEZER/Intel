@@ -330,7 +330,18 @@ export interface BoardColumn {
   projects: BoardProject[];
   /** Jobs here that are past their planned end. */
   overdue: number;
+  /**
+   * True for the one column holding jobs whose stage nobody has set.
+   *
+   * It is not a stage; it is a queue of jobs the board cannot place. The page
+   * marks it so, because a reader must not read "Stage not set" as somewhere
+   * the work has got to.
+   */
+  untracked?: boolean;
 }
+
+/** The column that catches jobs with no stage recorded. */
+export const UNTRACKED_KEY = '__untracked';
 
 /**
  * Group the live jobs by stage, in the stage order given.
@@ -353,14 +364,28 @@ export function buildBoard(
   }));
   const byLabel = new Map(columns.map((c) => [c.label, c]));
 
+  // Jobs whose stage nobody has set — every imported job, until somebody ticks
+  // a checkpoint on it. They go in a column of their own at the front rather
+  // than being dropped: a board that silently omits a hundred and sixty live
+  // jobs is worse than one that says it cannot place them.
+  const untracked: BoardColumn = {
+    key: UNTRACKED_KEY,
+    label: 'Stage not set',
+    projects: [],
+    overdue: 0,
+    untracked: true,
+  };
+
   for (const project of projects) {
     if (isClosedProject(project.status)) continue;
-    if (project.currentStage === null) continue;
-    const column = byLabel.get(project.currentStage);
+    const column =
+      project.currentStage === null ? untracked : byLabel.get(project.currentStage);
     if (column === undefined) continue;
     column.projects.push(project);
     if (project.plannedEnd < asOf) column.overdue += 1;
   }
+
+  if (untracked.projects.length > 0) columns.unshift(untracked);
 
   for (const column of columns) {
     // Worst first inside a column: the job in trouble is the one to look at.

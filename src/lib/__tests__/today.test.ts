@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  UNTRACKED_KEY,
   buildBoard,
   buildToday,
   describeToday,
@@ -272,12 +273,35 @@ describe('the job board', () => {
     expect(board.find((c) => c.key === 'rail_installation')!.projects[0]!.id).toBe('bad');
   });
 
+  it('holds a job whose stage nobody has set rather than dropping it', () => {
+    // Every imported job arrives without a stage. A board that silently omits a
+    // hundred and sixty live jobs is worse than one that says it cannot place
+    // them.
+    const board = buildBoard([job({ currentStage: null })], STAGES, AS_OF);
+    const first = board[0]!;
+    expect(first.key).toBe(UNTRACKED_KEY);
+    expect(first.untracked).toBe(true);
+    expect(first.projects).toHaveLength(1);
+    expect(board).toHaveLength(STAGES.length + 1);
+  });
+
+  it('adds no such column when every job has a stage', () => {
+    const board = buildBoard([job()], STAGES, AS_OF);
+    expect(board.some((c) => c.key === UNTRACKED_KEY)).toBe(false);
+  });
+
+  it('counts a late job in that column too', () => {
+    const board = buildBoard([job({ currentStage: null, plannedEnd: days(-3) })], STAGES, AS_OF);
+    expect(board[0]!.overdue).toBe(1);
+  });
+
   it('leaves finished and cancelled jobs off the board entirely', () => {
     const board = buildBoard(
-      [job({ status: 'completed' }), job({ id: 'x', status: 'cancelled' })],
+      [job({ status: 'completed' }), job({ id: 'x', status: 'cancelled', currentStage: null })],
       STAGES,
       AS_OF,
     );
     expect(board.every((c) => c.projects.length === 0)).toBe(true);
+    expect(board.some((c) => c.key === UNTRACKED_KEY)).toBe(false);
   });
 });
