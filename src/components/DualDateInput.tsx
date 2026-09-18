@@ -9,7 +9,7 @@
  * Switching mode mid-edit preserves the date the user already chose.
  */
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ETHIOPIAN_MONTHS,
   formatEthiopian,
@@ -58,6 +58,33 @@ export function DualDateInput({
   const [ec, setEc] = useState<EcInputParts>(() => (value ? toEcParts(value.at.toDate()) : EMPTY_EC));
   const [touched, setTouched] = useState(false);
 
+  /*
+   * Adopt a value the PARENT changed.
+   *
+   * The two fields below are this component's own state, seeded once on mount,
+   * so until now a parent that set the date itself — the contract form
+   * proposing an end date six months after signing — changed the value and the
+   * box on screen stayed empty.
+   *
+   * Only a value this component did not itself emit is adopted, tracked by the
+   * instant last sent out. Without that guard every keystroke would round-trip
+   * through the parent and fight the half-typed text in the box.
+   */
+  const lastEmitted = useRef<number | null>(value?.at.toMillis() ?? null);
+  const incoming = value?.at.toMillis() ?? null;
+  useEffect(() => {
+    if (incoming === lastEmitted.current) return;
+    lastEmitted.current = incoming;
+    if (value === null) {
+      setIso('');
+      setEc(EMPTY_EC);
+      return;
+    }
+    const at = value.at.toDate();
+    setIso(toIsoDate(at));
+    setEc(toEcParts(at));
+  }, [incoming, value]);
+
   const parsed = useMemo(
     () => (mode === 'GC' ? parseIsoDate(iso) : parseEcParts(ec)),
     [mode, iso, ec],
@@ -69,11 +96,15 @@ export function DualDateInput({
   const errorText = !parsed.ok && !parsed.incomplete ? parsed.error : null;
 
   function emitGregorian(next: ReturnType<typeof parseIsoDate>) {
-    onChange(next.ok ? dualDateFromGregorian(next.value, toTimestamp, 'GC') : null);
+    const built = next.ok ? dualDateFromGregorian(next.value, toTimestamp, 'GC') : null;
+    lastEmitted.current = built?.at.toMillis() ?? null;
+    onChange(built);
   }
 
   function emitEthiopian(next: ReturnType<typeof parseEcParts>) {
-    onChange(next.ok ? dualDateFromEthiopian(next.value, toTimestamp) : null);
+    const built = next.ok ? dualDateFromEthiopian(next.value, toTimestamp) : null;
+    lastEmitted.current = built?.at.toMillis() ?? null;
+    onChange(built);
   }
 
   function updateIso(nextIso: string) {
