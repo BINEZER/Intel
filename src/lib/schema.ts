@@ -148,6 +148,16 @@ export interface Contract extends AuditFields {
   clientId: string;
   /** Denormalized for list views; refreshed by a Cloud Function on client rename. */
   clientName: string;
+  /**
+   * @deprecated Never written, and it cannot be right.
+   *
+   * A contract covers as many projects as it has sites — "four lifts at Bole
+   * Tower and two at Ayat" is one contract and two projects — so a single
+   * project id cannot hold the relationship. The link that IS maintained runs
+   * the other way, `Project.contractId`, and `lib/scope.ts` reads it.
+   *
+   * Kept only so documents written before this was understood still parse.
+   */
   projectId?: string;
   title: string;
 
@@ -273,6 +283,13 @@ export interface Project extends AuditFields {
   title: string;
   clientId: string;
   clientName: string;
+  /**
+   * The contract this project delivers.
+   *
+   * This is THE link between the commercial agreement and the work. One
+   * contract has many projects — one per site — so it is held here, on the
+   * many side. See `lib/scope.ts`.
+   */
   contractId: string | null;
   /**
    * The program this project belongs to, where it is part of something larger.

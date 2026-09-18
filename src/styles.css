@@ -2112,3 +2112,39 @@ input[type="range"] { width: 100%; max-width: 100%; accent-color: var(--brand-te
   /* The switch is a control; the numbers are the point of printing it. */
   .number-toggle { display: none !important; }
 }
+
+/* --- the contract ↔ project ↔ lift links ---------------------------------- */
+
+.scope-cell { display: flex; flex-direction: column; gap: .15rem; align-items: flex-start; }
+.scope-line { font-weight: 550; }
+.scope-progress { font-size: .8rem; }
+
+/* A link that is a button: it reveals rows rather than navigating, so it must
+   not look like somewhere to go. */
+.link-button {
+  background: none; border: 0; box-shadow: none; padding: 0;
+  color: var(--brand-blue-dark); font-size: .8rem; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.link-button:hover:not(:disabled) { background: none; color: var(--brand-blue); }
+
+.scope-projects {
+  list-style: none; margin: .35rem 0 0; padding: 0;
+  display: grid; gap: .25rem;
+  border-left: 2px solid var(--border-strong); padding-left: .6rem;
+}
+.scope-projects li { display: flex; flex-direction: column; font-size: .82rem; }
+
+.project-contract { margin-top: .15rem; font-size: .82rem; }
+
+/* Both ends of the link on one panel: the questions arrive together. */
+.link-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1.25rem 2rem;
+}
+.link-half h2 { font-size: .95rem; margin-bottom: .5rem; }
+.link-title { margin: 0; font-weight: 600; }
+.link-units { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+.link-units li { display: flex; flex-direction: column; font-size: .88rem; }
+.link-units .muted { font-size: .78rem; }

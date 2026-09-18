@@ -25,6 +25,7 @@ import { allocateMilestones, type MilestoneShare } from '../lib/milestones.js';
 import { renewalAlertAt } from '../lib/renewal.js';
 import { stampCreate, stampUpdate, stripReserved } from './audit.js';
 import { collectionRef, getMany, getOne, newId, subscribe, type WithId } from './repository.js';
+import { getProject } from './projects.js';
 import { db } from '../firebase.js';
 
 const PATH = 'contracts';
@@ -124,8 +125,24 @@ export function subscribeMilestones(
  * needs to see in order to act on the refusal.
  */
 export async function getPaymentStagesForProject(projectId: string): Promise<Map<string, string[]>> {
-  const contracts = await getMany<Contract>(query(collectionRef(PATH), where('projectId', '==', projectId)));
+  /*
+   * WHY THIS READS THE PROJECT FIRST
+   *
+   * It used to query `contracts where projectId == …`. Nothing in the app has
+   * ever written `Contract.projectId` — it is a singular field that cannot
+   * express a contract covering two buildings — so the query matched nothing,
+   * every time, and this guard silently never fired. The refusal it exists to
+   * produce has never once been shown.
+   *
+   * The link that IS maintained runs the other way: `Project.contractId`, one
+   * contract to many projects. So: read the project, then its contract.
+   */
+  const project = await getProject(projectId);
   const byPhase = new Map<string, string[]>();
+  if (project === null || project.contractId === null) return byPhase;
+
+  const contract = await getOne<Contract>(PATH, project.contractId);
+  const contracts = contract === null ? [] : [contract];
 
   for (const contract of contracts) {
     for (const milestone of await getMilestones(contract.id)) {

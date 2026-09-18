@@ -9,7 +9,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getProject, subscribePhases } from '../data/projects.js';
-import { getPaymentStagesForProject } from '../data/contracts.js';
+import { getPaymentStagesForProject, subscribeContracts } from '../data/contracts.js';
+import { subscribeUnits } from '../data/units.js';
 import { subscribeTechnicians } from '../data/technicians.js';
 import { useCollection } from '../data/useCollection.js';
 import { computeProjectKpis } from '../lib/kpi.js';
@@ -22,7 +23,7 @@ import { ProjectTeam } from '../components/ProjectTeam.js';
 import { RiskFlagList } from '../components/RiskAlerts.js';
 import { ProjectKpiPanel } from './ProjectKpis.js';
 import { DualDateText } from '../components/DualDateInput.js';
-import type { Project, ProjectPhase, Technician } from '../lib/schema.js';
+import type { Contract, ElevatorUnit, Project, ProjectPhase, Technician } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ProjectDetail() {
@@ -35,6 +36,11 @@ export function ProjectDetail() {
     [projectId],
     'load the project phases',
   );
+  // The two ends of the link this project sits in the middle of: the contract
+  // that pays for it, and the lifts it puts in. See lib/scope.ts.
+  const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
+  const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
+
   const technicians = useCollection<Technician>(
     (d, e) => subscribeTechnicians(d, e, { activeOnly: true }),
     [],
@@ -139,6 +145,12 @@ export function ProjectDetail() {
         <span className="chip">{project.status.replace(/_/g, ' ')}</span>
       </div>
 
+      <ProjectLinks
+        project={project}
+        contract={contracts.rows.find((k) => k.id === project.contractId) ?? null}
+        units={units.rows.filter((u) => u.installedByProjectId === project.id)}
+      />
+
       {risk.flags.length > 0 && (
         <section className="card">
           <h2>Risk</h2>
@@ -160,5 +172,70 @@ export function ProjectDetail() {
 
       <ProjectTeam projectId={project.id} technicians={technicians.rows} />
     </>
+  );
+}
+
+/**
+ * Where this project sits: the contract above it, the lifts below it.
+ *
+ * Both directions on one panel, because the questions arrive together — "who
+ * agreed to pay for this" and "which machines come out of it" — and answering
+ * one of them by making somebody search the other page is not answering it.
+ */
+function ProjectLinks({
+  project,
+  contract,
+  units,
+}: {
+  project: WithId<Project>;
+  contract: WithId<Contract> | null;
+  units: readonly WithId<ElevatorUnit>[];
+}) {
+  return (
+    <section className="card link-panel">
+      <div className="link-half">
+        <h2>Contract</h2>
+        {contract === null ? (
+          <p className="muted">
+            {project.contractId === null
+              ? 'This project is not under a contract. Variations and warranty work often are not — but if this one should be, set it on the project.'
+              : 'The contract this project names could not be found. It may have been deleted.'}
+          </p>
+        ) : (
+          <>
+            <p className="link-title">
+              <Link to={`/contracts?contract=${contract.id}`}>{contract.title}</Link>
+            </p>
+            <p className="muted mono">{contract.contractNo}</p>
+            <p className="muted">
+              A contract can cover several projects across several sites; this is one of them.
+            </p>
+          </>
+        )}
+      </div>
+
+      <div className="link-half">
+        <h2>Lifts on this project</h2>
+        {units.length === 0 ? (
+          <p className="muted">
+            No lift on the register names this project as the one that installed it.{' '}
+            <Link to="/units">Open the register</Link> to link them.
+          </p>
+        ) : (
+          <ul className="link-units">
+            {units.map((unit) => (
+              <li key={unit.id}>
+                <Link to={`/units/${unit.id}`}>{unit.tag}</Link>
+                <span className="muted">
+                  {unit.unitCode}
+                  {unit.brand === undefined ? '' : ` · ${unit.brand}`} ·{' '}
+                  {unit.status.replace(/_/g, ' ')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
