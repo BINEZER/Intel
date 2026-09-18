@@ -22,6 +22,7 @@ import {
 } from '../data/units.js';
 import { subscribeClients } from '../data/clients.js';
 import { subscribeContracts } from '../data/contracts.js';
+import { subscribeProjects } from '../data/projects.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -38,7 +39,7 @@ import { formatBps } from '../lib/kpi.js';
 import { formatETB } from '../lib/money.js';
 import { formatDual } from '../lib/ethiopic.js';
 import { DualDateText } from '../components/DualDateInput.js';
-import type { Callout, Client, Contract, ElevatorUnit, MaintenanceVisit } from '../lib/schema.js';
+import type { Callout, Client, Contract, ElevatorUnit, MaintenanceVisit, Project } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { FormPanel } from '../components/FormPanel.js';
@@ -527,12 +528,22 @@ function UnitForm({
 }) {
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients').rows;
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts').rows;
+  const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
 
   const [tag, setTag] = useState(initial?.tag ?? 'LIFT-01');
   const [siteName, setSiteName] = useState(initial?.siteName ?? '');
   const [city, setCity] = useState(initial?.city ?? 'Addis Ababa');
   const [clientId, setClientId] = useState(initial?.clientId ?? '');
   const [contractId, setContractId] = useState(initial?.maintenanceContractId ?? '');
+  /*
+   * Which project installed this lift.
+   *
+   * Only the workbook import used to set this, so a lift added by hand could
+   * never be attached to the job that put it in — and the project page had no
+   * way to list its own machines. It is the link from a contract down to the
+   * hardware: contract → project → lift.
+   */
+  const [installedBy, setInstalledBy] = useState(initial?.installedByProjectId ?? '');
   const [brand, setBrand] = useState(initial?.brand ?? '');
   const [model, setModel] = useState(initial?.model ?? '');
   const [manufacturerUnitId, setManufacturerUnitId] = useState(initial?.manufacturerUnitId ?? '');
@@ -572,9 +583,7 @@ function UnitForm({
       city,
       clientId,
       clientName: client.name,
-      // Editing the register must not detach a lift from the project that
-      // installed it, or its history stops being attributable.
-      installedByProjectId: initial?.installedByProjectId ?? null,
+      installedByProjectId: installedBy === '' ? null : installedBy,
       maintenanceContractId: contractId === '' ? null : contractId,
       maintenanceContractNo: contract?.contractNo ?? null,
       commissionedOn: initial?.commissionedOn ?? null,
@@ -633,6 +642,28 @@ function UnitForm({
             <label htmlFor="u-speed">Speed, m/s</label>
             <input id="u-speed" type="number" min="0" step="0.01" value={speedMps}
               onChange={(e) => setSpeedMps(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="u-project">Installed by project</label>
+            <select
+              id="u-project"
+              value={installedBy}
+              onChange={(e) => setInstalledBy(e.target.value)}
+            >
+              <option value="">Not recorded</option>
+              {/* This client's projects first — a picker of all 163 invites
+                  attaching a lift to the wrong building. */}
+              {projects
+                .filter((p) => clientId === '' || p.clientId === clientId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.projectNo} · {p.title}
+                  </option>
+                ))}
+            </select>
+            <p className="field-hint">
+              The job that put this lift in. It is how a contract reaches its machines.
+            </p>
           </div>
           <div className="field">
             <label htmlFor="u-contract">Maintenance contract</label>

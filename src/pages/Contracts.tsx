@@ -2,7 +2,7 @@
  * Contract list, with the renewal board.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
@@ -19,6 +19,12 @@ import { DeleteButton } from '../components/DeleteButton.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 import { DataTable } from '../components/DataTable.js';
 import { statusLabel } from '../lib/status.js';
+import { Link } from 'react-router-dom';
+import { subscribeProjects } from '../data/projects.js';
+import { subscribeUnits } from '../data/units.js';
+import { contractScope, describeScope, type ScopeProject, type ScopeUnit } from '../lib/scope.js';
+import { formatBps } from '../lib/kpi.js';
+import type { ElevatorUnit, Project } from '../lib/schema.js';
 
 export function Contracts() {
   const { user, role } = useAuth();
@@ -27,6 +33,58 @@ export function Contracts() {
 
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
+  // What each contract actually covers lives on the projects and the lifts, not
+  // on the contract — see lib/scope.ts for why the link runs that way.
+  const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
+  const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
+
+  const scopeProjects = useMemo<ScopeProject[]>(
+    () =>
+      projects.rows.map((p) => ({
+        id: p.id,
+        projectNo: p.projectNo,
+        title: p.title,
+        contractId: p.contractId,
+        clientId: p.clientId,
+        siteName: p.site?.name ?? '',
+        status: p.status,
+        progressBps: p.progressBps,
+        contractNetSantim: p.financials?.contractNetSantim ?? null,
+      })),
+    [projects.rows],
+  );
+
+  const scopeUnits = useMemo<ScopeUnit[]>(
+    () =>
+      units.rows.map((u) => ({
+        id: u.id,
+        unitCode: u.unitCode,
+        tag: u.tag,
+        siteName: u.siteName,
+        installedByProjectId: u.installedByProjectId,
+        maintenanceContractId: u.maintenanceContractId,
+        status: u.status,
+      })),
+    [units.rows],
+  );
+
+  const scopeOf = useMemo(() => {
+    const byContract = new Map<string, ReturnType<typeof contractScope>>();
+    for (const contract of contracts.rows) {
+      byContract.set(contract.id, contractScope(
+        {
+          id: contract.id,
+          contractNo: contract.contractNo,
+          clientId: contract.clientId,
+          valueNetSantim: contract.valueNetSantim,
+          status: contract.status,
+        },
+        scopeProjects,
+        scopeUnits,
+      ));
+    }
+    return byContract;
+  }, [contracts.rows, scopeProjects, scopeUnits]);
 
   return (
     <>
@@ -81,6 +139,23 @@ export function Contracts() {
               ),
             },
             { key: 'client', label: 'Client', value: (k) => k.clientName, filterable: true },
+            {
+              key: 'scope',
+              label: 'Covers',
+              // Sorted by how many lifts it covers — the size of the job — not
+              // by the sentence, which would sort "10 lifts" above "2 lifts".
+              value: (k) => scopeOf.get(k.id)?.unitCount ?? 0,
+              numeric: true,
+              text: (k) => {
+                const scope = scopeOf.get(k.id);
+                return scope === undefined ? '' : describeScope(scope);
+              },
+              render: (k) => {
+                const scope = scopeOf.get(k.id);
+                if (scope === undefined) return <span className="muted">—</span>;
+                return <ScopeCell scope={scope} />;
+              },
+            },
             {
               key: 'type',
               label: 'Type',
@@ -274,5 +349,60 @@ function RenewalBoard({
         </table>
       </div>
     </section>
+  );
+}
+
+/**
+ * What a contract covers, and the projects that deliver it.
+ *
+ * The count alone does not say whether three projects is one building or three,
+ * and that difference decides whether one crew can do it — so the sites are
+ * named, and each project is a link, because "which ones?" is the next question
+ * every time.
+ */
+function ScopeCell({ scope }: { scope: ReturnType<typeof contractScope> }) {
+  const [open, setOpen] = useState(false);
+
+  if (scope.projectCount === 0 && scope.unitCount === 0) {
+    return (
+      <span className="muted">
+        Nothing linked yet
+      </span>
+    );
+  }
+
+  return (
+    <div className="scope-cell">
+      <span className="scope-line">{describeScope(scope)}</span>
+      {scope.progress.bps !== null && (
+        <span className="muted scope-progress">
+          {formatBps(scope.progress.bps, 0)} delivered
+          {/* Named, because a weighted average and a plain one disagree and the
+              reader cannot tell which they are looking at. */}
+          {scope.progress.basis === 'value' ? ' (by value)' : ''}
+        </span>
+      )}
+
+      {scope.projectCount > 0 && (
+        <>
+          <button type="button" className="link-button no-print" onClick={() => setOpen((v) => !v)}>
+            {open ? 'Hide' : 'Show'} {scope.projectCount === 1 ? 'the project' : `all ${scope.projectCount} projects`}
+          </button>
+          {open && (
+            <ul className="scope-projects">
+              {scope.projects.map((project) => (
+                <li key={project.id}>
+                  <Link to={`/projects/${project.id}`}>{project.title}</Link>
+                  <span className="muted">
+                    {project.siteName === '' ? 'no site' : project.siteName} ·{' '}
+                    {formatBps(project.progressBps, 0)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }

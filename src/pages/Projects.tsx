@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
+import { subscribeContracts } from '../data/contracts.js';
 import {
   createProject,
   subscribeProjects,
@@ -26,7 +27,7 @@ import { FormPanel } from '../components/FormPanel.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { buildTree, sortTree, type TreeProject } from '../lib/project-tree.js';
 import { ReminderEditor } from '../components/ReminderEditor.js';
-import type { Client, DualDate, Project, Reminder } from '../lib/schema.js';
+import type { Client, Contract, DualDate, Project, Reminder } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
@@ -50,6 +51,13 @@ export function Projects() {
 
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
+  // Resolved here rather than denormalised onto the project: a contract number
+  // copied onto 163 projects goes stale the day one contract is renumbered.
+  const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
+  const contractById = useMemo(
+    () => new Map(contracts.rows.map((k) => [k.id, k])),
+    [contracts.rows],
+  );
 
   const asOf = useMemo(() => new Date(), []);
 
@@ -173,6 +181,21 @@ export function Projects() {
                   <p className="muted">
                     {project.clientName} · {project.site?.name ?? '—'} · {project.units?.length ?? 0} unit
                     {project.units?.length === 1 ? '' : 's'}
+                  </p>
+                  {/* Which agreement pays for this. A project with no contract
+                      is a real state — variations and warranty work — and it
+                      says so rather than showing a blank. */}
+                  <p className="muted project-contract">
+                    {project.contractId === null ? (
+                      <span className="chip chip-status-idle">No contract</span>
+                    ) : (
+                      <>
+                        Under{' '}
+                        <Link to={`/contracts?contract=${project.contractId}`}>
+                          {contractById.get(project.contractId)?.contractNo ?? 'a contract'}
+                        </Link>
+                      </>
+                    )}
                   </p>
                 </div>
                 <StatusChip kind="project" value={project.status} />
