@@ -153,15 +153,27 @@ export interface LifecycleInput {
 // ---------------------------------------------------------------------------
 
 /** Warranty ends this many months after it starts. Whole months, same day. */
-export function warrantyEnd(startsOn: Date, months: number): Date {
+/**
+ * Add whole months in UTC, clamping a day the target month does not have.
+ *
+ * 31 August plus six months is 28 February, not 3 March. JavaScript rolls the
+ * overflow forward, which silently GAINS days on a term — so the day is pulled
+ * back to the last of the intended month.
+ *
+ * UTC throughout: every date in this system is stored as UTC midnight, and
+ * doing this arithmetic in local time is how a term ends up a day out.
+ */
+export function addMonthsUtc(from: Date, months: number): Date {
   const end = new Date(
-    Date.UTC(startsOn.getUTCFullYear(), startsOn.getUTCMonth() + months, startsOn.getUTCDate()),
+    Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + months, from.getUTCDate()),
   );
-  // A 31st that lands in a short month rolls forward; pull it back to the last
-  // day of the intended month so a warranty never silently gains days.
-  const intendedMonth = (startsOn.getUTCMonth() + months) % 12;
+  const intendedMonth = (((from.getUTCMonth() + months) % 12) + 12) % 12;
   if (end.getUTCMonth() !== intendedMonth) end.setUTCDate(0);
   return end;
+}
+
+export function warrantyEnd(startsOn: Date, months: number): Date {
+  return addMonthsUtc(startsOn, months);
 }
 
 /** The default where nobody has said otherwise. Editable per contract. */

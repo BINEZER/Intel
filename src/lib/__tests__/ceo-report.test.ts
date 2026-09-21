@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  REPORT_FOCUSES,
   buildCeoReport,
   describeChange,
   periodProgressNote,
@@ -230,11 +231,19 @@ describe('buildCeoReport', () => {
     expect(delivery?.narrative.join(' ')).toContain('an unmoved tracker and an unmoved site look identical');
   });
 
-  it('names the project that is past its planned end date', () => {
+  it('counts the projects past their planned end without listing them again', () => {
+    // The names were a comma-separated copy of the Live projects table
+    // directly below, which carries the planned end date for every row. Two
+    // lists of the same projects means checking one against the other.
     const report = buildCeoReport(
       inputs({ projects: [project({ plannedEnd: utc(2026, 6, 30) })], asOf: utc(2026, 10, 1) }),
     );
-    expect(report.sections.find((s) => s.id === 'delivery')?.narrative.join(' ')).toContain('PRJ-001 Bole Tower lifts');
+    const delivery = report.sections.find((s) => s.id === 'delivery');
+    const narrative = delivery?.narrative.join(' ') ?? '';
+    expect(narrative).toContain('1 live project is past the planned completion date');
+    expect(narrative).not.toContain('PRJ-001');
+    // The table still names it, once.
+    expect(delivery?.table?.rows.map((r) => r.projectNo)).toContain('PRJ-001');
   });
 
   it('draws six trailing periods including the empty ones', () => {
@@ -328,5 +337,226 @@ describe('periodProgressNote', () => {
 
   it('says nothing once the period is over', () => {
     expect(periodProgressNote(SEPTEMBER, utc(2026, 10, 5))).toBeNull();
+  });
+});
+
+describe('focusing the report', () => {
+  const contract = (over = {}) => ({
+    id: 'k1',
+    contractNo: 'AGR-2021-001',
+    clientName: 'Addis Towers',
+    type: 'installation',
+    endDate: utc(2027, 3, 31),
+    renewalAlertAt: null,
+    status: 'active',
+    valueGrossSantim: 10_000_000,
+    ...over,
+  });
+
+  it('leaves the overall report exactly as it was', () => {
+    // Clients and Contracts are new sections. Quietly adding them to the
+    // overall report would change a document somebody already prints every
+    // month — they are reached by asking for them.
+    const report = buildCeoReport(inputs());
+    expect(report.focus).toBe('overall');
+    expect(report.sections.map((s) => s.id)).toEqual([
+      'money-in', 'money-out', 'delivery', 'trend', 'risk',
+    ]);
+    expect(report.title).toBe('Monthly report to the Chief Executive');
+  });
+
+  it('keeps only the money sections when focused on finance', () => {
+    const report = buildCeoReport(inputs(), 'finance');
+    expect(report.sections.map((s) => s.id)).toEqual(['money-in', 'money-out', 'trend']);
+    expect(report.title).toBe('Monthly finance report to the Chief Executive');
+  });
+
+  it('keeps only delivery when focused on projects', () => {
+    const report = buildCeoReport(inputs(), 'projects');
+    expect(report.sections.map((s) => s.id)).toEqual(['delivery']);
+    expect(report.title).toContain('delivery report');
+  });
+
+  it('narrows the plan ahead to match the focus', () => {
+    // A finance report that ended with next month's site work would read as a
+    // different document stapled to the back.
+    const finance = buildCeoReport(inputs(), 'finance');
+    expect(finance.plan.every((s) => s.id === 'plan-cash')).toBe(true);
+
+    const projects = buildCeoReport(inputs(), 'projects');
+    expect(projects.plan.every((s) => s.id.startsWith('plan-work') || s.id === 'plan-priorities')).toBe(true);
+  });
+
+  it('keeps the headline figures whatever the focus is', () => {
+    // The summary at the top is the reason somebody opened it at all.
+    for (const { value } of REPORT_FOCUSES) {
+      const report = buildCeoReport(inputs(), value);
+      expect(report.headline.length).toBeGreaterThan(0);
+      expect(report.executiveSummary.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('offers every focus the report can actually build', () => {
+    for (const { value } of REPORT_FOCUSES) {
+      const report = buildCeoReport(inputs({ contracts: [contract()] }), value);
+      // An empty section list would be a focus that shows nothing.
+      expect(report.sections.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('the clients section', () => {
+  const contract = (over = {}) => ({
+    id: 'k1', contractNo: 'AGR-1', clientName: 'Addis Towers', type: 'installation',
+    endDate: utc(2027, 3, 31), renewalAlertAt: null, status: 'active',
+    valueGrossSantim: 10_000_000, ...over,
+  });
+
+  it('names concentration when one client dominates the book', () => {
+    // The number worth an executive's attention is the SHARE, not the size:
+    // one client at 60% is a different company from twelve at 8% each.
+    const report = buildCeoReport(
+      inputs({ contracts: [contract(), contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 1_000_000 })] }),
+      'clients',
+    );
+    const narrative = report.sections.find((s) => s.id === 'clients')?.narrative.join(' ') ?? '';
+    expect(narrative).toContain('Addis Towers is 91% of the signed book');
+    expect(narrative).toContain('concentration');
+  });
+
+  it('says so when no client dominates', () => {
+    const even = [
+      contract({ id: 'a', clientName: 'A', valueGrossSantim: 1_000_000 }),
+      contract({ id: 'b', clientName: 'B', valueGrossSantim: 1_000_000 }),
+      contract({ id: 'c', clientName: 'C', valueGrossSantim: 1_000_000 }),
+    ];
+    const narrative = buildCeoReport(inputs({ contracts: even }), 'clients')
+      .sections.find((s) => s.id === 'clients')?.narrative.join(' ') ?? '';
+    expect(narrative).toContain('no single client dominates');
+  });
+
+  it('sorts the biggest client first', () => {
+    const report = buildCeoReport(
+      inputs({ contracts: [contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 1_000_000 }), contract()] }),
+      'clients',
+    );
+    const rows = report.sections.find((s) => s.id === 'clients')?.table?.rows ?? [];
+    expect(rows[0]?.name).toBe('Addis Towers');
+  });
+
+  it('says plainly when there is no client to report on', () => {
+    const narrative = buildCeoReport(inputs({ contracts: [], invoices: [], projects: [] }), 'clients')
+      .sections.find((s) => s.id === 'clients')?.narrative.join(' ') ?? '';
+    expect(narrative).toContain('No client has a contract');
+  });
+});
+
+describe('the contracts section', () => {
+  const contract = (over = {}) => ({
+    id: 'k1', contractNo: 'AGR-1', clientName: 'Addis Towers', type: 'installation',
+    endDate: utc(2027, 3, 31), renewalAlertAt: null, status: 'active',
+    valueGrossSantim: 10_000_000, ...over,
+  });
+
+  it('flags a contract still active with an end date in the past', () => {
+    // Either the term was extended and nobody recorded it, or it lapsed and
+    // the work is running uncovered. Both are worth a sentence.
+    const report = buildCeoReport(
+      inputs({ contracts: [contract({ endDate: utc(2026, 1, 31) })], asOf: utc(2026, 10, 1) }),
+      'contracts',
+    );
+    const narrative = report.sections.find((s) => s.id === 'contracts')?.narrative.join(' ') ?? '';
+    expect(narrative).toContain('end date already in the past');
+  });
+
+  it('lists active contracts soonest to end first', () => {
+    const report = buildCeoReport(
+      inputs({
+        contracts: [
+          contract({ id: 'late', contractNo: 'AGR-LATE', endDate: utc(2028, 1, 1) }),
+          contract({ id: 'soon', contractNo: 'AGR-SOON', endDate: utc(2026, 11, 1) }),
+        ],
+      }),
+      'contracts',
+    );
+    const rows = report.sections.find((s) => s.id === 'contracts')?.table?.rows ?? [];
+    expect(rows.map((r) => r.contractNo)).toEqual(['AGR-SOON', 'AGR-LATE']);
+  });
+
+  it('breaks the book down by type when there is more than one', () => {
+    const report = buildCeoReport(
+      inputs({ contracts: [contract(), contract({ id: 'm', type: 'maintenance', valueGrossSantim: 500_000 })] }),
+      'contracts',
+    );
+    const narrative = report.sections.find((s) => s.id === 'contracts')?.narrative.join(' ') ?? '';
+    expect(narrative).toContain('By type:');
+    expect(narrative).toContain('maintenance');
+  });
+});
+
+describe('client concentration in the headline', () => {
+  const contract = (over = {}) => ({
+    id: 'k1', contractNo: 'AGR-1', clientName: 'Addis Towers', type: 'installation',
+    endDate: utc(2027, 3, 31), renewalAlertAt: null, status: 'active',
+    valueGrossSantim: 10_000_000, ...over,
+  });
+
+  const concentration = (over: Partial<ReportInputs> = {}, focus?: 'overall' | 'finance') =>
+    buildCeoReport(inputs(over), focus).headline.find((m) => m.key === 'concentration');
+
+  it('rides in the headline of every report, not only the clients one', () => {
+    // How much of the book sits with one client changes what a month means,
+    // and it is invisible in any of the other totals.
+    for (const { value } of REPORT_FOCUSES) {
+      const report = buildCeoReport(inputs({ contracts: [contract()] }), value);
+      expect(report.headline.find((m) => m.key === 'concentration')).toBeDefined();
+    }
+  });
+
+  it('reports the SHARE, and names who it is', () => {
+    const metric = concentration({
+      contracts: [contract(), contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 10_000_000 })],
+    });
+    expect(metric?.value).toBe('50%');
+    expect(metric?.note).toContain('Addis Towers');
+  });
+
+  it('says what losing them would cost once one client dominates', () => {
+    const metric = concentration({
+      contracts: [contract(), contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 1_000_000 })],
+    });
+    expect(metric?.note).toContain('Losing them would take 91%');
+  });
+
+  it('says plainly that nobody dominates when nobody does', () => {
+    const even = ['A', 'B', 'C'].map((name, i) =>
+      contract({ id: `k${i}`, clientName: name, valueGrossSantim: 1_000_000 }));
+    expect(concentration({ contracts: even })?.note).toContain('No single client dominates');
+  });
+
+  it('carries no arrow, because a share is a position and not a flow', () => {
+    // There is no stored "last month's concentration"; re-deriving one would
+    // be a different calculation wearing the same label.
+    const metric = concentration({ contracts: [contract()] });
+    expect(metric?.direction).toBeNull();
+    expect(metric?.changeBps).toBeNull();
+    expect(metric?.previousValue).toBeNull();
+  });
+
+  it('shows a dash rather than 0% when there is no signed value at all', () => {
+    const metric = concentration({ contracts: [] });
+    expect(metric?.value).toBe('—');
+    expect(metric?.note).toContain('No signed contract value');
+  });
+
+  it('agrees with the clients section about who is biggest', () => {
+    // One grouping feeds both; they cannot drift apart.
+    const over = {
+      contracts: [contract(), contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 1_000_000 })],
+    };
+    const metric = concentration(over);
+    const rows = buildCeoReport(inputs(over), 'clients')
+      .sections.find((s) => s.id === 'clients')?.table?.rows ?? [];
+    expect(metric?.note).toContain(rows[0]?.name ?? '');
   });
 });

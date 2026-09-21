@@ -26,7 +26,18 @@ import { FormPanel } from '../components/FormPanel.js';
 import { ReminderEditor } from '../components/ReminderEditor.js';
 import type { Client, Contract, ContractType, DualDate, Reminder } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
-import { DEFAULT_WARRANTY_ALERT_DAYS, DEFAULT_WARRANTY_MONTHS } from '../lib/lifecycle.js';
+import { DEFAULT_WARRANTY_ALERT_DAYS, DEFAULT_WARRANTY_MONTHS, addMonthsUtc } from '../lib/lifecycle.js';
+import { dualDateFromGregorian } from '../lib/dual-date.js';
+import { toTimestamp } from '../firebase.js';
+
+/**
+ * How long a contract runs unless somebody says otherwise.
+ *
+ * It is a PROPOSAL, not a rule: the field stays editable, and the moment it is
+ * edited by hand the form stops proposing. A default that quietly overwrites
+ * what you typed is worse than no default.
+ */
+const DEFAULT_TERM_MONTHS = 6;
 
 export function ContractForm({
   initial,
@@ -56,6 +67,25 @@ export function ContractForm({
   const [signedDate, setSignedDate] = useState<DualDate | null>(initial?.signedDate ?? null);
   const [startDate, setStartDate] = useState<DualDate | null>(initial?.startDate ?? null);
   const [endDate, setEndDate] = useState<DualDate | null>(initial?.endDate ?? null);
+  /*
+   * An end date that came from the six-month default rather than from a person.
+   *
+   * Editing an existing contract never counts as proposed — its end date was
+   * agreed with a client, and re-deriving it from the signing date would
+   * silently rewrite the term of a signed agreement.
+   */
+  const [endIsProposed, setEndIsProposed] = useState(initial === null);
+
+  /** Signing moves the end date only while nobody has set one by hand. */
+  function chooseSignedDate(next: DualDate | null) {
+    setSignedDate(next);
+    if (!endIsProposed || next === null) return;
+    setEndDate(dualDateFromGregorian(
+      addMonthsUtc(next.at.toDate(), DEFAULT_TERM_MONTHS),
+      toTimestamp,
+      next.enteredIn,
+    ));
+  }
   const [renewalWindowDays, setRenewalWindowDays] = useState(initial?.renewalWindowDays ?? 60);
   const [autoRenew, setAutoRenew] = useState(initial?.autoRenew ?? false);
   const [responseHours, setResponseHours] = useState(initial?.sla?.responseHours ?? 4);
@@ -257,9 +287,23 @@ export function ContractForm({
         )}
 
         <div className="form-grid dates">
-          <DualDateInput label="Signed" value={signedDate} onChange={setSignedDate} required />
+          <DualDateInput label="Signed" value={signedDate} onChange={chooseSignedDate} required />
           <DualDateInput label="Start" value={startDate} onChange={setStartDate} required />
-          <DualDateInput label="End" value={endDate} onChange={setEndDate} required />
+          <DualDateInput
+            label="End"
+            value={endDate}
+            onChange={(next) => {
+              // Touched by hand: stop proposing, for good.
+              setEndIsProposed(false);
+              setEndDate(next);
+            }}
+            required
+            {...(endIsProposed && endDate !== null
+              ? {
+                  hint: `${DEFAULT_TERM_MONTHS} months after signing. Change it if the agreement says otherwise.`,
+                }
+              : {})}
+          />
         </div>
 
         <div className="form-grid">

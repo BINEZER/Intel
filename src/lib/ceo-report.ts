@@ -209,6 +209,8 @@ export interface ReportSection {
 export interface CeoReport {
   companyName: string;
   title: string;
+  /** What the report was asked to be about. `overall` is the whole thing. */
+  focus: ReportFocus;
   period: Period;
   comparison: Period;
   ahead: Period;
@@ -435,7 +437,73 @@ function totalsFor(inputs: ReportInputs, period: Period): PeriodTotals {
 // The report
 // ---------------------------------------------------------------------------
 
-export function buildCeoReport(inputs: ReportInputs): CeoReport {
+
+// ---------------------------------------------------------------------------
+// Focus
+// ---------------------------------------------------------------------------
+
+/**
+ * What the report is ABOUT.
+ *
+ * The whole report answers every question at once, which is right for the
+ * monthly read-through and wrong when you are going into a meeting about one
+ * thing. A focused report is not a shorter overall report: it drops the
+ * sections that are not about its subject, and it keeps the plan items that
+ * are, so what is left reads as a document rather than as an extract.
+ *
+ * `overall` is exactly what the report has always been — nothing is hidden by
+ * default, because a reader who does not know this control exists must not be
+ * quietly given less than before.
+ */
+export type ReportFocus = 'overall' | 'clients' | 'finance' | 'contracts' | 'projects';
+
+export const REPORT_FOCUSES: readonly { value: ReportFocus; label: string; hint: string }[] = [
+  { value: 'overall', label: 'Overall', hint: 'Everything: money in and out, delivery, trend and risk' },
+  { value: 'finance', label: 'Finance', hint: 'Invoiced, collected, what is owed, cost and margin' },
+  { value: 'projects', label: 'Projects', hint: 'Live jobs, stages closed, what is late' },
+  { value: 'contracts', label: 'Contracts', hint: 'The signed book, what it covers, what is expiring' },
+  { value: 'clients', label: 'Clients', hint: 'Who the work is for, and who owes what' },
+];
+
+/** Which body sections each focus keeps, in the order they are read. */
+const FOCUS_SECTIONS: Record<ReportFocus, readonly string[]> = {
+  /*
+   * The five sections the overall report has always had, listed rather than
+   * left as "everything". Clients and Contracts are new, and quietly adding
+   * them here would change the document somebody already prints every month —
+   * they are reports in their own right, reached by asking for them.
+   */
+  overall: ['money-in', 'money-out', 'delivery', 'trend', 'risk'],
+  finance: ['money-in', 'money-out', 'trend'],
+  projects: ['delivery'],
+  contracts: ['contracts'],
+  clients: ['clients'],
+};
+
+/** Which items of the plan ahead belong to each focus. */
+const FOCUS_PLAN: Record<ReportFocus, readonly string[] | null> = {
+  overall: null,   // the plan ahead is unchanged: every item, as before
+  finance: ['plan-cash'],
+  projects: ['plan-work', 'plan-priorities'],
+  contracts: ['plan-renewals'],
+  clients: ['plan-cash', 'plan-renewals'],
+};
+
+const FOCUS_TITLE: Record<ReportFocus, string> = {
+  overall: '',
+  finance: 'finance ',
+  projects: 'delivery ',
+  contracts: 'contracts ',
+  clients: 'clients ',
+};
+
+function keep(sections: readonly ReportSection[], allowed: readonly string[] | null): ReportSection[] {
+  if (allowed === null) return [...sections];
+  // Ordered by the focus, not by the order the sections were built in.
+  return allowed.flatMap((id) => sections.filter((section) => section.id === id));
+}
+
+export function buildCeoReport(inputs: ReportInputs, focus: ReportFocus = 'overall'): CeoReport {
   const { period, asOf } = inputs;
   const comparison = previousPeriod(period);
   const ahead = nextPeriod(period);
@@ -494,11 +562,17 @@ export function buildCeoReport(inputs: ReportInputs): CeoReport {
       'lower_is_better',
     ),
     countMetric('delivery', 'Stages completed', now.stagesCompleted, before.stagesCompleted, noun, 'higher_is_better'),
+    // In the headline of EVERY report, not only the clients one: how much of
+    // the book sits with one client is the kind of fact that changes what a
+    // month means, and it is invisible in any of the totals above.
+    concentrationMetric(clientBook(inputs, ageing)),
   ];
 
   return {
     companyName: inputs.companyName,
-    title: `${period.kind === 'week' ? 'Weekly' : period.kind === 'month' ? 'Monthly' : period.kind === 'quarter' ? 'Quarterly' : 'Annual'} report to the Chief Executive`,
+    title:
+      `${period.kind === 'week' ? 'Weekly' : period.kind === 'month' ? 'Monthly' : period.kind === 'quarter' ? 'Quarterly' : 'Annual'} ` +
+      `${FOCUS_TITLE[focus]}report to the Chief Executive`,
     period,
     comparison,
     ahead,
@@ -506,14 +580,23 @@ export function buildCeoReport(inputs: ReportInputs): CeoReport {
     periodRange: formatPeriodRange(period),
     executiveSummary: buildExecutiveSummary(inputs, now, before, ageing, unlock, noun),
     headline,
-    sections: [
-      moneyInSection(inputs, now, before, ageing, noun),
-      moneyOutSection(inputs, now, before, noun),
-      deliverySection(inputs, now, before, noun),
-      trendSection(inputs),
-      riskSection(inputs, ageing, unlock),
-    ],
-    plan: buildPlan(inputs, ahead, unlock, ageing),
+    focus,
+    sections: keep(
+      [
+        moneyInSection(inputs, now, before, ageing, noun),
+        moneyOutSection(inputs, now, before, noun),
+        deliverySection(inputs, now, before, noun),
+        clientsSection(inputs, ageing),
+        contractsSection(inputs, noun),
+        trendSection(inputs),
+        // Risk cuts across everything, so it rides with the overall report
+        // only; a focused report that ended on somebody else's risks would
+        // read as a different document stapled to the back.
+        riskSection(inputs, ageing, unlock),
+      ],
+      FOCUS_SECTIONS[focus],
+    ),
+    plan: keep(buildPlan(inputs, ahead, unlock, ageing), FOCUS_PLAN[focus]),
   };
 }
 
@@ -770,6 +853,257 @@ function moneyOutSection(
   };
 }
 
+
+/**
+ * Who the work is for, and who owes what.
+ *
+ * Grouped by client NAME, because that is the only client key the report
+ * inputs carry. Two clients with the same name would merge — worth knowing,
+ * and not worth a second identifier on five input types to avoid.
+ *
+ * The figure worth an executive's attention is CONCENTRATION: not how much the
+ * biggest client is worth, but what share of the book it is. One client at
+ * 60% is a different company from twelve at 8% each, and the totals alone do
+ * not show the difference.
+ */
+interface ClientBookRow {
+  name: string;
+  contractGrossSantim: number;
+  outstandingSantim: number;
+  liveProjects: number;
+  contracts: number;
+}
+
+interface ClientBook {
+  rows: ClientBookRow[];
+  bookTotal: number;
+  owedTotal: number;
+  largest: ClientBookRow | null;
+  /** The largest client's share of the signed book, or null when there is none. */
+  largestShareBps: number | null;
+}
+
+/** Above this share, one client leaving takes a serious part of the work with it. */
+const CONCENTRATION_BPS = 4000;
+
+/**
+ * The book, by client.
+ *
+ * Shared by the headline figure and the Clients section so the two cannot
+ * disagree about who the biggest client is or what share they are.
+ *
+ * Grouped by client NAME, because that is the only client key the report
+ * inputs carry. Two clients with the same name would merge — worth knowing,
+ * and not worth a second identifier on five input types to avoid.
+ */
+function clientBook(inputs: ReportInputs, ageing: AgeingReport): ClientBook {
+  const byName = new Map<string, ClientBookRow>();
+  const row = (name: string): ClientBookRow => {
+    const found = byName.get(name);
+    if (found !== undefined) return found;
+    const created: ClientBookRow = {
+      name, contractGrossSantim: 0, outstandingSantim: 0, liveProjects: 0, contracts: 0,
+    };
+    byName.set(name, created);
+    return created;
+  };
+
+  for (const contract of inputs.contracts) {
+    if (contract.status === 'cancelled' || contract.status === 'draft') continue;
+    const r = row(contract.clientName);
+    r.contractGrossSantim += contract.valueGrossSantim;
+    r.contracts += 1;
+  }
+  for (const project of inputs.projects) {
+    if (project.status === 'in_progress') row(project.clientName).liveProjects += 1;
+  }
+  for (const aged of ageing.rows) {
+    row(aged.clientName).outstandingSantim += aged.balanceSantim;
+  }
+
+  const rows = [...byName.values()].sort(
+    (a, b) => b.contractGrossSantim - a.contractGrossSantim || a.name.localeCompare(b.name),
+  );
+  const bookTotal = rows.reduce((sum, r) => sum + r.contractGrossSantim, 0);
+  const largest = rows[0] ?? null;
+
+  return {
+    rows,
+    bookTotal,
+    owedTotal: rows.reduce((sum, r) => sum + r.outstandingSantim, 0),
+    largest,
+    largestShareBps:
+      largest === null || bookTotal <= 0
+        ? null
+        : Math.round((largest.contractGrossSantim / bookTotal) * 10_000),
+  };
+}
+
+/**
+ * How much of the book sits with one client.
+ *
+ * Carried in the HEADLINE of every report, not only the clients one. It is a
+ * position rather than a flow, so like receivables it gets no arrow: there is
+ * no stored "last month's concentration", and re-deriving one would be a
+ * different calculation wearing the same label.
+ *
+ * The figure that matters is the SHARE, not the size. One client at 60% is a
+ * different company from twelve at 8% each, and no total shows that.
+ */
+function concentrationMetric(book: ClientBook): Metric {
+  const share = book.largestShareBps;
+  return {
+    key: 'concentration',
+    label: 'Largest client',
+    value: share === null ? '—' : pct(share),
+    santim: null,
+    previousValue: null,
+    changeBps: null,
+    direction: null,
+    polarity: 'lower_is_better',
+    note:
+      share === null || book.largest === null
+        ? 'No signed contract value to divide between clients.'
+        : share >= CONCENTRATION_BPS
+          ? `${book.largest.name}. Losing them would take ${pct(share)} of the signed book with it.`
+          : `${book.largest.name}. No single client dominates the book.`,
+  };
+}
+
+/**
+ * Who the work is for, and who owes what.
+ *
+ * The figure worth an executive's attention is CONCENTRATION: not how much the
+ * biggest client is worth, but what share of the book it is.
+ */
+function clientsSection(inputs: ReportInputs, ageing: AgeingReport): ReportSection {
+  const book = clientBook(inputs, ageing);
+  const { rows, bookTotal, owedTotal, largest, largestShareBps: share } = book;
+
+  const narrative: string[] = [];
+  if (rows.length === 0) {
+    narrative.push('No client has a contract, a live project or an unpaid invoice against them.');
+  } else {
+    narrative.push(
+      `${plural(rows.length, 'client')} on the book, carrying ${formatETB(bookTotal)} of signed contract value ` +
+        `and ${formatETB(owedTotal)} outstanding.`,
+    );
+    if (largest !== null && share !== null) {
+      narrative.push(
+        share >= CONCENTRATION_BPS
+          ? `${largest.name} is ${pct(share)} of the signed book on its own. That is concentration worth naming out loud: losing one client would take ${pct(share)} of the work with it.`
+          : `The largest client, ${largest.name}, is ${pct(share)} of the signed book — no single client dominates it.`,
+      );
+    }
+    const owing = rows.filter((r) => r.outstandingSantim > 0).length;
+    if (owing > 0) narrative.push(`${plural(owing, 'client owes', 'clients owe')} money against an issued invoice.`);
+  }
+
+  return {
+    id: 'clients',
+    heading: 'Clients',
+    narrative,
+    table: {
+      caption: 'Clients by signed value',
+      columns: [
+        { key: 'name', label: 'Client' },
+        { key: 'contracts', label: 'Contracts', align: 'right' },
+        { key: 'value', label: 'Signed value', align: 'right' },
+        { key: 'live', label: 'Live projects', align: 'right' },
+        { key: 'owed', label: 'Outstanding', align: 'right' },
+      ],
+      rows: rows.map((r) => ({
+        name: r.name,
+        contracts: String(r.contracts),
+        value: formatETB(r.contractGrossSantim),
+        live: String(r.liveProjects),
+        owed: r.outstandingSantim === 0 ? '—' : formatETB(r.outstandingSantim),
+      })),
+      emptyMessage: 'No client records yet.',
+    },
+  };
+}
+
+/**
+ * The signed book: what is on it, and what is running out.
+ *
+ * A contract's END DATE is the thing this section exists for. Work gets
+ * delivered whether or not anybody reads a report; a contract quietly reaching
+ * its end date does not announce itself, and the renewal conversation has to
+ * start before it does.
+ */
+function contractsSection(inputs: ReportInputs, noun: string): ReportSection {
+  const live = inputs.contracts.filter((c) => c.status === 'active');
+  const ended = inputs.contracts.filter((c) => c.endDate < inputs.asOf && c.status === 'active');
+  const signedValue = live.reduce((sum, c) => sum + c.valueGrossSantim, 0);
+
+  const byType = new Map<string, { count: number; santim: number }>();
+  for (const contract of live) {
+    const key = contract.type.replace(/_/g, ' ');
+    const found = byType.get(key) ?? { count: 0, santim: 0 };
+    found.count += 1;
+    found.santim += contract.valueGrossSantim;
+    byType.set(key, found);
+  }
+
+  const narrative: string[] = [];
+  if (live.length === 0) {
+    narrative.push('No contract is currently active.');
+  } else {
+    narrative.push(
+      `${plural(live.length, 'active contract')} worth ${formatETB(signedValue)} gross.` +
+        (byType.size > 1
+          ? ` By type: ${[...byType.entries()]
+              .sort((a, b) => b[1].santim - a[1].santim)
+              .map(([type, t]) => `${plural(t.count, type)} at ${formatETB(t.santim)}`)
+              .join('; ')}.`
+          : ''),
+    );
+  }
+
+  if (ended.length > 0) {
+    narrative.push(
+      `${plural(ended.length, 'contract is', 'contracts are')} still marked active with an end date already in the past. ` +
+        'Either the term was extended and nobody recorded it, or it lapsed and the work is running uncovered.',
+    );
+  }
+
+  const soon = inputs.contracts
+    .filter((c) => c.status === 'active' && c.endDate >= inputs.asOf)
+    .sort((a, b) => a.endDate.getTime() - b.endDate.getTime());
+
+  return {
+    id: 'contracts',
+    heading: 'Contracts',
+    narrative: [
+      ...narrative,
+      soon.length === 0
+        ? `No active contract runs past today, so nothing is due to be renewed this ${noun}.`
+        : `The nearest end date is ${formatDual(soon[0]!.endDate)}.`,
+    ],
+    table: {
+      caption: 'Active contracts, soonest to end first',
+      columns: [
+        { key: 'contractNo', label: 'Contract' },
+        { key: 'client', label: 'Client' },
+        { key: 'type', label: 'Type' },
+        { key: 'value', label: 'Value (gross)', align: 'right' },
+        { key: 'ends', label: 'Ends' },
+      ],
+      rows: [...live]
+        .sort((a, b) => a.endDate.getTime() - b.endDate.getTime())
+        .map((c) => ({
+          contractNo: c.contractNo,
+          client: c.clientName,
+          type: c.type.replace(/_/g, ' '),
+          value: formatETB(c.valueGrossSantim),
+          ends: formatDual(c.endDate),
+        })),
+      emptyMessage: 'No active contract.',
+    },
+  };
+}
+
 function deliverySection(
   inputs: ReportInputs,
   now: PeriodTotals,
@@ -790,9 +1124,13 @@ function deliverySection(
   );
 
   if (overdue.length > 0) {
+    // The COUNT is the fact; naming each one was a comma-separated copy of the
+    // Live projects table directly below, which carries the planned end date
+    // for every row anyway. Two lists of the same projects means checking one
+    // against the other to see whether they agree.
     narrative.push(
-      `${plural(overdue.length, 'live project is', 'live projects are')} past the planned completion date: ` +
-        `${overdue.map((p) => `${p.projectNo} ${p.title}`).join(', ')}.`,
+      `${plural(overdue.length, 'live project is', 'live projects are')} past the planned completion date. ` +
+        'They are in the table below, with the dates they were due.',
     );
   } else if (live.length > 0) {
     narrative.push('Every live project is still inside its planned end date.');

@@ -19,7 +19,9 @@ import { subscribeDisbursements } from '../data/disbursements.js';
 import { usePortfolioDetail } from '../data/portfolio.js';
 import { useCollection } from '../data/useCollection.js';
 import {
+  REPORT_FOCUSES,
   buildCeoReport,
+  type ReportFocus,
   periodProgressNote,
   type CeoReport as CeoReportModel,
   type Metric,
@@ -54,6 +56,7 @@ const DEPENDS_ON = new Map(
 );
 
 export function CeoReport() {
+  const [focus, setFocus] = useState<ReportFocus>('overall');
   const [kind, setKind] = useState<PeriodKind>('month');
   const [basis, setBasis] = useState<CalendarBasis>('gregorian');
   const [anchor, setAnchor] = useState<Date>(() => new Date());
@@ -173,7 +176,7 @@ export function CeoReport() {
       })),
     };
 
-    return buildCeoReport(inputs);
+    return buildCeoReport(inputs, focus);
   }, [projects.rows, contracts.rows, invoices.rows, disbursements.rows, detail, period, asOf]);
 
   const loading = projects.loading || contracts.loading || invoices.loading || disbursements.loading || detail.loading;
@@ -204,6 +207,22 @@ export function CeoReport() {
         <h1>Reports</h1>
 
         <div className="report-toolbar">
+          <fieldset className="focus-set">
+            <legend>Report on</legend>
+            {REPORT_FOCUSES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={focus === option.value ? 'primary' : ''}
+                aria-pressed={focus === option.value}
+                title={option.hint}
+                onClick={() => setFocus(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </fieldset>
+
           <fieldset>
             <legend>Period</legend>
             {PERIOD_KINDS.map((option) => (
@@ -303,13 +322,17 @@ export function CeoReport() {
           <SectionBlock key={section.id} section={section} />
         ))}
 
-        <section className="report-block report-plan-head">
-          <h3>The {report.ahead.kind} ahead — {report.ahead.label}</h3>
-          <p className="muted">
-            Everything below is derived from dates and milestones already recorded. It is what the
-            records commit us to, not a forecast.
-          </p>
-        </section>
+        {/* Only when there IS something below it: a heading with nothing under
+            it promises a section that is not there. */}
+        {report.plan.length > 0 && (
+          <section className="report-block report-plan-head">
+            <h3>The {report.ahead.kind} ahead — {report.ahead.label}</h3>
+            <p className="muted">
+              Everything below is derived from dates and milestones already recorded. It is what the
+              records commit us to, not a forecast.
+            </p>
+          </section>
+        )}
 
         {report.plan.map((section) => (
           <SectionBlock key={section.id} section={section} />

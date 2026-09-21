@@ -205,18 +205,57 @@ function num(row: Row, ...names: string[]): number | null {
   return null;
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * The day an Excel date cell MEANT, whatever timezone the browser is in.
+ *
+ * THE BUG THIS EXISTS TO KILL
+ *   An Excel date is a wall-clock day with no timezone at all. SheetJS turns
+ *   the serial into a JS `Date` by way of LOCAL time, so in Addis Ababa
+ *   (UTC+3) serial 44270 — 15 March 2021 — arrives as
+ *
+ *       2021-03-14T20:59:44.000Z
+ *
+ *   Read the day off that with either local or UTC getters and you get the
+ *   14th. Every date in the imported workbook was one day early, and only for
+ *   users at a positive offset: it is correct in UTC, in New York and in
+ *   Sydney, which is exactly why it survived every test and every review.
+ *   Reproduced at UTC+3 and at UTC+5:30 before this was written.
+ *
+ * WHY IT ROUNDS
+ *   Undoing the offset lands on 23:59:44, not midnight — SheetJS's serial
+ *   arithmetic drifts by seconds. Rounding to the nearest midnight absorbs
+ *   both the offset and the drift. Taking the floor would re-introduce the
+ *   same off-by-one it is here to remove.
+ *
+ * `offsetMinutes` is injectable so the tests can pin every timezone down
+ * without depending on the one the test runner happens to be in.
+ */
+export function excelWallClockDate(
+  value: Date,
+  offsetMinutes: number = value.getTimezoneOffset(),
+): Date {
+  const shifted = value.getTime() - offsetMinutes * 60_000;
+  return new Date(Math.round(shifted / DAY_MS) * DAY_MS);
+}
+
 function date(row: Row, ...names: string[]): Date | null {
   const value = pick(row, ...names);
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    // Excel dates are wall-clock with no zone; anchor them at UTC midnight so
-    // the stored day never shifts by one when read back.
-    return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+    return excelWallClockDate(value);
   }
   if (typeof value === 'string') {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
-    }
+    const text = value.trim();
+    // A bare `YYYY-MM-DD` is parsed as UTC midnight by spec, so it is already
+    // the day it says. Anything else ("15 March 2021", "3/15/2021") is parsed
+    // as LOCAL time, and its day has to be read with local getters to match.
+    const iso = /^\d{4}-\d{2}-\d{2}$/.test(text);
+    const parsed = new Date(text);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return iso
+      ? new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()))
+      : new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()));
   }
   return null;
 }
