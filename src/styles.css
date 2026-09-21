@@ -2148,3 +2148,7 @@ input[type="range"] { width: 100%; max-width: 100%; accent-color: var(--brand-te
 .link-units { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
 .link-units li { display: flex; flex-direction: column; font-size: .88rem; }
 .link-units .muted { font-size: .78rem; }
+
+/* The focus control leads the toolbar: it decides what the report IS, where
+   the others decide which slice of time it covers. */
+.report-toolbar .focus-set { flex-basis: 100%; }
