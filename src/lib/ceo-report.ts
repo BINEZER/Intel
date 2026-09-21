@@ -562,6 +562,10 @@ export function buildCeoReport(inputs: ReportInputs, focus: ReportFocus = 'overa
       'lower_is_better',
     ),
     countMetric('delivery', 'Stages completed', now.stagesCompleted, before.stagesCompleted, noun, 'higher_is_better'),
+    // In the headline of EVERY report, not only the clients one: how much of
+    // the book sits with one client is the kind of fact that changes what a
+    // month means, and it is invisible in any of the totals above.
+    concentrationMetric(clientBook(inputs, ageing)),
   ];
 
   return {
@@ -862,20 +866,44 @@ function moneyOutSection(
  * 60% is a different company from twelve at 8% each, and the totals alone do
  * not show the difference.
  */
-function clientsSection(inputs: ReportInputs, ageing: AgeingReport): ReportSection {
-  interface Row {
-    name: string;
-    contractGrossSantim: number;
-    outstandingSantim: number;
-    liveProjects: number;
-    contracts: number;
-  }
+interface ClientBookRow {
+  name: string;
+  contractGrossSantim: number;
+  outstandingSantim: number;
+  liveProjects: number;
+  contracts: number;
+}
 
-  const byName = new Map<string, Row>();
-  const row = (name: string): Row => {
+interface ClientBook {
+  rows: ClientBookRow[];
+  bookTotal: number;
+  owedTotal: number;
+  largest: ClientBookRow | null;
+  /** The largest client's share of the signed book, or null when there is none. */
+  largestShareBps: number | null;
+}
+
+/** Above this share, one client leaving takes a serious part of the work with it. */
+const CONCENTRATION_BPS = 4000;
+
+/**
+ * The book, by client.
+ *
+ * Shared by the headline figure and the Clients section so the two cannot
+ * disagree about who the biggest client is or what share they are.
+ *
+ * Grouped by client NAME, because that is the only client key the report
+ * inputs carry. Two clients with the same name would merge — worth knowing,
+ * and not worth a second identifier on five input types to avoid.
+ */
+function clientBook(inputs: ReportInputs, ageing: AgeingReport): ClientBook {
+  const byName = new Map<string, ClientBookRow>();
+  const row = (name: string): ClientBookRow => {
     const found = byName.get(name);
     if (found !== undefined) return found;
-    const created: Row = { name, contractGrossSantim: 0, outstandingSantim: 0, liveProjects: 0, contracts: 0 };
+    const created: ClientBookRow = {
+      name, contractGrossSantim: 0, outstandingSantim: 0, liveProjects: 0, contracts: 0,
+    };
     byName.set(name, created);
     return created;
   };
@@ -897,8 +925,60 @@ function clientsSection(inputs: ReportInputs, ageing: AgeingReport): ReportSecti
     (a, b) => b.contractGrossSantim - a.contractGrossSantim || a.name.localeCompare(b.name),
   );
   const bookTotal = rows.reduce((sum, r) => sum + r.contractGrossSantim, 0);
-  const owedTotal = rows.reduce((sum, r) => sum + r.outstandingSantim, 0);
-  const biggest = rows[0];
+  const largest = rows[0] ?? null;
+
+  return {
+    rows,
+    bookTotal,
+    owedTotal: rows.reduce((sum, r) => sum + r.outstandingSantim, 0),
+    largest,
+    largestShareBps:
+      largest === null || bookTotal <= 0
+        ? null
+        : Math.round((largest.contractGrossSantim / bookTotal) * 10_000),
+  };
+}
+
+/**
+ * How much of the book sits with one client.
+ *
+ * Carried in the HEADLINE of every report, not only the clients one. It is a
+ * position rather than a flow, so like receivables it gets no arrow: there is
+ * no stored "last month's concentration", and re-deriving one would be a
+ * different calculation wearing the same label.
+ *
+ * The figure that matters is the SHARE, not the size. One client at 60% is a
+ * different company from twelve at 8% each, and no total shows that.
+ */
+function concentrationMetric(book: ClientBook): Metric {
+  const share = book.largestShareBps;
+  return {
+    key: 'concentration',
+    label: 'Largest client',
+    value: share === null ? '—' : pct(share),
+    santim: null,
+    previousValue: null,
+    changeBps: null,
+    direction: null,
+    polarity: 'lower_is_better',
+    note:
+      share === null || book.largest === null
+        ? 'No signed contract value to divide between clients.'
+        : share >= CONCENTRATION_BPS
+          ? `${book.largest.name}. Losing them would take ${pct(share)} of the signed book with it.`
+          : `${book.largest.name}. No single client dominates the book.`,
+  };
+}
+
+/**
+ * Who the work is for, and who owes what.
+ *
+ * The figure worth an executive's attention is CONCENTRATION: not how much the
+ * biggest client is worth, but what share of the book it is.
+ */
+function clientsSection(inputs: ReportInputs, ageing: AgeingReport): ReportSection {
+  const book = clientBook(inputs, ageing);
+  const { rows, bookTotal, owedTotal, largest, largestShareBps: share } = book;
 
   const narrative: string[] = [];
   if (rows.length === 0) {
@@ -908,12 +988,11 @@ function clientsSection(inputs: ReportInputs, ageing: AgeingReport): ReportSecti
       `${plural(rows.length, 'client')} on the book, carrying ${formatETB(bookTotal)} of signed contract value ` +
         `and ${formatETB(owedTotal)} outstanding.`,
     );
-    if (biggest !== undefined && bookTotal > 0) {
-      const share = Math.round((biggest.contractGrossSantim / bookTotal) * 100);
+    if (largest !== null && share !== null) {
       narrative.push(
-        share >= 40
-          ? `${biggest.name} is ${share}% of the signed book on its own. That is concentration worth naming out loud: losing one client would take ${share}% of the work with it.`
-          : `The largest client, ${biggest.name}, is ${share}% of the signed book — no single client dominates it.`,
+        share >= CONCENTRATION_BPS
+          ? `${largest.name} is ${pct(share)} of the signed book on its own. That is concentration worth naming out loud: losing one client would take ${pct(share)} of the work with it.`
+          : `The largest client, ${largest.name}, is ${pct(share)} of the signed book — no single client dominates it.`,
       );
     }
     const owing = rows.filter((r) => r.outstandingSantim > 0).length;

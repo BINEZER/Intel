@@ -493,3 +493,70 @@ describe('the contracts section', () => {
     expect(narrative).toContain('maintenance');
   });
 });
+
+describe('client concentration in the headline', () => {
+  const contract = (over = {}) => ({
+    id: 'k1', contractNo: 'AGR-1', clientName: 'Addis Towers', type: 'installation',
+    endDate: utc(2027, 3, 31), renewalAlertAt: null, status: 'active',
+    valueGrossSantim: 10_000_000, ...over,
+  });
+
+  const concentration = (over: Partial<ReportInputs> = {}, focus?: 'overall' | 'finance') =>
+    buildCeoReport(inputs(over), focus).headline.find((m) => m.key === 'concentration');
+
+  it('rides in the headline of every report, not only the clients one', () => {
+    // How much of the book sits with one client changes what a month means,
+    // and it is invisible in any of the other totals.
+    for (const { value } of REPORT_FOCUSES) {
+      const report = buildCeoReport(inputs({ contracts: [contract()] }), value);
+      expect(report.headline.find((m) => m.key === 'concentration')).toBeDefined();
+    }
+  });
+
+  it('reports the SHARE, and names who it is', () => {
+    const metric = concentration({
+      contracts: [contract(), contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 10_000_000 })],
+    });
+    expect(metric?.value).toBe('50%');
+    expect(metric?.note).toContain('Addis Towers');
+  });
+
+  it('says what losing them would cost once one client dominates', () => {
+    const metric = concentration({
+      contracts: [contract(), contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 1_000_000 })],
+    });
+    expect(metric?.note).toContain('Losing them would take 91%');
+  });
+
+  it('says plainly that nobody dominates when nobody does', () => {
+    const even = ['A', 'B', 'C'].map((name, i) =>
+      contract({ id: `k${i}`, clientName: name, valueGrossSantim: 1_000_000 }));
+    expect(concentration({ contracts: even })?.note).toContain('No single client dominates');
+  });
+
+  it('carries no arrow, because a share is a position and not a flow', () => {
+    // There is no stored "last month's concentration"; re-deriving one would
+    // be a different calculation wearing the same label.
+    const metric = concentration({ contracts: [contract()] });
+    expect(metric?.direction).toBeNull();
+    expect(metric?.changeBps).toBeNull();
+    expect(metric?.previousValue).toBeNull();
+  });
+
+  it('shows a dash rather than 0% when there is no signed value at all', () => {
+    const metric = concentration({ contracts: [] });
+    expect(metric?.value).toBe('—');
+    expect(metric?.note).toContain('No signed contract value');
+  });
+
+  it('agrees with the clients section about who is biggest', () => {
+    // One grouping feeds both; they cannot drift apart.
+    const over = {
+      contracts: [contract(), contract({ id: 'k2', clientName: 'Small Co', valueGrossSantim: 1_000_000 })],
+    };
+    const metric = concentration(over);
+    const rows = buildCeoReport(inputs(over), 'clients')
+      .sections.find((s) => s.id === 'clients')?.table?.rows ?? [];
+    expect(metric?.note).toContain(rows[0]?.name ?? '');
+  });
+});
