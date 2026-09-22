@@ -2159,3 +2159,8 @@ input[type="range"] { width: 100%; max-width: 100%; accent-color: var(--brand-te
 /* The focus control leads the toolbar: it decides what the report IS, where
    the others decide which slice of time it covers. */
 .report-toolbar .focus-set { flex-basis: 100%; }
+
+/* A page's own file arriving. Deliberately not a spinner: the rail and the top
+   bar are already on screen, so only the panel is missing, and a spinner that
+   appears and vanishes in 80ms is more jarring than a word. */
+.page-loading { padding: 2rem 0; }
