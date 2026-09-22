@@ -63,6 +63,7 @@ function project(over: Partial<ReportProject> = {}): ReportProject {
     projectNo: 'PRJ-001',
     title: 'Bole Tower lifts',
     clientName: 'Addis Towers',
+    type: 'elevator',
     status: 'in_progress',
     progressBps: 4000,
     contractNetSantim: 10_000_000,
@@ -340,6 +341,78 @@ describe('periodProgressNote', () => {
   });
 });
 
+describe('what the work is', () => {
+  const lift = (over = {}) => project({ type: 'elevator', ...over });
+  const other = (over = {}) =>
+    project({ type: 'renovation', status: 'in_progress', ...over });
+
+  const mixOf = (projects: ReportProject[]) => {
+    const report = buildCeoReport({ ...inputs(), projects }, 'projects');
+    return report.sections.find((s) => s.id === 'mix');
+  };
+
+  it('breaks the portfolio down by kind of work', () => {
+    const mix = mixOf([
+      lift({ id: 'a', projectNo: 'P-1', contractNetSantim: 8_000_000_00 }),
+      other({ id: 'b', projectNo: 'P-2', contractNetSantim: 2_000_000_00 }),
+    ]);
+    expect(mix?.heading).toBe('What the work is');
+    expect(mix?.table?.rows.map((r) => r['kind'])).toEqual([
+      'Lift supply & installation',
+      'Building renovation',
+    ]);
+  });
+
+  it('says so plainly when every job is lift work', () => {
+    // Rather than an empty "other" row, which reads as a business that has
+    // tried something and failed at it.
+    const mix = mixOf([lift({ id: 'a' }), lift({ id: 'b', projectNo: 'P-2' })]);
+    expect(mix?.narrative.join(' ')).toContain('is lift work');
+    expect(mix?.table?.rows).toHaveLength(1);
+  });
+
+  it('names the non-lift share in the delivery narrative too', () => {
+    const report = buildCeoReport(
+      {
+        ...inputs(),
+        projects: [
+          lift({ id: 'a', contractNetSantim: 8_000_000_00 }),
+          other({ id: 'b', projectNo: 'P-2', contractNetSantim: 2_000_000_00 }),
+        ],
+      },
+      'projects',
+    );
+    const delivery = report.sections.find((s) => s.id === 'delivery');
+    expect(delivery?.narrative.join(' ')).toContain('not lift work');
+  });
+
+  it('keeps the delivery narrative silent when there is no other work', () => {
+    const report = buildCeoReport({ ...inputs(), projects: [lift({ id: 'a' })] }, 'projects');
+    const delivery = report.sections.find((s) => s.id === 'delivery');
+    expect(delivery?.narrative.join(' ')).not.toContain('not lift work');
+  });
+
+  it('names the kind of every live project in the delivery table', () => {
+    const report = buildCeoReport(
+      { ...inputs(), projects: [other({ id: 'b', projectNo: 'P-2' })] },
+      'projects',
+    );
+    const delivery = report.sections.find((s) => s.id === 'delivery');
+    expect(delivery?.table?.columns.map((c) => c.key)).toContain('kind');
+    expect(delivery?.table?.rows[0]?.['kind']).toBe('Renovation');
+  });
+
+  it('draws a chart only when there is more than one kind to compare', () => {
+    expect(mixOf([lift({ id: 'a' })])?.chart).toBeUndefined();
+    expect(mixOf([lift({ id: 'a' }), other({ id: 'b', projectNo: 'P-2' })])?.chart).toBeDefined();
+  });
+
+  it('says there is nothing to break down rather than showing an empty table', () => {
+    const mix = mixOf([]);
+    expect(mix?.narrative.join(' ')).toContain('no project in hand');
+  });
+});
+
 describe('focusing the report', () => {
   const contract = (over = {}) => ({
     id: 'k1',
@@ -371,10 +444,17 @@ describe('focusing the report', () => {
     expect(report.title).toBe('Monthly finance report to the Chief Executive');
   });
 
-  it('keeps only delivery when focused on projects', () => {
+  it('keeps delivery and the breakdown of the work when focused on projects', () => {
     const report = buildCeoReport(inputs(), 'projects');
-    expect(report.sections.map((s) => s.id)).toEqual(['delivery']);
+    expect(report.sections.map((s) => s.id)).toEqual(['delivery', 'mix']);
     expect(report.title).toContain('delivery report');
+  });
+
+  it('leaves the breakdown out of the overall report', () => {
+    // The overall report is a document somebody prints every month and reads
+    // the same way each time. Quietly adding a section changes that document.
+    const report = buildCeoReport(inputs(), 'overall');
+    expect(report.sections.map((s) => s.id)).not.toContain('mix');
   });
 
   it('narrows the plan ahead to match the focus', () => {

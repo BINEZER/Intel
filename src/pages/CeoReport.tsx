@@ -42,6 +42,7 @@ import { collectChartImages, exportDocx, exportPdf, exportPptx } from '../lib/re
 import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
 import { ReportChart } from '../components/ReportChart.js';
 import { formatDual } from '../lib/ethiopic.js';
+import { normaliseProjectType } from '../lib/project-kind.js';
 import type { Contract, Disbursement, Invoice, Project } from '../lib/schema.js';
 
 const KIND_LABEL: Record<PeriodKind, string> = {
@@ -90,6 +91,7 @@ export function CeoReport() {
         projectNo: p.projectNo,
         title: p.title,
         clientName: p.clientName,
+        type: normaliseProjectType(p.type),
         status: p.status,
         progressBps: p.progressBps,
         contractNetSantim: p.financials.contractNetSantim,

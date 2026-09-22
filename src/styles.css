@@ -319,6 +319,25 @@ button {
   box-shadow: var(--shadow-xs);
   cursor: pointer;
 }
+/* A link that has to look like a button, because it sits in a row of them and
+   a bare underline there reads as a stray word rather than an action. It
+   navigates, so it stays an anchor: middle-click and "open in new tab" are
+   things people do with a report. */
+a.button-link {
+  display: inline-flex; align-items: center;
+  padding: .45rem .9rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: .88rem;
+  letter-spacing: -.005em;
+  box-shadow: var(--shadow-xs);
+  text-decoration: none;
+}
+a.button-link:hover { background: var(--surface-2); color: var(--text); }
+
 button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 button:active:not(:disabled) { box-shadow: none; }
 button:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
@@ -518,6 +537,7 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
   text-transform: capitalize; white-space: nowrap;
 }
 .chip-ok { background: #E9F7F0; border-color: #CBEBDD; color: #176B47; }
+.chip-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 
 /* --- forms --- */
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; align-items: start; }
@@ -1262,6 +1282,13 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
   button {
     display: none !important;
   }
+
+  /* On the one-project report the print header already carries the project,
+     the client and the date. Keeping the screen heading as well prints the
+     same title twice, which on a document handed to somebody reads as a
+     mistake rather than as emphasis. Other pages keep theirs: there the
+     heading is the only thing naming the list. */
+  .project-report > .page-head { display: none !important; }
 
   .print-only { display: block !important; }
 

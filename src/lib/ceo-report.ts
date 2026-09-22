@@ -36,6 +36,9 @@ import {
 } from './period.js';
 import { formatDual } from './ethiopic.js';
 import type { ProjectStatusValue } from './status.js';
+import { projectTypeShort } from './project-kind.js';
+import { describeMix, workMix, type WorkMix } from './work-mix.js';
+import type { ProjectType } from './project-kind.js';
 
 // ---------------------------------------------------------------------------
 // Inputs — flat, so the report can be tested without Firestore
@@ -79,6 +82,12 @@ export interface ReportProject {
   projectNo: string;
   title: string;
   clientName: string;
+  /**
+   * The kind of work. Without it the report cannot tell an office renovation
+   * from a lift installation, which is how a company that has diversified goes
+   * on reading as a company that has not.
+   */
+  type: ProjectType;
   status: ProjectStatusValue;
   progressBps: number;
   contractNetSantim: number;
@@ -475,7 +484,7 @@ const FOCUS_SECTIONS: Record<ReportFocus, readonly string[]> = {
    */
   overall: ['money-in', 'money-out', 'delivery', 'trend', 'risk'],
   finance: ['money-in', 'money-out', 'trend'],
-  projects: ['delivery'],
+  projects: ['delivery', 'mix'],
   contracts: ['contracts'],
   clients: ['clients'],
 };
@@ -586,6 +595,7 @@ export function buildCeoReport(inputs: ReportInputs, focus: ReportFocus = 'overa
         moneyInSection(inputs, now, before, ageing, noun),
         moneyOutSection(inputs, now, before, noun),
         deliverySection(inputs, now, before, noun),
+        mixSection(inputs),
         clientsSection(inputs, ageing),
         contractsSection(inputs, noun),
         trendSection(inputs),
@@ -1136,6 +1146,11 @@ function deliverySection(
     narrative.push('Every live project is still inside its planned end date.');
   }
 
+  // Said only where there IS other work. A company that only installs lifts
+  // should not read "0 jobs are not lift work" every month.
+  const mixLine = describeMix(workMix(inputs.projects));
+  if (mixLine !== null) narrative.push(mixLine);
+
   if (onHold.length > 0) {
     narrative.push(`${plural(onHold.length, 'project is', 'projects are')} on hold and consuming no crew time, but still carrying contract value.`);
   }
@@ -1152,6 +1167,7 @@ function deliverySection(
       columns: [
         { key: 'projectNo', label: 'Project' },
         { key: 'title', label: 'Title' },
+        { key: 'kind', label: 'Kind' },
         { key: 'client', label: 'Client' },
         { key: 'progress', label: 'Progress', align: 'right' },
         { key: 'contract', label: 'Contract value', align: 'right' },
@@ -1160,6 +1176,7 @@ function deliverySection(
       rows: live.map((p) => ({
         projectNo: p.projectNo,
         title: p.title,
+        kind: projectTypeShort(p.type),
         client: p.clientName,
         progress: pct(p.progressBps),
         contract: formatETB(p.contractNetSantim),
@@ -1184,6 +1201,86 @@ function deliverySection(
         values: { progress: Math.round(p.progressBps / 100) },
       })),
     },
+  };
+}
+
+/**
+ * What kind of work the portfolio is.
+ *
+ * Carried by the DELIVERY focus, not by the overall report. The overall report
+ * is a document somebody prints every month and reads the same way each time;
+ * quietly adding a section to it changes that document. Asking for the delivery
+ * report is asking for the detail, and this is the detail.
+ *
+ * The rows are jobs in hand — cancelled and terminated are dropped by
+ * `workMix`, because a portfolio that counts them describes a bigger business
+ * than the one that exists.
+ */
+function mixSection(inputs: ReportInputs): ReportSection {
+  const mix = workMix(inputs.projects);
+  const chart = mixChart(mix);
+
+  const narrative: string[] = [];
+  if (mix.projects === 0) {
+    narrative.push('There is no project in hand to break down.');
+  } else if (!mix.hasOtherWork) {
+    narrative.push(
+      `All ${plural(mix.projects, 'project')} in hand is lift work. ` +
+        'When a job outside that is taken on, set its kind on the project and it will report here separately.',
+    );
+  } else {
+    narrative.push(describeMix(mix) ?? '');
+    narrative.push(
+      `Lift work is ${plural(mix.elevator.projects, 'job')} worth ${formatETB(mix.elevator.valueNetSantim)}; ` +
+        `everything else is ${plural(mix.other.projects, 'job')} worth ${formatETB(mix.other.valueNetSantim)}. ` +
+        'Both are in the table below, split by what the work actually is.',
+    );
+  }
+
+  return {
+    id: 'mix',
+    heading: 'What the work is',
+    narrative: narrative.filter((line) => line !== ''),
+    table: {
+      caption: 'Projects in hand, by kind of work',
+      columns: [
+        { key: 'kind', label: 'Kind of work' },
+        { key: 'projects', label: 'Projects', align: 'right' },
+        { key: 'value', label: 'Value', align: 'right' },
+        { key: 'share', label: 'Share of portfolio', align: 'right' },
+        { key: 'progress', label: 'Progress', align: 'right' },
+      ],
+      rows: mix.rows.map((row) => ({
+        kind: row.label,
+        projects: String(row.projects),
+        value: formatETB(row.valueNetSantim),
+        // A share of nothing is not 0%: printing it reads as "this work is
+        // worth nothing" rather than "nothing here carries a figure yet".
+        share: row.shareBps === null ? 'no value recorded' : pct(row.shareBps),
+        progress: row.progressBps === null ? '—' : pct(row.progressBps),
+      })),
+      emptyMessage: 'No project is in hand.',
+    },
+    ...(chart === undefined ? {} : { chart }),
+  };
+}
+
+/** The same split as a chart, where there is more than one kind to compare. */
+function mixChart(mix: WorkMix): ChartSpec | undefined {
+  if (mix.rows.length < 2) return undefined;
+  return {
+    id: 'mix',
+    kind: 'bars',
+    title: 'Portfolio value by kind of work',
+    subtitle: `${plural(mix.projects, 'project')} in hand, worth ${formatETB(mix.valueNetSantim)}`,
+    series: [{ key: 'value', label: 'Value' }],
+    palette: 'single',
+    unit: 'santim',
+    points: mix.rows.map((row) => ({
+      label: row.label,
+      shortLabel: row.label,
+      values: { value: row.valueNetSantim },
+    })),
   };
 }
 

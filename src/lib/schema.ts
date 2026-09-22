@@ -13,6 +13,7 @@
 
 /** Firestore Timestamp, structurally typed so this file stays SDK-agnostic. */
 import type { ClientStatus, ContractStatusValue, ProjectStatusValue } from './status.js';
+import type { ProjectType } from './project-kind.js';
 
 export interface Timestamp {
   toDate(): Date;
@@ -265,7 +266,9 @@ export interface PaymentMilestone extends AuditFields {
 // projects/{projectId}
 // ===========================================================================
 
-export type ProjectType = 'elevator' | 'non_elevator';
+// The kinds of work a project can be, and whether the lift machinery applies.
+// Widened from a two-way elevator/not split; see `lib/project-kind.ts`.
+export type { ProjectType };
 
 /** The five standard elevator phases. Non-elevator projects use free-form phases. */
 export const ELEVATOR_PHASES = [

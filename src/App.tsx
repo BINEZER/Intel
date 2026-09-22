@@ -28,6 +28,7 @@ const Performance = lazy(() => import('./pages/Performance.js').then((m) => ({ d
 const Settings = lazy(() => import('./pages/Settings.js').then((m) => ({ default: m.Settings })));
 const Finance = lazy(() => import('./pages/Finance.js').then((m) => ({ default: m.Finance })));
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail.js').then((m) => ({ default: m.ProjectDetail })));
+const ProjectReport = lazy(() => import('./pages/ProjectReport.js').then((m) => ({ default: m.ProjectReport })));
 const Projects = lazy(() => import('./pages/Projects.js').then((m) => ({ default: m.Projects })));
 const Contracts = lazy(() => import('./pages/Contracts.js').then((m) => ({ default: m.Contracts })));
 const Priority = lazy(() => import('./pages/Priority.js').then((m) => ({ default: m.Priority })));
@@ -124,6 +125,16 @@ export function App() {
               element={
                 <RequireCapability capability="read">
                   <ProjectDetail />
+                </RequireCapability>
+              }
+            />
+            {/* The same project as a document: money in birr, the invoices
+                behind it, and a print header — for taking off the screen. */}
+            <Route
+              path="projects/:projectId/report"
+              element={
+                <RequireCapability capability="viewFinancials">
+                  <ProjectReport />
                 </RequireCapability>
               }
             />

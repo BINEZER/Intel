@@ -3,6 +3,15 @@
  */
 
 import { useMemo, useState, type FormEvent } from 'react';
+import {
+  PROJECT_TYPES,
+  isElevatorWork,
+  normaliseProjectType,
+  projectTypeLabel,
+  projectTypeShort,
+  typeForTemplate,
+  type SelectableProjectType,
+} from '../lib/project-kind.js';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -72,6 +81,14 @@ export function Projects() {
       { key: 'title', label: 'Name', value: (p) => p.title },
       { key: 'projectNo', label: 'Number', value: (p) => p.projectNo },
       { key: 'client', label: 'Client', value: (p) => p.clientName, filterable: true },
+      // Filterable, so the lift business and the rest can each be looked at
+      // alone. Without it a company doing both can only ever see the total.
+      {
+        key: 'kind',
+        label: 'Kind',
+        value: (p) => projectTypeShort(p.type),
+        filterable: true,
+      },
       { key: 'status', label: 'Status', value: (p) => p.status, filterable: true },
       { key: 'city', label: 'City', value: (p) => p.site?.city ?? '', filterable: true },
       { key: 'progress', label: 'Progress', value: (p) => p.progressBps },
@@ -179,8 +196,17 @@ export function Projects() {
                 <div>
                   <h2><Link to={`/projects/${project.id}`}>{project.title}</Link></h2>
                   <p className="muted">
-                    {project.clientName} · {project.site?.name ?? '—'} · {project.units?.length ?? 0} unit
-                    {project.units?.length === 1 ? '' : 's'}
+                    {project.clientName} · {project.site?.name ?? '—'} ·{' '}
+                    {projectTypeShort(project.type)}
+                    {/* A lift count belongs on lift work. "0 units" on an
+                        office renovation is not a fact about the job, it is
+                        the shape of a different job showing through. */}
+                    {isElevatorWork(project.type) && (
+                      <>
+                        {' · '}
+                        {project.units?.length ?? 0} unit{project.units?.length === 1 ? '' : 's'}
+                      </>
+                    )}
                   </p>
                   {/* Which agreement pays for this. A project with no contract
                       is a real state — variations and warranty work — and it
@@ -283,6 +309,19 @@ function ProjectForm({
   const [city, setCity] = useState(initial?.site?.city ?? 'Addis Ababa');
   const [units, setUnits] = useState(initial?.units?.length ?? 1);
   const [templateKey, setTemplateKey] = useState(initial?.templateKey ?? DEFAULT_TEMPLATE_KEY);
+  /**
+   * The kind of work, which used to be inferred from the template and never
+   * shown. A template is a starting point for the STAGES; the kind of work is
+   * a fact about the job, and a fact nobody can correct is a fact that stays
+   * wrong. Choosing a template still proposes it — see `chooseTemplate`.
+   */
+  const [type, setType] = useState<SelectableProjectType>(() =>
+    initial === null
+      ? typeForTemplate(DEFAULT_TEMPLATE_KEY)
+      : normaliseProjectType(initial.type),
+  );
+  /** Once the kind has been set by hand, a template must not overwrite it. */
+  const [typeIsProposed, setTypeIsProposed] = useState(initial === null);
   const [programId, setProgramId] = useState(initial?.programId ?? '');
   const [parentProjectId, setParentProjectId] = useState(initial?.parentProjectId ?? '');
   const [subCity, setSubCity] = useState(initial?.site?.subCity ?? '');
@@ -298,6 +337,16 @@ function ProjectForm({
   const programs = useCollection<Program>((d, e) => subscribePrograms(d, e, { status: 'active' }), [], 'load programs').rows;
   const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
   const template = projectTemplate(templateKey);
+
+  /**
+   * Picking a template proposes the matching kind of work, and stops doing so
+   * the moment the kind is set by hand. A default that quietly overwrites what
+   * somebody chose is worse than no default at all.
+   */
+  function chooseTemplate(key: string) {
+    setTemplateKey(key);
+    if (typeIsProposed) setType(typeForTemplate(key));
+  }
 
   /**
    * Only top-level projects may be a parent. Sub-projects do not nest — a
@@ -319,11 +368,7 @@ function ProjectForm({
 
     const input = {
       projectNo: initial?.projectNo ?? `P-${Date.now()}`,
-      // A project built from a lift template is elevator work; anything else
-      // is not, and forcing it into the elevator reports would misstate them.
-      type: (templateKey === 'elevator_install' || templateKey === 'modernisation'
-        ? 'elevator'
-        : 'non_elevator') as Project['type'],
+      type,
       title: title.trim(),
       clientId,
       clientName: client.name,
@@ -447,10 +492,31 @@ function ProjectForm({
 
           <div className="field">
             <label htmlFor="p-template">Kind of job</label>
-            <select id="p-template" value={templateKey} onChange={(e) => setTemplateKey(e.target.value)}>
+            <select id="p-template" value={templateKey} onChange={(e) => chooseTemplate(e.target.value)}>
               {PROJECT_TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
             </select>
             <p className="hint">{template.description}</p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-type">Kind of work</label>
+            <select
+              id="p-type"
+              value={type}
+              onChange={(e) => {
+                setType(e.target.value as SelectableProjectType);
+                setTypeIsProposed(false);
+              }}
+            >
+              {PROJECT_TYPES.map((t) => (
+                <option key={t} value={t}>{projectTypeLabel(t)}</option>
+              ))}
+            </select>
+            <p className="hint">
+              {typeIsProposed
+                ? 'Taken from the kind of job above. Change it if this is something else.'
+                : 'What the reports count this job as. Lift work and other work are reported both together and apart.'}
+            </p>
           </div>
 
           <div className="field">
@@ -465,11 +531,17 @@ function ProjectForm({
             </p>
           </div>
 
-          <div className="field">
-            <label htmlFor="p-units">Units</label>
-            <input id="p-units" type="number" min={1} value={units}
-              onChange={(e) => setUnits(Number(e.target.value) || 1)} />
-          </div>
+          {/* Asked only where there are lifts to count. On a renovation the
+              field has no answer, and a required-looking box with no answer is
+              how a form teaches people to type something untrue. */}
+          {isElevatorWork(type) && (
+            <div className="field">
+              <label htmlFor="p-units">Units</label>
+              <input id="p-units" type="number" min={1} value={units}
+                onChange={(e) => setUnits(Number(e.target.value) || 1)} />
+              <p className="hint">How many lifts this project puts in.</p>
+            </div>
+          )}
         </div>
 
         <div className="form-grid dates">
