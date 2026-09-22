@@ -1,29 +1,60 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthProvider.js';
 import { RequireAuth, RequireCapability } from './auth/RequireAuth.js';
 import { AppShell } from './components/AppShell.js';
+
+/*
+ * WHY THE PAGES ARE LOADED LAZILY
+ *
+ * Every page used to be imported here, so opening the dashboard downloaded the
+ * CEO report, the import wizard, the lift register, Settings and twenty-three
+ * others before anything appeared — one 1.28 MB script, 370 kB over the wire,
+ * parsed and executed before the first pixel. On a connection that is not a
+ * data centre's, that is the wait.
+ *
+ * Each route now arrives as its own file, fetched when somebody actually goes
+ * there. The two ways INTO the app — the sign-in screen and the dashboard —
+ * stay eager: making them lazy would only add a second round trip to the one
+ * path every session starts with.
+ */
 import { Dashboard } from './pages/Dashboard.js';
-import { Boards } from './pages/Boards.js';
-import { Clients } from './pages/Clients.js';
-import { FinishNextRoute } from './pages/FinishNext.js';
-import { Performance } from './pages/Performance.js';
-import { Settings } from './pages/Settings.js';
-import { Finance } from './pages/Finance.js';
-import { ProjectDetail } from './pages/ProjectDetail.js';
-import { Projects } from './pages/Projects.js';
-import { Contracts } from './pages/Contracts.js';
-import { Priority } from './pages/Priority.js';
-import { Alerts } from './pages/Alerts.js';
-import { Collections } from './pages/Collections.js';
-import { Payouts } from './pages/Payouts.js';
-import { Incentives } from './pages/Incentives.js';
-import { Programs, ProgramDetail } from './pages/Programs.js';
-import { Units, UnitDetail } from './pages/Units.js';
-import { CeoReport } from './pages/CeoReport.js';
-import { Import } from './pages/Import.js';
-import { People } from './pages/People.js';
-import { FollowUps } from './pages/FollowUps.js';
 import { SignIn } from './pages/SignIn.js';
+
+const Boards = lazy(() => import('./pages/Boards.js').then((m) => ({ default: m.Boards })));
+const Clients = lazy(() => import('./pages/Clients.js').then((m) => ({ default: m.Clients })));
+const FinishNextRoute = lazy(() => import('./pages/FinishNext.js').then((m) => ({ default: m.FinishNextRoute })));
+const Performance = lazy(() => import('./pages/Performance.js').then((m) => ({ default: m.Performance })));
+const Settings = lazy(() => import('./pages/Settings.js').then((m) => ({ default: m.Settings })));
+const Finance = lazy(() => import('./pages/Finance.js').then((m) => ({ default: m.Finance })));
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail.js').then((m) => ({ default: m.ProjectDetail })));
+const Projects = lazy(() => import('./pages/Projects.js').then((m) => ({ default: m.Projects })));
+const Contracts = lazy(() => import('./pages/Contracts.js').then((m) => ({ default: m.Contracts })));
+const Priority = lazy(() => import('./pages/Priority.js').then((m) => ({ default: m.Priority })));
+const Alerts = lazy(() => import('./pages/Alerts.js').then((m) => ({ default: m.Alerts })));
+const Collections = lazy(() => import('./pages/Collections.js').then((m) => ({ default: m.Collections })));
+const Payouts = lazy(() => import('./pages/Payouts.js').then((m) => ({ default: m.Payouts })));
+const Incentives = lazy(() => import('./pages/Incentives.js').then((m) => ({ default: m.Incentives })));
+const Programs = lazy(() => import('./pages/Programs.js').then((m) => ({ default: m.Programs })));
+const ProgramDetail = lazy(() => import('./pages/Programs.js').then((m) => ({ default: m.ProgramDetail })));
+const Units = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.Units })));
+const UnitDetail = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.UnitDetail })));
+const CeoReport = lazy(() => import('./pages/CeoReport.js').then((m) => ({ default: m.CeoReport })));
+const Import = lazy(() => import('./pages/Import.js').then((m) => ({ default: m.Import })));
+const People = lazy(() => import('./pages/People.js').then((m) => ({ default: m.People })));
+const FollowUps = lazy(() => import('./pages/FollowUps.js').then((m) => ({ default: m.FollowUps })));
+
+/**
+ * Shown while a page's own file is in flight.
+ *
+ * Deliberately plain and deliberately NOT a spinner that flashes on a fast
+ * connection: the rail and the top bar are already on screen, so the only
+ * thing missing is the panel, and a word is less jarring than a spinner that
+ * appears and vanishes in 80ms.
+ */
+function PageLoading() {
+  return <p className="muted page-loading">Loading…</p>;
+}
 
 export function App() {
   return (

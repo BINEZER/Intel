@@ -3,7 +3,7 @@
  * shows today in both calendars.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './ErrorBoundary.js';
 import { Logo } from './Logo.js';
@@ -237,7 +237,12 @@ export function AppShell() {
           {/* Keyed on the path so navigating away from a page that failed
               clears the error rather than stranding you on it. */}
           <ErrorBoundary resetKey={location.pathname}>
-            <Outlet />
+            {/* Inside the shell, so the rail and the top bar stay on screen
+                while a page's own file is in flight — the page is what is
+                loading, not the application. */}
+            <Suspense fallback={<p className="muted page-loading">Loading…</p>}>
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </main>
       </div>
