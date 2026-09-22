@@ -25,6 +25,11 @@ import {
   type Workbook,
 } from '../lib/import-master.js';
 import { runImport, type ImportProgress, type ImportResult } from '../data/import-run.js';
+import {
+  repairImportedDates,
+  type DateRepairProgress,
+  type DateRepairResult,
+} from '../data/date-repair.js';
 import { describeFirestoreError } from '../data/repository.js';
 
 type VatTreatment = 'inclusive' | 'exclusive';
@@ -60,7 +65,10 @@ export function Import() {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [repairProgress, setRepairProgress] = useState<DateRepairProgress | null>(null);
+  const [repairResult, setRepairResult] = useState<DateRepairResult | null>(null);
   const [showAllIssues, setShowAllIssues] = useState(false);
+  const [showAllChanges, setShowAllChanges] = useState(false);
 
   const plan: ImportPlan | null = useMemo(() => {
     if (workbook === null || vatTreatment === null) return null;
@@ -78,6 +86,7 @@ export function Import() {
     if (file === undefined) return;
     setError(null);
     setResult(null);
+    setRepairResult(null);
     setReading(true);
     try {
       setWorkbook(await readWorkbook(file));
@@ -102,6 +111,26 @@ export function Import() {
       setError(describeFirestoreError(cause, 'import the workbook'));
     } finally {
       setProgress(null);
+    }
+  }
+
+  /**
+   * Correct the dates without touching anything else.
+   *
+   * Separate from `write` on purpose: a full import overwrites every field from
+   * the workbook, and by now these records carry decisions the workbook has
+   * never heard of. See `data/date-repair.ts`.
+   */
+  async function repairDates() {
+    if (plan === null || user === null) return;
+    setError(null);
+    setRepairProgress({ stage: 'Starting', examined: 0, total: 0 });
+    try {
+      setRepairResult(await repairImportedDates(plan, user.uid, setRepairProgress));
+    } catch (cause) {
+      setError(describeFirestoreError(cause, 'correct the dates'));
+    } finally {
+      setRepairProgress(null);
     }
   }
 
@@ -283,7 +312,48 @@ export function Import() {
           </section>
 
           <section className="card">
-            <h2>4. Import</h2>
+            <h2>4. Correct the dates already loaded</h2>
+            {repairResult === null ? (
+              <>
+                <p className="muted">
+                  The first import read every date from this workbook one day early. This puts
+                  them right and changes <strong>nothing else</strong> — a contract you have put
+                  on hold stays on hold, a project you marked terminated stays terminated, and
+                  every payment record is left exactly as it is. Only dates that are actually
+                  wrong are rewritten.
+                </p>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void repairDates()}
+                  disabled={repairProgress !== null || progress !== null || user === null}
+                >
+                  {repairProgress === null ? 'Correct the dates' : 'Correcting…'}
+                </button>
+                {repairProgress !== null && (
+                  <p className="muted" role="status" aria-live="polite">
+                    Checking {repairProgress.stage}: {repairProgress.examined} of{' '}
+                    {repairProgress.total} records.
+                  </p>
+                )}
+              </>
+            ) : (
+              <DatesCorrected
+                result={repairResult}
+                expanded={showAllChanges}
+                onToggle={() => setShowAllChanges((v) => !v)}
+              />
+            )}
+          </section>
+
+          <section className="card">
+            <h2>5. Load everything from the workbook</h2>
+            <p className="muted">
+              Only needed for a first load, or after editing the workbook itself. It writes every
+              field from the spreadsheet over what is stored, so anything changed in the app since
+              the last import — a status, a warranty term, a handover date — goes back to what the
+              spreadsheet says. To fix dates alone, use step 4 instead.
+            </p>
             {result === null ? (
               <>
                 <p className="muted">
@@ -333,6 +403,130 @@ function RefList({ refs, expanded }: { refs: readonly string[]; expanded: boolea
     </>
   );
 }
+
+/**
+ * What the date correction did.
+ *
+ * The COUNT is the headline, but a count alone asks to be trusted. The first
+ * few changes are shown with the day they were on and the day they are on now,
+ * so the figure can be checked against the workbook rather than believed.
+ */
+function DatesCorrected({
+  result,
+  expanded,
+  onToggle,
+}: {
+  result: DateRepairResult;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const fields = Object.values(result.fields).reduce((sum, n) => sum + n, 0);
+  const documents = Object.values(result.corrected).reduce((sum, n) => sum + n, 0);
+  const shown = expanded ? result.changes : result.changes.slice(0, 8);
+
+  if (fields === 0) {
+    return (
+      <div>
+        <p className="verdict verdict-healthy">Every date is already correct.</p>
+        <p className="muted">
+          Nothing was changed. {result.alreadyRight} dates were checked against the workbook and
+          all of them match.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="verdict verdict-healthy">
+        {fields} date{fields === 1 ? '' : 's'} corrected across {documents} record
+        {documents === 1 ? '' : 's'}.
+      </p>
+      <dl className="figure-list">
+        {Object.entries(result.corrected)
+          .filter(([, count]) => count > 0)
+          .map(([name, count]) => (
+            <div key={name}>
+              <dt>{LABEL[name] ?? name}</dt>
+              <dd>
+                {count} corrected{' '}
+                <span className="muted">of {result.examined[name] ?? 0} checked</span>
+              </dd>
+            </div>
+          ))}
+        {result.alreadyRight > 0 && (
+          <div>
+            <dt>Already right</dt>
+            <dd>
+              {result.alreadyRight} <span className="muted">left untouched</span>
+            </dd>
+          </div>
+        )}
+        {result.missing > 0 && (
+          <div>
+            <dt>No longer in the app</dt>
+            <dd>
+              {result.missing} <span className="muted">deleted since the import</span>
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      <table className="data-table">
+        <caption className="sr-only">Dates changed by the correction</caption>
+        <thead>
+          <tr>
+            <th scope="col">Record</th>
+            <th scope="col">Date</th>
+            <th scope="col">Was</th>
+            <th scope="col">Now</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((change) => (
+            <tr key={`${change.collection}-${change.label}-${change.field}`}>
+              <td>{change.label}</td>
+              <td>{FIELD_LABEL[change.field] ?? change.field}</td>
+              <td className="muted">{change.from}</td>
+              <td>{change.to}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {result.changes.length > shown.length && (
+        <button type="button" onClick={onToggle}>
+          Show all {result.changes.length} changes
+        </button>
+      )}
+      {expanded && result.changes.length > 8 && (
+        <button type="button" onClick={onToggle}>
+          Show fewer
+        </button>
+      )}
+
+      <p className="muted">
+        Nothing but these dates was written. Open Contracts or Projects to check a few against the
+        workbook.
+      </p>
+    </div>
+  );
+}
+
+/** Collection names as the app says them. */
+const LABEL: Record<string, string> = {
+  programs: 'Programs',
+  contracts: 'Contracts',
+  projects: 'Projects',
+};
+
+/** Field names as the forms say them. */
+const FIELD_LABEL: Record<string, string> = {
+  signedDate: 'Signed',
+  startDate: 'Start',
+  endDate: 'End',
+  plannedStart: 'Planned start',
+  plannedEnd: 'Planned end',
+};
 
 function ImportDone({ result }: { result: ImportResult }) {
   const line = (map: Record<string, number>) =>
