@@ -30,6 +30,11 @@ import {
   type DateRepairProgress,
   type DateRepairResult,
 } from '../data/date-repair.js';
+import {
+  backfillImportedStages,
+  type BackfillProgress,
+  type BackfillResult,
+} from '../data/stage-backfill.js';
 import { describeFirestoreError } from '../data/repository.js';
 
 type VatTreatment = 'inclusive' | 'exclusive';
@@ -69,6 +74,8 @@ export function Import() {
   const [repairResult, setRepairResult] = useState<DateRepairResult | null>(null);
   const [showAllIssues, setShowAllIssues] = useState(false);
   const [showAllChanges, setShowAllChanges] = useState(false);
+  const [stageProgress, setStageProgress] = useState<BackfillProgress | null>(null);
+  const [stageResult, setStageResult] = useState<BackfillResult | null>(null);
 
   const plan: ImportPlan | null = useMemo(() => {
     if (workbook === null || vatTreatment === null) return null;
@@ -87,6 +94,7 @@ export function Import() {
     setError(null);
     setResult(null);
     setRepairResult(null);
+    setStageResult(null);
     setReading(true);
     try {
       setWorkbook(await readWorkbook(file));
@@ -131,6 +139,26 @@ export function Import() {
       setError(describeFirestoreError(cause, 'correct the dates'));
     } finally {
       setRepairProgress(null);
+    }
+  }
+
+  /**
+   * Give the imported projects the stage trackers the import never created.
+   *
+   * Separate from both the import and the date repair: it writes only to
+   * projects that have NO stages, so it can never overwrite progress somebody
+   * recorded. See `data/stage-backfill.ts`.
+   */
+  async function backfillStages() {
+    if (plan === null || user === null) return;
+    setError(null);
+    setStageProgress({ stage: 'Starting', examined: 0, total: 0 });
+    try {
+      setStageResult(await backfillImportedStages(plan, user.uid, setStageProgress));
+    } catch (cause) {
+      setError(describeFirestoreError(cause, 'set up the stage trackers'));
+    } finally {
+      setStageProgress(null);
     }
   }
 
@@ -347,7 +375,38 @@ export function Import() {
           </section>
 
           <section className="card">
-            <h2>5. Load everything from the workbook</h2>
+            <h2>5. Set up the stage trackers</h2>
+            {stageResult === null ? (
+              <>
+                <p className="muted">
+                  The projects loaded from the workbook have no stages, so they all read 0% however
+                  much of them is built. This creates the fourteen installation stages on each one
+                  and marks the stages the workbook says are already behind the job. It only ever
+                  touches a project that has <strong>no</strong> stages — anything your crews have
+                  recorded is left exactly as it is.
+                </p>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void backfillStages()}
+                  disabled={stageProgress !== null || progress !== null || repairProgress !== null || user === null}
+                >
+                  {stageProgress === null ? 'Set up the trackers' : 'Setting up…'}
+                </button>
+                {stageProgress !== null && (
+                  <p className="muted" role="status" aria-live="polite">
+                    {stageProgress.stage}: {stageProgress.examined} of {stageProgress.total}{' '}
+                    projects.
+                  </p>
+                )}
+              </>
+            ) : (
+              <StagesBuilt result={stageResult} />
+            )}
+          </section>
+
+          <section className="card">
+            <h2>6. Load everything from the workbook</h2>
             <p className="muted">
               Only needed for a first load, or after editing the workbook itself. It writes every
               field from the spreadsheet over what is stored, so anything changed in the app since
@@ -527,6 +586,87 @@ const FIELD_LABEL: Record<string, string> = {
   plannedStart: 'Planned start',
   plannedEnd: 'Planned end',
 };
+
+/**
+ * What the stage back-fill did.
+ *
+ * The number that matters is not how many trackers were created — it is how
+ * many jobs now report a progress figure that came from somewhere, and how
+ * many are still blank because the workbook had nothing to say about them.
+ * The second number is the honest one, so it is not buried.
+ */
+function StagesBuilt({ result }: { result: BackfillResult }) {
+  if (result.backfilled === 0) {
+    return (
+      <div>
+        <p className="verdict verdict-healthy">Every project already has its stages.</p>
+        <p className="muted">
+          Nothing was changed. {result.alreadyHadStages} of {result.examined} projects were checked
+          and all of them already had a tracker.
+        </p>
+      </div>
+    );
+  }
+
+  const measured = result.backfilled - result.openedEmpty;
+
+  return (
+    <div>
+      <p className="verdict verdict-healthy">
+        {result.backfilled} project{result.backfilled === 1 ? '' : 's'} now have stage trackers.
+      </p>
+      <dl className="figure-list">
+        <div>
+          <dt>Trackers created</dt>
+          <dd>
+            {result.backfilled} <span className="muted">· {result.stagesCreated} stages in total</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Progress set from the workbook</dt>
+          <dd>
+            {measured}{' '}
+            <span className="muted">where the workbook said how far the job had got</span>
+          </dd>
+        </div>
+        {result.openedEmpty > 0 && (
+          <div>
+            <dt>Opened at zero</dt>
+            <dd>
+              {result.openedEmpty}{' '}
+              <span className="muted">
+                the workbook said nothing about these, so nothing was assumed — tick the stages as
+                the crews confirm them
+              </span>
+            </dd>
+          </div>
+        )}
+        {result.alreadyHadStages > 0 && (
+          <div>
+            <dt>Left alone</dt>
+            <dd>
+              {result.alreadyHadStages}{' '}
+              <span className="muted">already had stages, so their progress was not touched</span>
+            </dd>
+          </div>
+        )}
+        {result.missing > 0 && (
+          <div>
+            <dt>No longer in the app</dt>
+            <dd>
+              {result.missing} <span className="muted">deleted since the import</span>
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      <p className="muted">
+        A stage marked complete here was marked from the spreadsheet, not signed off by anybody —
+        the tracker says so on each one. Open any project to see its stages and correct them.
+      </p>
+    </div>
+  );
+}
 
 function ImportDone({ result }: { result: ImportResult }) {
   const line = (map: Record<string, number>) =>

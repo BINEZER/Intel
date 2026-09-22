@@ -11,6 +11,7 @@ import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { setCheckpoint, setPhaseBlocked, updatePhaseProgress } from '../data/projects.js';
 import { describeCheckpoints, isTracked } from '../lib/checkpoints.js';
+import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
 import { nextActionablePhase, sequenceWarnings, type PhaseStatus } from '../lib/phases.js';
@@ -234,6 +235,14 @@ function CheckpointList({
                 }
               />
               <span>{checkpoint.label}</span>
+              {/* A tick that came from the spreadsheet is not a sign-off. It
+                  says so, so nobody reads a back-filled job as one somebody
+                  walked round and checked. */}
+              {checkpoint.doneBy === WORKBOOK_SOURCE && (
+                <span className="chip from-workbook" title="Marked from the imported workbook, not signed off on site">
+                  from the workbook
+                </span>
+              )}
             </label>
           </li>
         ))}
