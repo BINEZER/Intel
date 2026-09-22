@@ -23,6 +23,7 @@ import { ProjectTeam } from '../components/ProjectTeam.js';
 import { RiskFlagList } from '../components/RiskAlerts.js';
 import { ProjectKpiPanel } from './ProjectKpis.js';
 import { DualDateText } from '../components/DualDateInput.js';
+import { isElevatorWork, projectTypeLabel, projectTypeShort } from '../lib/project-kind.js';
 import type { Contract, ElevatorUnit, Project, ProjectPhase, Technician } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
@@ -142,7 +143,16 @@ export function ProjectDetail() {
             <DualDateText value={project.plannedEnd} />
           </p>
         </div>
-        <span className="chip">{project.status.replace(/_/g, ' ')}</span>
+        <div className="chip-row">
+          <Link className="button-link no-print" to={`/projects/${project.id}/report`}>
+            Full report
+          </Link>
+          {/* The kind of work, said out loud. An office renovation and a lift
+              installation looked identical here, which is how one gets read as
+              the other in a meeting. */}
+          <span className="chip">{projectTypeShort(project.type)}</span>
+          <span className="chip">{project.status.replace(/_/g, ' ')}</span>
+        </div>
       </div>
 
       <ProjectLinks
@@ -217,10 +227,23 @@ function ProjectLinks({
       <div className="link-half">
         <h2>Lifts on this project</h2>
         {units.length === 0 ? (
-          <p className="muted">
-            No lift on the register names this project as the one that installed it.{' '}
-            <Link to="/units">Open the register</Link> to link them.
-          </p>
+          /*
+           * What "no lifts" MEANS depends on the work. On a lift job it is a
+           * gap to go and fill; on a renovation it is simply the right answer,
+           * and sending somebody to the lift register to fix it is sending them
+           * to fix something that is not broken.
+           */
+          isElevatorWork(project.type) ? (
+            <p className="muted">
+              No lift on the register names this project as the one that installed it.{' '}
+              <Link to="/units">Open the register</Link> to link them.
+            </p>
+          ) : (
+            <p className="muted">
+              {projectTypeLabel(project.type)} — no lift is expected on this job. If one is
+              involved after all, link it from the <Link to="/units">lift register</Link>.
+            </p>
+          )
         ) : (
           <ul className="link-units">
             {units.map((unit) => (
