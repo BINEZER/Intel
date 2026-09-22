@@ -538,6 +538,12 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 }
 .chip-ok { background: #E9F7F0; border-color: #CBEBDD; color: #176B47; }
 .chip-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+/* A checkpoint ticked by the workbook back-fill rather than signed off on
+   site. Deliberately quiet — it is provenance, not a warning. */
+.chip.from-workbook {
+  margin-left: .5rem; font-size: .68rem; font-weight: 500;
+  text-transform: none; padding: .05rem .4rem;
+}
 
 /* --- forms --- */
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; align-items: start; }
