@@ -121,6 +121,15 @@ export interface PlannedContract {
   milestones: PlannedMilestone[];
   /** Where a payment block was matched, what it said had been collected. */
   collectedSantim: number | null;
+  /**
+   * Equipment the client pays the factory for directly, in cents.
+   *
+   * The workbook carries these as a second row under the same Agreement_ID,
+   * priced in USD. They used to be dropped, which lost the size of the job;
+   * they are now attached to the contract as data. Never converted to birr and
+   * never part of any total — see `lib/direct-supply.ts`.
+   */
+  equipmentPaidDirectUsdCents: number | null;
   notes: string;
 }
 
@@ -577,6 +586,13 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
   const clients = new Map<string, PlannedClient>();
   const seenAgreement = new Set<string>();
   const contractValueBirr = new Map<string, number>();
+  /**
+   * Dollar figures found under an agreement id, by id.
+   *
+   * Collected as the rows go past and attached afterwards, because the USD row
+   * may sit either side of the ETB one in the sheet and neither order is wrong.
+   */
+  const directUsdCents = new Map<string, number>();
 
   for (const row of agreementRows) {
     const name = text(row, 'Agreement_Name');
@@ -594,13 +610,27 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
       continue;
     }
     if (currency === 'USD') {
-      issues.push({
-        severity: 'skipped',
-        sheet: 'Agreements_Master',
-        ref: `${agreementId} ${name}`,
-        reason:
-          'USD figure sharing an id with an ETB agreement — this is equipment cost, not a client contract. Importing it would duplicate the contract and inflate the order book.',
-      });
+      // NOT a contract of ours: it is the lift, bought by the client straight
+      // from the factory. Importing it as a contract would duplicate the
+      // agreement and inflate the order book — so it is kept as a figure ON
+      // that agreement instead, in cents, with no birr equivalent anywhere.
+      if (value !== null && value > 0) {
+        directUsdCents.set(agreementId, Math.round(value * 100));
+        issues.push({
+          severity: 'repaired',
+          sheet: 'Agreements_Master',
+          ref: `${agreementId} ${name}`,
+          reason:
+            'USD figure under an existing Agreement_ID — recorded on the contract as equipment the client pays the manufacturer for directly. It is data only and is in no total.',
+        });
+      } else {
+        issues.push({
+          severity: 'skipped',
+          sheet: 'Agreements_Master',
+          ref: `${agreementId} ${name}`,
+          reason: 'USD row with no figure on it — nothing to record.',
+        });
+      }
       continue;
     }
     if (seenAgreement.has(agreementId)) {
@@ -654,9 +684,29 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
       siteCity: city,
       milestones: [],
       collectedSantim: null,
+      // Filled in after the loop: the USD row may sit either side of this one.
+      equipmentPaidDirectUsdCents: null,
       notes: [text(row, 'Status') && `Stage in source: ${text(row, 'Status')}`, text(row, 'Remarks')]
         .filter((part) => part && !part.startsWith('nan'))
         .join(' · '),
+    });
+  }
+
+  // Attach the dollar figures now every agreement has been seen, whichever
+  // order the two rows appeared in.
+  for (const contract of contracts) {
+    const cents = directUsdCents.get(contract.sourceId);
+    if (cents !== undefined) contract.equipmentPaidDirectUsdCents = cents;
+  }
+  for (const [agreementId, cents] of directUsdCents) {
+    if (contracts.some((c) => c.sourceId === agreementId)) continue;
+    // A dollar row with no ETB agreement to hang on. Said out loud rather than
+    // quietly dropped: it means an agreement is missing from the sheet.
+    issues.push({
+      severity: 'warning',
+      sheet: 'Agreements_Master',
+      ref: agreementId,
+      reason: `USD ${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })} under an Agreement_ID with no ETB agreement row — there is nothing to attach it to.`,
     });
   }
 

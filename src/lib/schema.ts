@@ -14,6 +14,8 @@
 /** Firestore Timestamp, structurally typed so this file stays SDK-agnostic. */
 import type { ClientStatus, ContractStatusValue, ProjectStatusValue } from './status.js';
 import type { ProjectType } from './project-kind.js';
+import type { DirectSupply } from './direct-supply.js';
+export type { DirectSupply };
 
 export interface Timestamp {
   toDate(): Date;
@@ -231,6 +233,17 @@ export interface Contract extends AuditFields {
   supersedesContractId?: string;
   /** Set where the client was offered service after warranty and said no. */
   serviceDeclined?: boolean;
+
+  /**
+   * Equipment the client buys straight from the factory, in dollars.
+   *
+   * On a supply-and-install-by-others contract we do the installation and the
+   * lift itself is paid for directly by the client; that money never passes
+   * through this company. Recorded because it says how big the job really is,
+   * and deliberately carrying NO birr equivalent so it cannot end up in one.
+   * See `lib/direct-supply.ts`.
+   */
+  equipmentPaidDirect?: DirectSupply;
 
   /** Maintenance contracts are priced per month, not as a lump sum. */
   serviceFee?: {

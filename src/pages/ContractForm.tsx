@@ -29,6 +29,7 @@ import type { WithId } from '../data/repository.js';
 import { DEFAULT_WARRANTY_ALERT_DAYS, DEFAULT_WARRANTY_MONTHS, addMonthsUtc } from '../lib/lifecycle.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
+import { usdCentsFrom, usdCentsToInput } from '../lib/direct-supply.js';
 
 /**
  * How long a contract runs unless somebody says otherwise.
@@ -97,6 +98,16 @@ export function ContractForm({
     initial?.warranty?.alertDays ?? DEFAULT_WARRANTY_ALERT_DAYS,
   );
   const [reminders, setReminders] = useState<Reminder[]>(initial?.reminders ?? []);
+  /**
+   * The lift itself, where the client buys it straight from the factory.
+   *
+   * Held as the string that was typed rather than as cents, so a half-typed
+   * "148" is not stored as USD 148.00 the moment somebody pauses.
+   */
+  const [directUsd, setDirectUsd] = useState(
+    usdCentsToInput(initial?.equipmentPaidDirect?.amountUsdCents ?? null),
+  );
+  const [directPaidTo, setDirectPaidTo] = useState(initial?.equipmentPaidDirect?.paidTo ?? '');
 
   const { busy, error, run } = useAsyncAction('create this contract');
 
@@ -155,6 +166,17 @@ export function ContractForm({
       autoRenew,
       renewalWindowDays,
       reminders,
+      // Data only. It is never converted to birr and appears in no total —
+      // see `lib/direct-supply.ts`. Absent rather than zero where there is
+      // nothing to record.
+      ...(usdCentsFrom(directUsd) === null || usdCentsFrom(directUsd) === 0
+        ? {}
+        : {
+            equipmentPaidDirect: {
+              amountUsdCents: usdCentsFrom(directUsd) as number,
+              ...(directPaidTo.trim() === '' ? {} : { paidTo: directPaidTo.trim() }),
+            },
+          }),
       // The warranty clock starts at HANDOVER. On an edit the dates already on
       // the contract are kept — re-deriving them from today would move an
       // expiry somebody is counting on.
@@ -327,6 +349,42 @@ export function ContractForm({
               Auto-renews
             </label>
           </div>
+
+          {/*
+            * The lift itself, where the client buys it straight from the
+            * factory and we only install it. Recorded because it says how big
+            * the job really is; kept well away from every birr figure above,
+            * and labelled so nobody reads it as money coming to us.
+            */}
+          <div className="field form-wide">
+            <label htmlFor="k-direct-usd">Equipment paid directly by the client (USD)</label>
+            <input
+              id="k-direct-usd"
+              inputMode="decimal"
+              placeholder="e.g. 148200.00"
+              value={directUsd}
+              onChange={(e) => setDirectUsd(e.target.value)}
+            />
+            <p className="hint">
+              For contracts where we take on the installation and the client pays the
+              manufacturer for the lift. <strong>Stored as information only</strong> — it is never
+              converted to birr and appears in no invoice, receivable, margin or report total.
+              Leave blank where it does not apply.
+            </p>
+          </div>
+
+          {directUsd.trim() !== '' && (
+            <div className="field">
+              <label htmlFor="k-direct-paid-to">Paid to</label>
+              <input
+                id="k-direct-paid-to"
+                placeholder="the manufacturer"
+                value={directPaidTo}
+                onChange={(e) => setDirectPaidTo(e.target.value)}
+              />
+              <p className="hint">The factory or trader the client pays. Optional.</p>
+            </div>
+          )}
 
           <div className="field">
             <label htmlFor="k-warranty">Warranty / defects liability (months)</label>

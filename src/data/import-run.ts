@@ -314,6 +314,13 @@ export async function runImport(
       },
       succeededByContractId: null,
       serviceDeclined: false,
+      // Only where the workbook carried a dollar row under this agreement.
+      // Spread rather than set to undefined: `exactOptionalPropertyTypes`
+      // treats an absent field and one holding undefined as different things,
+      // and Firestore rejects the second.
+      ...(contract.equipmentPaidDirectUsdCents === null
+        ? {}
+        : { equipmentPaidDirect: { amountUsdCents: contract.equipmentPaidDirectUsdCents } }),
     };
     await queue.add((batch) =>
       batch.set(

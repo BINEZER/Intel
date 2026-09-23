@@ -554,6 +554,14 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
    as such rather than left to look like the save buttons above it. */
 .danger-zone { border-color: var(--danger); }
 .danger-zone > h2 { color: var(--danger); }
+
+/* A dollar figure the client pays somebody else. Deliberately not styled like
+   the money beside it: it is a note on the contract, not a column of the
+   ledger, and the one mistake to design against is it reading as revenue. */
+.chip.direct-usd {
+  margin-top: .3rem; font-size: .7rem; font-weight: 500; text-transform: none;
+  background: transparent; border-style: dashed; color: var(--muted);
+}
 /* A checkpoint ticked by the workbook back-fill rather than signed off on
    site. Deliberately quiet — it is provenance, not a warning. */
 .chip.from-workbook {
