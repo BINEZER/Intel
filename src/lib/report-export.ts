@@ -33,7 +33,11 @@ const RULE = 'E1E4E8';
 
 export function reportFileStem(report: CeoReport): string {
   const safe = (value: string) => value.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return `${safe(report.companyName)}-${safe(report.period.label)}-CEO-report`;
+  // The record of what got done is not a report to the chief executive, and a
+  // file called one is the wrong thing to have in front of you when you open
+  // it in the meeting it was made for.
+  const kind = report.focus === 'achievements' ? 'what-we-got-done' : 'CEO-report';
+  return `${safe(report.companyName)}-${safe(report.period.label)}-${kind}`;
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
