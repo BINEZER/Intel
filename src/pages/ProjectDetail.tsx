@@ -12,6 +12,10 @@ import { getProject, subscribePhases } from '../data/projects.js';
 import { getPaymentStagesForProject, subscribeContracts } from '../data/contracts.js';
 import { subscribeUnits } from '../data/units.js';
 import { subscribePrograms } from '../data/programs.js';
+import { subscribeClients } from '../data/clients.js';
+import { useAuth } from '../auth/AuthProvider.js';
+import { can } from '../auth/roles.js';
+import { LinkPicker } from '../components/LinkPicker.js';
 import { subscribeTechnicians } from '../data/technicians.js';
 import { useCollection } from '../data/useCollection.js';
 import { computeProjectKpis } from '../lib/kpi.js';
@@ -26,13 +30,22 @@ import { ProjectKpiPanel } from './ProjectKpis.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { isElevatorWork, projectTypeLabel, projectTypeShort } from '../lib/project-kind.js';
 import { describeFleet, describeMake, describeSpec } from '../lib/lift-spec.js';
-import type { Contract, ElevatorUnit, Program, Project, ProjectPhase, Technician } from '../lib/schema.js';
+import type { Client, Contract, ElevatorUnit, Program, Project, ProjectPhase, Technician } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { user, role } = useAuth();
+  const editable = can(role, 'manageProjects');
   const [project, setProject] = useState<WithId<Project> | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /**
+   * Bumped after a link is changed. The project is fetched once rather than
+   * subscribed, so without this the page would keep showing the old contract
+   * until somebody navigated away and back.
+   */
+  const [reloadAt, setReloadAt] = useState(0);
+  const reload = () => setReloadAt((n) => n + 1);
 
   const phases = useCollection<ProjectPhase>(
     (d, e) => subscribePhases(projectId ?? '', d, e),
@@ -46,6 +59,7 @@ export function ProjectDetail() {
   // The commitment this job is one part of. A tower is one programme and four
   // projects, and from a project you have to be able to get back up to it.
   const programs = useCollection<Program>((d, e) => subscribePrograms(d, e), [], 'load programmes');
+  const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients');
 
   const technicians = useCollection<Technician>(
     (d, e) => subscribeTechnicians(d, e, { activeOnly: true }),
@@ -80,7 +94,7 @@ export function ProjectDetail() {
         if (!cancelled) setLoadError('Could not load that project.');
       });
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, reloadAt]);
 
   if (loadError !== null) {
     return (
@@ -165,6 +179,12 @@ export function ProjectDetail() {
         contract={contracts.rows.find((k) => k.id === project.contractId) ?? null}
         program={programs.rows.find((g) => g.id === project.programId) ?? null}
         units={units.rows.filter((u) => u.installedByProjectId === project.id)}
+        clients={clients.rows}
+        allContracts={contracts.rows}
+        allPrograms={programs.rows}
+        uid={user?.uid ?? null}
+        editable={editable}
+        onChanged={reload}
       />
 
       {risk.flags.length > 0 && (
@@ -203,29 +223,73 @@ function ProjectLinks({
   contract,
   program,
   units,
+  clients,
+  allContracts,
+  allPrograms,
+  uid,
+  editable,
+  onChanged,
 }: {
   project: WithId<Project>;
   contract: WithId<Contract> | null;
   program: WithId<Program> | null;
   units: readonly WithId<ElevatorUnit>[];
+  clients: readonly WithId<Client>[];
+  allContracts: readonly WithId<Contract>[];
+  allPrograms: readonly WithId<Program>[];
+  uid: string | null;
+  editable: boolean;
+  onChanged: () => void;
 }) {
   return (
     <section className="card link-panel">
       <div className="link-half">
-        <h2>Client & programme</h2>
+        <h2>Client &amp; programme</h2>
         <p className="link-title">
           <Link to={`/clients?client=${project.clientId}`}>{project.clientName}</Link>
+          {/* Changed here rather than by finding the project in its own list
+              and re-saving twenty other fields to correct one. */}
+          <LinkPicker
+            kind="project.client"
+            recordId={project.id}
+            currentId={project.clientId}
+            currentLabel={project.clientName}
+            options={clients.map((c) => ({ id: c.id, label: c.name }))}
+            uid={uid}
+            editable={editable}
+            onDone={onChanged}
+          />
         </p>
         {program === null ? (
           <p className="muted">
             {project.programId === null || project.programId === undefined
               ? 'Stand-alone project — not part of a programme. A site with several lifts is usually one programme and one project per lift.'
-              : 'The programme this project names could not be found. It may have been deleted.'}
+              : 'The programme this project names could not be found. It may have been deleted.'}{' '}
+            <LinkPicker
+              kind="project.program"
+              recordId={project.id}
+              currentId={project.programId ?? null}
+              currentLabel={null}
+              options={allPrograms.map((g) => ({ id: g.id, label: g.name, hint: g.programNo }))}
+              uid={uid}
+              editable={editable}
+              onDone={onChanged}
+            />
           </p>
         ) : (
           <>
             <p className="muted">
               <Link to={`/programs/${program.id}`}>{program.name}</Link>
+              <LinkPicker
+                kind="project.program"
+                recordId={project.id}
+                currentId={project.programId ?? null}
+                currentLabel={program.name}
+                options={allPrograms.map((g) => ({ id: g.id, label: g.name, hint: g.programNo }))}
+                uid={uid}
+                editable={editable}
+                onDone={onChanged}
+              />
             </p>
             <p className="muted mono">{program.programNo}</p>
             <p className="muted">
@@ -242,13 +306,36 @@ function ProjectLinks({
         {contract === null ? (
           <p className="muted">
             {project.contractId === null
-              ? 'This project is not under a contract. Variations and warranty work often are not — but if this one should be, set it on the project.'
-              : 'The contract this project names could not be found. It may have been deleted.'}
+              ? 'This project is not under a contract. Variations and warranty work often are not.'
+              : 'The contract this project names could not be found. It may have been deleted.'}{' '}
+            {/* Until now this link could not be changed ANYWHERE: the project
+                form preserved whatever was there and offered no control, so a
+                job filed against the wrong agreement stayed there. */}
+            <LinkPicker
+              kind="project.contract"
+              recordId={project.id}
+              currentId={project.contractId}
+              currentLabel={null}
+              options={allContracts.map((k) => ({ id: k.id, label: k.contractNo, hint: k.title }))}
+              uid={uid}
+              editable={editable}
+              onDone={onChanged}
+            />
           </p>
         ) : (
           <>
             <p className="link-title">
               <Link to={`/contracts?contract=${contract.id}`}>{contract.title}</Link>
+              <LinkPicker
+                kind="project.contract"
+                recordId={project.id}
+                currentId={project.contractId}
+                currentLabel={contract.contractNo}
+                options={allContracts.map((k) => ({ id: k.id, label: k.contractNo, hint: k.title }))}
+                uid={uid}
+                editable={editable}
+                onDone={onChanged}
+              />
             </p>
             <p className="muted mono">{contract.contractNo}</p>
             <p className="muted">

@@ -562,6 +562,23 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
    line so a bank of four does not wrap into an unreadable block. */
 .lift-spec { display: block; width: 100%; font-size: .8rem; }
 
+/* --- changing a link in place --- */
+/* A quiet control beside the thing it changes: it must be findable without
+   competing with the link itself, which is what people are usually here for. */
+.link-change {
+  margin-left: .5rem; padding: .1rem .45rem;
+  font-size: .72rem; font-weight: 550;
+  border-radius: var(--radius-sm); box-shadow: none;
+}
+/* Spans, not divs: the picker renders inside the paragraph carrying the link it
+   changes, so every part of it has to be phrasing content. The grid blockifies
+   them, which is what makes a stack of spans lay out like a stack of divs. */
+.link-edit { margin: .4rem 0 0; display: grid; gap: .45rem; }
+.link-edit select { max-width: 26rem; }
+.link-edit > .error { margin: 0; }
+.link-says { margin: 0; font-size: .85rem; }
+.link-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
 .chip.direct-usd {
   margin-top: .3rem; font-size: .7rem; font-weight: 500; text-transform: none;
   background: transparent; border-style: dashed; color: var(--muted);
