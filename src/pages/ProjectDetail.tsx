@@ -11,6 +11,7 @@ import { Link, useParams } from 'react-router-dom';
 import { getProject, subscribePhases } from '../data/projects.js';
 import { getPaymentStagesForProject, subscribeContracts } from '../data/contracts.js';
 import { subscribeUnits } from '../data/units.js';
+import { subscribePrograms } from '../data/programs.js';
 import { subscribeTechnicians } from '../data/technicians.js';
 import { useCollection } from '../data/useCollection.js';
 import { computeProjectKpis } from '../lib/kpi.js';
@@ -24,7 +25,8 @@ import { RiskFlagList } from '../components/RiskAlerts.js';
 import { ProjectKpiPanel } from './ProjectKpis.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { isElevatorWork, projectTypeLabel, projectTypeShort } from '../lib/project-kind.js';
-import type { Contract, ElevatorUnit, Project, ProjectPhase, Technician } from '../lib/schema.js';
+import { describeFleet, describeMake, describeSpec } from '../lib/lift-spec.js';
+import type { Contract, ElevatorUnit, Program, Project, ProjectPhase, Technician } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ProjectDetail() {
@@ -41,6 +43,9 @@ export function ProjectDetail() {
   // that pays for it, and the lifts it puts in. See lib/scope.ts.
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
+  // The commitment this job is one part of. A tower is one programme and four
+  // projects, and from a project you have to be able to get back up to it.
+  const programs = useCollection<Program>((d, e) => subscribePrograms(d, e), [], 'load programmes');
 
   const technicians = useCollection<Technician>(
     (d, e) => subscribeTechnicians(d, e, { activeOnly: true }),
@@ -158,6 +163,7 @@ export function ProjectDetail() {
       <ProjectLinks
         project={project}
         contract={contracts.rows.find((k) => k.id === project.contractId) ?? null}
+        program={programs.rows.find((g) => g.id === project.programId) ?? null}
         units={units.rows.filter((u) => u.installedByProjectId === project.id)}
       />
 
@@ -195,14 +201,42 @@ export function ProjectDetail() {
 function ProjectLinks({
   project,
   contract,
+  program,
   units,
 }: {
   project: WithId<Project>;
   contract: WithId<Contract> | null;
+  program: WithId<Program> | null;
   units: readonly WithId<ElevatorUnit>[];
 }) {
   return (
     <section className="card link-panel">
+      <div className="link-half">
+        <h2>Client & programme</h2>
+        <p className="link-title">
+          <Link to={`/clients?client=${project.clientId}`}>{project.clientName}</Link>
+        </p>
+        {program === null ? (
+          <p className="muted">
+            {project.programId === null || project.programId === undefined
+              ? 'Stand-alone project — not part of a programme. A site with several lifts is usually one programme and one project per lift.'
+              : 'The programme this project names could not be found. It may have been deleted.'}
+          </p>
+        ) : (
+          <>
+            <p className="muted">
+              <Link to={`/programs/${program.id}`}>{program.name}</Link>
+            </p>
+            <p className="muted mono">{program.programNo}</p>
+            <p className="muted">
+              The programme's progress is the average across its projects — weighted by contract
+              value where they are on separate agreements, and a plain average where they share
+              one, as the lifts of a single building do.
+            </p>
+          </>
+        )}
+      </div>
+
       <div className="link-half">
         <h2>Contract</h2>
         {contract === null ? (
@@ -245,18 +279,33 @@ function ProjectLinks({
             </p>
           )
         ) : (
-          <ul className="link-units">
-            {units.map((unit) => (
-              <li key={unit.id}>
-                <Link to={`/units/${unit.id}`}>{unit.tag}</Link>
-                <span className="muted">
-                  {unit.unitCode}
-                  {unit.brand === undefined ? '' : ` · ${unit.brand}`} ·{' '}
-                  {unit.status.replace(/_/g, ' ')}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* One line for the whole set, because four identical lifts in a
+                shaft bank is the common case and the same spec four times is
+                noise where "4 × 630 kg · 8 stops" is information. */}
+            {describeFleet(units.map((unit) => ({ tag: unit.tag, spec: unit }))) !== null && (
+              <p className="muted">
+                {describeFleet(units.map((unit) => ({ tag: unit.tag, spec: unit })))}
+              </p>
+            )}
+            <ul className="link-units">
+              {units.map((unit) => (
+                <li key={unit.id}>
+                  <Link to={`/units/${unit.id}`}>{unit.tag}</Link>
+                  <span className="muted">
+                    {unit.unitCode}
+                    {describeMake(unit) === null ? '' : ` · ${describeMake(unit)}`} ·{' '}
+                    {unit.status.replace(/_/g, ' ')}
+                  </span>
+                  {/* The specification, read from the LIFT and never from a
+                      copy on the project — see schema.ts. */}
+                  {describeSpec(unit) !== null && (
+                    <span className="muted lift-spec">{describeSpec(unit)}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </section>

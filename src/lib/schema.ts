@@ -344,27 +344,45 @@ export interface Project extends AuditFields {
     gps?: { lat: number; lng: number };
   };
 
-  /** Elevator units under this project; empty for non-elevator work. */
   /**
-   * The lifts under this project. Each carries its own identity because a lift
-   * outlives the project that installed it: maintenance contracts, callouts and
-   * authority certificates all attach to the UNIT, not the job.
+   * The shafts on this job, by the tag painted on site — and nothing else.
+   *
+   * THE SPECIFICATION IS NOT HERE. A lift's capacity, speed, stops, make and
+   * serial number live on the LIFT, in `units`, because the machine outlives
+   * this project: the same 630 kg, 8-stop lift is still that in 2031 when
+   * somebody else maintains it. Read `ElevatorUnit.installedByProjectId` to get
+   * from a project to its machines, and `lib/lift-spec.ts` to describe them.
+   *
+   * This array used to carry a second copy of the capacity and the stop count.
+   * Nothing ever read it. Two fields holding one fact drift apart, and the one
+   * that drifts is always the one somebody is looking at.
+   *
+   * What is left is what this array is actually for: naming the shafts before
+   * any lift record exists, and tracking which shaft has got how far when they
+   * run at different speeds.
    */
   units: Array<{
     /** Our reference on site, e.g. "LIFT-01". */
     tag: string;
-    /** The manufacturer's unit id / equipment number — the one on the nameplate. */
+    /** @deprecated Lives on the lift record. Read only for documents written before that was fixed. */
     unitId?: string;
+    /** @deprecated Lives on the lift record. */
     serialNo?: string;
+    /** @deprecated Lives on the lift record. */
     brand?: string;
+    /** @deprecated Lives on the lift record. */
     model?: string;
+    /** @deprecated Lives on the lift record — `ElevatorUnit.capacityKg`. */
     capacityKg?: number;
+    /** @deprecated Lives on the lift record. */
     personCapacity?: number;
+    /** @deprecated Lives on the lift record. */
     speedMps?: number;
+    /** @deprecated Lives on the lift record — `ElevatorUnit.stops`. */
     stops?: number;
-    /** Passenger, goods, bed, panoramic, escalator. */
+    /** @deprecated Lives on the lift record. */
     type?: string;
-    /** Where in the building, e.g. "Block B, core 2". */
+    /** @deprecated Lives on the lift record — `ElevatorUnit.location`. */
     location?: string;
     /** Per-unit progress, for a project where the shafts run at different speeds. */
     status?: 'not_started' | 'in_progress' | 'testing' | 'commissioned' | 'handed_over';
