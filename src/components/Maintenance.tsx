@@ -193,14 +193,14 @@ function ResetPanel() {
     <section className="card danger-zone">
       <h2>Start from scratch</h2>
       <p className="muted">
-        Deletes every client, contract, programme, project, lift, invoice, voucher, board and
-        card. <strong>This cannot be undone.</strong> Your sign-in and the settings on this page
-        are kept, so you can import again straight afterwards.
+        Deletes every client, contract, programme, project, lift, technician, subcontractor,
+        invoice, voucher, callout, maintenance visit, board and card, and restarts document
+        numbering. <strong>This cannot be undone.</strong>
       </p>
       <p className="muted">
-        A few things are protected by the security rules and will be listed afterwards rather
-        than removed: technicians, invoices past draft, vouchers past draft, and work already
-        carried out. They are the records other figures are derived from.
+        Two things survive: your sign-in, so you are not locked out of the app you just cleared,
+        and the audit log, which is the record that this happened. The settings above are kept
+        too — the VAT rate and the withholding rates are configuration, not data.
       </p>
 
       {error !== null && <p className="error" role="alert">{error}</p>}

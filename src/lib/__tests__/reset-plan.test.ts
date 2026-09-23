@@ -45,15 +45,28 @@ describe('what a reset covers', () => {
     expect(order.indexOf('tasks')).toBeLessThan(order.indexOf('boards'));
   });
 
-  it('names a reason for every collection the rules will fight it on', () => {
+  it('clears the records the everyday delete button refuses', () => {
+    // Refusing to delete one technician is a judgement about that technician.
+    // Clearing the database is a different act, taken deliberately and
+    // confirmed by typing a word.
+    const paths = RESET_TARGETS.map((t) => t.path);
+    expect(paths).toContain('technicians');
+    expect(paths).toContain('invoices');
+    expect(paths).toContain('disbursements');
+    expect(paths).toContain('callouts');
+    expect(paths).toContain('maintenanceVisits');
+  });
+
+  it('restarts document numbering', () => {
+    // Left alone, the first invoice of an empty database would be numbered
+    // wherever yesterday's sequence had got to.
+    expect(RESET_TARGETS.map((t) => t.path)).toContain('counters');
+  });
+
+  it('spells out any reason it does carry', () => {
     for (const target of RESET_TARGETS.filter((t) => t.guard !== undefined)) {
       expect(target.guard?.length ?? 0).toBeGreaterThan(20);
     }
-    // The ones that are actually guarded are named, so the report can explain.
-    const guarded = RESET_TARGETS.filter((t) => t.guard !== undefined).map((t) => t.path);
-    expect(guarded).toContain('technicians');
-    expect(guarded).toContain('invoices');
-    expect(guarded).toContain('disbursements');
   });
 
   it('clears the subcollections that hang off a parent', () => {

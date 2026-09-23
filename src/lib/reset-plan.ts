@@ -1,17 +1,24 @@
 /**
- * What "start from scratch" actually covers, and what it cannot.
+ * What "start from scratch" covers.
  *
- * WHY THIS IS NOT SIMPLY "DELETE EVERYTHING"
- *   The security rules refuse some deletes outright, on purpose. A technician
- *   is deactivated rather than deleted so the KPI history survives; an issued
- *   invoice and a paid voucher are financial records; the audit log is
- *   append-only, and a wipe is exactly the event you would later want it to
- *   have recorded.
+ * IT REALLY DOES CLEAR EVERYTHING
+ *   Every record somebody entered or imported goes, including the ones the
+ *   everyday delete button refuses: a technician, an issued invoice, a paid
+ *   voucher, a callout already resolved. Those refusals live in
+ *   `lib/deletion.ts`, where they belong — they are judgements about whether
+ *   deleting one record makes sense, and they can explain themselves. Clearing
+ *   the whole database is a different act, taken deliberately and confirmed by
+ *   typing a word.
  *
- *   Those guards are right for every ordinary day and inconvenient for exactly
- *   one operation. Rather than weaken them, the reset clears what it is allowed
- *   to clear and REPORTS the rest by name. A tool that silently leaves records
- *   behind is worse than one that says which and why.
+ * TWO THINGS SURVIVE ON PURPOSE
+ *   The user accounts, because deleting them would lock everybody out of the
+ *   app they just reset. And the audit log, because a wipe is precisely the
+ *   event you would later want it to have recorded.
+ *
+ * REFUSALS ARE STILL REPORTED, NOT ASSUMED AWAY
+ *   If a rule ever does refuse something, the pass counts it and names the
+ *   reason rather than reporting a clean sweep. A tool that silently leaves
+ *   records behind is worse than one that says which and why.
  *
  * THE ORDER MATTERS
  *   Children before parents. Deleting a contract first would leave its
@@ -26,7 +33,11 @@ export interface ResetTarget {
   label: string;
   /** Subcollections to clear before the parent document goes. */
   subcollections?: readonly string[];
-  /** Set where the rules will refuse some or all of them, and why. */
+  /**
+   * Why a record here might be refused, if one ever is. Not expected — the
+   * reset is allowed to clear every collection listed — but a refusal has to
+   * arrive with an explanation rather than as a silent shortfall.
+   */
   guard?: string;
 }
 
@@ -37,33 +48,15 @@ export interface ResetTarget {
  * withholding rates are settings, not input. Starting from scratch should not
  * mean setting the tax rate up again.
  *
- * `users` is absent for a blunter reason: deleting the accounts would lock
- * everybody out of the app they just reset.
+ * `users` and `auditLogs` are absent for the reasons in the header.
  */
 export const RESET_TARGETS: readonly ResetTarget[] = [
   { path: 'tasks', label: 'Board cards' },
   { path: 'boards', label: 'Boards' },
-  {
-    path: 'maintenanceVisits',
-    label: 'Maintenance visits',
-    guard: 'Visits already carried out are kept — they are the service history.',
-  },
-  {
-    path: 'callouts',
-    label: 'Callouts',
-    guard: 'Callouts already resolved are kept — they are the evidence behind response times.',
-  },
-  {
-    path: 'disbursements',
-    label: 'Payment vouchers',
-    guard: 'Vouchers past draft are kept — a paid voucher is a financial record.',
-  },
-  {
-    path: 'invoices',
-    label: 'Invoices',
-    subcollections: ['receipts', 'collectionSteps'],
-    guard: 'Invoices past draft are kept — an issued invoice is a legal document.',
-  },
+  { path: 'maintenanceVisits', label: 'Maintenance visits' },
+  { path: 'callouts', label: 'Callouts' },
+  { path: 'disbursements', label: 'Payment vouchers' },
+  { path: 'invoices', label: 'Invoices', subcollections: ['receipts', 'collectionSteps'] },
   { path: 'projectAssignments', label: 'Crew assignments' },
   { path: 'units', label: 'Lifts' },
   { path: 'projects', label: 'Projects', subcollections: ['phases'] },
@@ -71,12 +64,10 @@ export const RESET_TARGETS: readonly ResetTarget[] = [
   { path: 'contracts', label: 'Contracts', subcollections: ['milestones'] },
   { path: 'clients', label: 'Clients' },
   { path: 'subcontractors', label: 'Subcontractors' },
-  {
-    path: 'technicians',
-    label: 'Technicians',
-    subcollections: ['kpiSnapshots'],
-    guard: 'Technicians are never deleted — they are deactivated so their KPI history survives.',
-  },
+  { path: 'technicians', label: 'Technicians', subcollections: ['kpiSnapshots'] },
+  // Last, and the reason it is here at all: numbering restarts. Leaving the
+  // counters would have the first invoice of an empty database numbered 0042.
+  { path: 'counters', label: 'Document numbering' },
 ];
 
 /** What happened to one collection. */

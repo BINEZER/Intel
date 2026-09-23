@@ -97,7 +97,10 @@ service cloud.firestore {
       allow update: if (isFinance() || isManager())
                     && request.resource.data.value is int
                     && request.resource.data.value == resource.data.value + 1;
-      allow delete: if false;
+      // Never rewound — see above — but an admin may delete, so that a reset
+      // restarts numbering from 1 instead of carrying yesterday's sequence
+      // into a database with nothing in it.
+      allow delete: if isAdmin();
     }
 
     match /clients/{clientId} {
@@ -189,7 +192,18 @@ service cloud.firestore {
                         || (request.resource.data.netSantim == resource.data.netSantim
                             && request.resource.data.vatSantim == resource.data.vatSantim
                             && request.resource.data.invoiceNo == resource.data.invoiceNo));
-      allow delete: if isAdmin() && resource.data.status == 'draft';
+      // An admin may delete any invoice, not only a draft.
+      //
+      // The everyday rule — drafts only — is enforced in the app, by
+      // `lib/deletion.ts`, which refuses an issued invoice by name and explains
+      // why. That is where it belongs: it is a judgement about whether deleting
+      // makes sense, and it can say so to the person holding the mouse.
+      //
+      // This rule is the outer fence, and it has to permit one thing the app
+      // never offers: clearing the database back to empty. Without it a reset
+      // leaves every issued invoice behind, which is not a reset. Authorised
+      // deliberately; the audit log below still records who did it.
+      allow delete: if isAdmin();
 
       // --- the chase: who asked, when the letter landed, what they promised --
       // Any signed-in role that works with clients may record a step, because
@@ -200,7 +214,11 @@ service cloud.firestore {
       match /collectionSteps/{stepId} {
         allow read:   if canRead();
         allow create: if has(['admin', 'manager', 'finance']) && stampedCreate();
-        allow update, delete: if false;
+        // Never edited: what was said on a date is the thing an escalation
+        // later rests on. Deletable by an admin only so a reset does not strand
+        // chase steps under an invoice that no longer exists.
+        allow update: if false;
+        allow delete: if isAdmin();
       }
 
       match /receipts/{receiptId} {
@@ -218,7 +236,10 @@ service cloud.firestore {
                     && request.resource.data.status == 'draft';
       allow update: if isFinance() && stampedUpdate() && whtReconciles(request.resource.data)
                     && resource.data.status != 'paid';
-      allow delete: if isAdmin() && resource.data.status == 'draft';
+      // Drafts only on the everyday path, enforced in the app; an admin may
+      // clear the collection so a reset leaves no vouchers behind. See the
+      // note on invoices above.
+      allow delete: if isAdmin();
     }
 
     // --- technicians -------------------------------------------------------
@@ -226,12 +247,19 @@ service cloud.firestore {
       allow read:   if canRead();
       allow create: if isManager() && stampedCreate();
       allow update: if isManager() && stampedUpdate();
-      allow delete: if false; // deactivate — KPI history must survive
+      // The app refuses this outright: `lib/deletion.ts` says a technician is
+      // deactivated, never deleted, so the KPI history survives — and nothing
+      // in the UI reaches past it. The rule admits an admin purely so a reset
+      // can empty the collection.
+      allow delete: if isAdmin();
 
       // KPI snapshots are computed server-side; nobody edits their own numbers.
       match /kpiSnapshots/{periodId} {
         allow read:  if canRead();
-        allow write: if false;
+        allow create, update: if false;
+        // An admin may delete, so a reset does not strand snapshots under a
+        // technician who is no longer there. Still never written by hand.
+        allow delete: if isAdmin();
       }
     }
 
@@ -265,7 +293,10 @@ service cloud.firestore {
                         || (has(['engineer'])
                             && resource.data.technicianId == request.auth.uid
                             && resource.data.status != 'resolved'));
-      allow delete: if isAdmin() && resource.data.status == 'open';
+      // Open callouts only on the everyday path — a resolved callout is the
+      // evidence behind a response-time figure. An admin may clear them so a
+      // reset empties the collection.
+      allow delete: if isAdmin();
     }
 
     // --- maintenance visits ------------------------------------------------
@@ -279,7 +310,10 @@ service cloud.firestore {
                             // The promised date is the yardstick for PM
                             // compliance — a technician cannot move it.
                             && request.resource.data.scheduledDate == resource.data.scheduledDate));
-      allow delete: if isManager() && resource.data.status == 'scheduled';
+      // A manager may drop a visit that has not happened yet; only an admin may
+      // remove one already carried out, and only so a reset leaves no service
+      // history behind an empty database.
+      allow delete: if (isManager() && resource.data.status == 'scheduled') || isAdmin();
     }
 
     // --- Kanban ------------------------------------------------------------
