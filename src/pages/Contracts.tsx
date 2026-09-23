@@ -111,9 +111,6 @@ export function Contracts() {
         />
       )}
 
-      <RenewalBoard contracts={contracts.rows} editable={editable} uid={user?.uid ?? null} />
-
-      <h2 className="section-heading">All contracts</h2>
       {contracts.loading && <p className="muted">Loading…</p>}
       {!contracts.loading && contracts.rows.length === 0 && !contracts.error && (
         <p className="muted">No contracts yet.</p>
@@ -192,7 +189,10 @@ export function Contracts() {
             {
               key: 'status',
               label: 'Status',
-              value: (k) => k.status,
+              // The LABEL, not the stored value: the filter dropdown is built
+              // from this, and a menu reading "active / completed / terminated"
+              // in lower case looks like database internals leaking through.
+              value: (k) => statusLabel('contract', k.status),
               filterable: true,
               text: (k) => statusLabel('contract', k.status),
               render: (k) =>
@@ -231,6 +231,23 @@ export function Contracts() {
           ]}
         />
       )}
+
+      {/*
+        * Below the list, not above it.
+        *
+        * Every contract here is also in the list above, with the same figures —
+        * and with six-month terms on a book going back to 2019, "approaching
+        * renewal" is most of the book. Putting a hundred duplicated rows first
+        * meant scrolling past the whole thing to reach the one contract you
+        * came to edit. The renewal question is real, but it is a question you
+        * go and ask, not one that should stand between you and the register.
+        */}
+      <RenewalBoard
+        contracts={contracts.rows}
+        editable={editable}
+        uid={user?.uid ?? null}
+        onEdit={setEditing}
+      />
     </>
   );
 }
@@ -246,13 +263,16 @@ function RenewalBoard({
   contracts,
   editable,
   uid,
+  onEdit,
 }: {
   contracts: readonly WithId<Contract>[];
   editable: boolean;
   uid: string | null;
+  onEdit: (contract: WithId<Contract>) => void;
 }) {
   const asOf = new Date();
   const { busy, error, run } = useAsyncAction('update this renewal');
+  const [open, setOpen] = useState(false);
 
   const rows = sortByUrgency(
     contracts
@@ -281,21 +301,41 @@ function RenewalBoard({
   }
 
   const urgent = rows.filter((r) => r.renewal.urgency === 'critical' || r.renewal.urgency === 'high');
+  const lapsed = rows.filter((r) => r.renewal.bucket === 'lapsed');
 
   return (
     <section className="card">
-      <h2>Renewals</h2>
-      {urgent.length > 0 ? (
-        <p className="muted">
-          <strong>{urgent.length}</strong> contract{urgent.length === 1 ? '' : 's'} need attention —
-          lapsed or expiring within 30 days.
-        </p>
-      ) : (
-        <p className="muted">Nothing urgent; these are approaching their window.</p>
-      )}
+      <div className="page-head">
+        <div>
+          <h2>Renewals</h2>
+          {/*
+            * The counts ARE the summary. Closed, this section answers "is there
+            * anything to chase" in one line; open, it is the working list. It
+            * starts closed because on a book this size the answer is usually
+            * "yes, a hundred of them", and a hundred rows is a report rather
+            * than a prompt.
+            */}
+          <p className="muted">
+            {urgent.length > 0 ? (
+              <>
+                <strong>{urgent.length}</strong> need attention
+                {lapsed.length > 0 && <> · {lapsed.length} already lapsed</>}
+                {' · '}
+                {rows.length} in the next 90 days
+              </>
+            ) : (
+              <>Nothing urgent. {rows.length} approaching their window.</>
+            )}
+          </p>
+        </div>
+        <button type="button" className="no-print" onClick={() => setOpen((v) => !v)}>
+          {open ? 'Hide renewals' : `Show ${rows.length} renewal${rows.length === 1 ? '' : 's'}`}
+        </button>
+      </div>
 
       {error && <p className="error" role="alert">{error}</p>}
 
+      {!open ? null : (
       <div className="table-scroll">
         <table className="data-table">
           <thead>
@@ -326,21 +366,27 @@ function RenewalBoard({
                 <td><span className={`risk-badge risk-${renewal.urgency}`}>{renewal.status.replace(/_/g, ' ')}</span></td>
                 {editable && (
                   <td>
-                    <select
-                      aria-label={`Renewal status for ${contract.title}`}
-                      value={renewal.status}
-                      disabled={busy || uid === null}
-                      onChange={(e) => {
-                        if (uid === null) return;
-                        void run(() => setRenewalStatus(contract.id, e.target.value as RenewalStatus, uid));
-                      }}
-                    >
-                      <option value="not_due">Not due</option>
-                      <option value="due">Due</option>
-                      <option value="in_negotiation">In negotiation</option>
-                      <option value="renewed">Renewed</option>
-                      <option value="lapsed">Lapsed</option>
-                    </select>
+                    <div className="row-actions">
+                      <select
+                        aria-label={`Renewal status for ${contract.title}`}
+                        value={renewal.status}
+                        disabled={busy || uid === null}
+                        onChange={(e) => {
+                          if (uid === null) return;
+                          void run(() => setRenewalStatus(contract.id, e.target.value as RenewalStatus, uid));
+                        }}
+                      >
+                        <option value="not_due">Not due</option>
+                        <option value="due">Due</option>
+                        <option value="in_negotiation">In negotiation</option>
+                        <option value="renewed">Renewed</option>
+                        <option value="lapsed">Lapsed</option>
+                      </select>
+                      {/* So a contract can be corrected from the row that
+                          flagged it, rather than by hunting for it again in
+                          the list above. */}
+                      <button type="button" onClick={() => onEdit(contract)}>Edit</button>
+                    </div>
                   </td>
                 )}
               </tr>
@@ -348,6 +394,7 @@ function RenewalBoard({
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }
