@@ -11,7 +11,7 @@
  * can trust afterwards.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
 import { KpiTile } from '../components/KpiTile.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
@@ -35,6 +35,7 @@ import {
   type BackfillProgress,
   type BackfillResult,
 } from '../data/stage-backfill.js';
+import { hasImportedRecords } from '../data/import-state.js';
 import { describeFirestoreError } from '../data/repository.js';
 
 type VatTreatment = 'inclusive' | 'exclusive';
@@ -76,6 +77,27 @@ export function Import() {
   const [showAllChanges, setShowAllChanges] = useState(false);
   const [stageProgress, setStageProgress] = useState<BackfillProgress | null>(null);
   const [stageResult, setStageResult] = useState<BackfillResult | null>(null);
+  /**
+   * Whether anything is loaded yet — null until the answer is back.
+   *
+   * It decides the ORDER of the steps below, not merely their wording. See
+   * `data/import-state.ts`: on a database somebody has just cleared, the two
+   * repair steps have nothing to act on and running them in the order they are
+   * numbered leaves every project at 0%.
+   */
+  const [loaded, setLoaded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (user === null) return;
+    let live = true;
+    void hasImportedRecords()
+      .then((yes) => { if (live) setLoaded(yes); })
+      // Not worth an error banner: if this cannot be answered the page falls
+      // back to the full sequence, which is the safe assumption — it offers a
+      // repair that finds nothing rather than hiding a load that is needed.
+      .catch(() => { if (live) setLoaded(true); });
+    return () => { live = false; };
+  }, [user]);
 
   const plan: ImportPlan | null = useMemo(() => {
     if (workbook === null || vatTreatment === null) return null;
@@ -163,6 +185,146 @@ export function Import() {
   }
 
   const groups = useMemo(() => groupIssues(plan?.issues ?? []), [plan]);
+
+  /*
+   * The three steps that act on the database, as functions rather than markup
+   * in place: the ORDER they are offered in depends on whether anything is
+   * loaded, and the number in each heading has to follow that order rather
+   * than be written into it.
+   */
+  function dateStep(n: number) {
+    return (
+        <section className="card">
+          <h2>{n}. Correct the dates already loaded</h2>
+          {repairResult === null ? (
+            <>
+              <p className="muted">
+                The first import read every date from this workbook one day early. This puts
+                them right and changes <strong>nothing else</strong> — a contract you have put
+                on hold stays on hold, a project you marked terminated stays terminated, and
+                every payment record is left exactly as it is. Only dates that are actually
+                wrong are rewritten.
+              </p>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void repairDates()}
+                disabled={repairProgress !== null || progress !== null || user === null}
+              >
+                {repairProgress === null ? 'Correct the dates' : 'Correcting…'}
+              </button>
+              {repairProgress !== null && (
+                <p className="muted" role="status" aria-live="polite">
+                  Checking {repairProgress.stage}: {repairProgress.examined} of{' '}
+                  {repairProgress.total} records.
+                </p>
+              )}
+            </>
+          ) : (
+            <DatesCorrected
+              result={repairResult}
+              expanded={showAllChanges}
+              onToggle={() => setShowAllChanges((v) => !v)}
+            />
+          )}
+        </section>
+    );
+  }
+
+  function stageStep(n: number) {
+    return (
+        <section className="card">
+          <h2>{n}. Set up the stage trackers</h2>
+          {stageResult === null ? (
+            <>
+              <p className="muted">
+                The projects loaded from the workbook have no stages, so they all read 0% however
+                much of them is built. This creates the fourteen installation stages on each one
+                and marks the stages the workbook says are already behind the job. It only ever
+                touches a project that has <strong>no</strong> stages — anything your crews have
+                recorded is left exactly as it is.
+                {loaded === false && (
+                  <>
+                    {' '}
+                    <strong>Run this after the load above</strong> — it acts on the projects that
+                    are stored, so on an empty database it would find none.
+                  </>
+                )}
+              </p>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void backfillStages()}
+                disabled={stageProgress !== null || progress !== null || repairProgress !== null || user === null}
+              >
+                {stageProgress === null ? 'Set up the trackers' : 'Setting up…'}
+              </button>
+              {stageProgress !== null && (
+                <p className="muted" role="status" aria-live="polite">
+                  {stageProgress.stage}: {stageProgress.examined} of {stageProgress.total}{' '}
+                  projects.
+                </p>
+              )}
+            </>
+          ) : (
+            <StagesBuilt result={stageResult} />
+          )}
+        </section>
+    );
+  }
+
+  /** Takes the summary rather than reading it: it is narrowed at the call site. */
+  function loadStep(n: number, summary: ReturnType<typeof planSummary>) {
+    return (
+        <section className="card">
+          <h2>{n}. Load everything from the workbook</h2>
+          {loaded === false ? (
+            <p className="muted">
+              This is the first load, so it writes everything and overwrites nothing.
+            </p>
+          ) : (
+            <p className="muted">
+              Only needed for a first load, or after editing the workbook itself. It writes every
+              field from the spreadsheet over what is stored, so anything changed in the app since
+              the last import — a status, a warranty term, a handover date — goes back to what the
+              spreadsheet says. To fix dates alone, use step 4 instead.
+            </p>
+          )}
+          {result === null ? (
+            <>
+              <p className="muted">
+                Writes{' '}
+                {summary.clients +
+                  summary.contracts +
+                  summary.projects +
+                  summary.units +
+                  summary.technicians +
+                  summary.subcontractors}{' '}
+                records plus {summary.milestones} payment terms. Records already loaded from a
+                previous run are updated in place; payment schedules on contracts that already
+                exist are left alone, in case they have been invoiced against.
+              </p>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void write()}
+                disabled={progress !== null || user === null}
+              >
+                {progress === null ? 'Import into the app' : 'Importing…'}
+              </button>
+              {progress !== null && (
+                <p className="muted" role="status" aria-live="polite">
+                  {progress.stage}: {progress.written} of {progress.total} records written.
+                </p>
+              )}
+            </>
+          ) : (
+            <ImportDone result={result} />
+          )}
+        </section>
+
+    );
+  }
 
   return (
     <div className="page">
@@ -339,113 +501,31 @@ export function Import() {
             </button>
           </section>
 
-          <section className="card">
-            <h2>4. Correct the dates already loaded</h2>
-            {repairResult === null ? (
-              <>
-                <p className="muted">
-                  The first import read every date from this workbook one day early. This puts
-                  them right and changes <strong>nothing else</strong> — a contract you have put
-                  on hold stays on hold, a project you marked terminated stays terminated, and
-                  every payment record is left exactly as it is. Only dates that are actually
-                  wrong are rewritten.
-                </p>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void repairDates()}
-                  disabled={repairProgress !== null || progress !== null || user === null}
-                >
-                  {repairProgress === null ? 'Correct the dates' : 'Correcting…'}
-                </button>
-                {repairProgress !== null && (
-                  <p className="muted" role="status" aria-live="polite">
-                    Checking {repairProgress.stage}: {repairProgress.examined} of{' '}
-                    {repairProgress.total} records.
-                  </p>
-                )}
-              </>
-            ) : (
-              <DatesCorrected
-                result={repairResult}
-                expanded={showAllChanges}
-                onToggle={() => setShowAllChanges((v) => !v)}
-              />
-            )}
-          </section>
-
-          <section className="card">
-            <h2>5. Set up the stage trackers</h2>
-            {stageResult === null ? (
-              <>
-                <p className="muted">
-                  The projects loaded from the workbook have no stages, so they all read 0% however
-                  much of them is built. This creates the fourteen installation stages on each one
-                  and marks the stages the workbook says are already behind the job. It only ever
-                  touches a project that has <strong>no</strong> stages — anything your crews have
-                  recorded is left exactly as it is.
-                </p>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void backfillStages()}
-                  disabled={stageProgress !== null || progress !== null || repairProgress !== null || user === null}
-                >
-                  {stageProgress === null ? 'Set up the trackers' : 'Setting up…'}
-                </button>
-                {stageProgress !== null && (
-                  <p className="muted" role="status" aria-live="polite">
-                    {stageProgress.stage}: {stageProgress.examined} of {stageProgress.total}{' '}
-                    projects.
-                  </p>
-                )}
-              </>
-            ) : (
-              <StagesBuilt result={stageResult} />
-            )}
-          </section>
-
-          <section className="card">
-            <h2>6. Load everything from the workbook</h2>
-            <p className="muted">
-              Only needed for a first load, or after editing the workbook itself. It writes every
-              field from the spreadsheet over what is stored, so anything changed in the app since
-              the last import — a status, a warranty term, a handover date — goes back to what the
-              spreadsheet says. To fix dates alone, use step 4 instead.
-            </p>
-            {result === null ? (
-              <>
-                <p className="muted">
-                  Writes{' '}
-                  {summary.clients +
-                    summary.contracts +
-                    summary.projects +
-                    summary.units +
-                    summary.technicians +
-                    summary.subcontractors}{' '}
-                  records plus {summary.milestones} payment terms. Records already loaded from a
-                  previous run are updated in place; payment schedules on contracts that already
-                  exist are left alone, in case they have been invoiced against.
-                </p>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void write()}
-                  disabled={progress !== null || user === null}
-                >
-                  {progress === null ? 'Import into the app' : 'Importing…'}
-                </button>
-                {progress !== null && (
-                  <p className="muted" role="status" aria-live="polite">
-                    {progress.stage}: {progress.written} of {progress.total} records written.
-                  </p>
-                )}
-              </>
-            ) : (
-              <ImportDone result={result} />
-            )}
-          </section>
-        </>
+          {/*
+            Ordered by what is actually there. On a database somebody has just
+            cleared, the load has to come FIRST — the stage back-fill would run
+            against no projects and write nothing, and the date repair is for
+            records written by the old importer, which these are not. Numbered
+            one to six they read as a sequence, and a person following that
+            sequence on an empty database ends up with every project at 0%.
+          */}
+          {loaded === false ? (
+            <>
+              {loadStep(4, summary)}
+              {stageStep(5)}
+              <p className="muted">
+                Nothing is loaded yet, so those are the only two steps that apply. The date
+                correction is for records written by an older version of the importer; a fresh
+                load reads every date correctly.
+              </p>
+            </>
+          ) : (
+            <>
+              {dateStep(4)}
+              {stageStep(5)}
+              {loadStep(6, summary)}
+            </>
+          )}        </>
       )}
     </div>
   );
