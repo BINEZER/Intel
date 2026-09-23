@@ -21,6 +21,19 @@ export interface ProgramProject {
   clientName: string;
   status: ProjectStatusValue;
   progressBps: number;
+  /**
+   * The contract this project delivers, so the programme can count each
+   * agreement once. Null for a project under no contract.
+   */
+  contractId: string | null;
+  /**
+   * The value attributed to THIS project.
+   *
+   * Where the project carries its own share, that is the figure. Where it does
+   * not — imported projects do not — the whole contract value comes through
+   * here instead, which is why `rollUpProgram` counts each contract once
+   * rather than adding this up blindly. See the note there.
+   */
   contractNetSantim: number;
   invoicedNetSantim: number;
   collectedGrossSantim: number;
@@ -36,6 +49,11 @@ export interface ProgramRollup {
   completed: number;
   onHold: number;
   inDanger: number;
+  /**
+   * Cancelled or terminated. Counted so a page can say so, and excluded from
+   * the progress figure and the commitment — see `rollUpProgram`.
+   */
+  abandoned: number;
 
   contractNetSantim: number;
   invoicedNetSantim: number;
@@ -65,36 +83,102 @@ export interface ProgramRollup {
   overdue: number;
 }
 
-export function rollUpProgram(projects: readonly ProgramProject[]): ProgramRollup {
-  const sum = (pick: (p: ProgramProject) => number) => projects.reduce((a, p) => a + pick(p), 0);
+/** A project that is no longer part of the commitment, however it ended. */
+function isAbandoned(status: ProjectStatusValue): boolean {
+  return status === 'cancelled' || status === 'terminated';
+}
 
-  const contractNetSantim = sum((p) => p.contractNetSantim);
-  const invoicedNetSantim = sum((p) => p.invoicedNetSantim);
-  const collectedGrossSantim = sum((p) => p.collectedGrossSantim);
-  const subcontractNetSantim = sum((p) => p.subcontractNetSantim);
+export function rollUpProgram(projects: readonly ProgramProject[]): ProgramRollup {
+  /**
+   * Cancelled and terminated jobs are not 0% complete; they are not part of
+   * the programme any more.
+   *
+   * Leaving them in did both halves of the damage at once: a cancelled lift
+   * sitting at 0% dragged the average down, AND its contract value inflated
+   * the denominator, so a two-lift programme with one cancelled read as half
+   * finished when the remaining lift was done. `lib/scope.ts` and
+   * `lib/work-mix.ts` have always excluded them; this did not.
+   */
+  const live = projects.filter((p) => !isAbandoned(p.status));
+  const sum = (pick: (p: ProgramProject) => number) => live.reduce((a, p) => a + pick(p), 0);
+  /**
+   * Money, though, is summed across EVERY project including the abandoned
+   * ones. A cancelled job that was invoiced for and paid really was invoiced
+   * for and paid; dropping it would make the programme's cash disagree with
+   * the bank.
+   */
+  const sumAll = (pick: (p: ProgramProject) => number) => projects.reduce((a, p) => a + pick(p), 0);
+
+  /**
+   * EACH CONTRACT COUNTED ONCE.
+   *
+   * A tower is one contract and one project per lift, and every one of those
+   * projects reports the contract's value when it has no share of its own
+   * recorded. Adding them up made a four-lift agreement worth four times the
+   * money — a programme on a ETB 40M contract read as ETB 120M once the
+   * cancelled lift dropped out, which is the sort of figure somebody repeats
+   * in a meeting.
+   *
+   * So: one entry per contract id, and projects under no contract keep their
+   * own figure because there is nothing to share with.
+   */
+  const seenContract = new Set<string>();
+  let contractNetSantim = 0;
+  for (const project of live) {
+    if (project.contractId === null) {
+      contractNetSantim += project.contractNetSantim;
+      continue;
+    }
+    if (seenContract.has(project.contractId)) continue;
+    seenContract.add(project.contractId);
+    contractNetSantim += project.contractNetSantim;
+  }
+  const invoicedNetSantim = sumAll((p) => p.invoicedNetSantim);
+  const collectedGrossSantim = sumAll((p) => p.collectedGrossSantim);
+  const subcontractNetSantim = sumAll((p) => p.subcontractNetSantim);
   const grossMarginSantim = invoicedNetSantim - subcontractNetSantim;
 
   const totalWeight = contractNetSantim;
   // Fall back to an unweighted mean only when there is no value to weight by —
   // and say which was used, so nobody reads a count-average as a value-average.
+  /**
+   * WEIGHT BY VALUE ONLY WHERE THE VALUES ARE REALLY PER PROJECT.
+   *
+   * Several lifts on one agreement each report that agreement's whole value
+   * when none of them carries a share of its own. Those are not weights —
+   * they are the same number repeated — and weighting by them divides a
+   * numerator built from four copies by a denominator holding one, which is
+   * how a programme of two finished lifts and one at 60% came out at 100%.
+   *
+   * So: a repeated contract id means there are no real shares, and the
+   * honest average is the plain one across the live projects. That is also
+   * the usual shape of this — one site, one contract, one project per lift.
+   */
+  const contractIds = live.map((p) => p.contractId).filter((id): id is string => id !== null);
+  const sharesAreDistinct = new Set(contractIds).size === contractIds.length;
+
   const weightedBy: ProgramRollup['weightedBy'] =
-    projects.length === 0 ? null : totalWeight > 0 ? 'value' : 'count';
+    live.length === 0 ? null : totalWeight > 0 && sharesAreDistinct ? 'value' : 'count';
 
   const progressBps =
     weightedBy === 'value'
       ? Math.round(sum((p) => p.progressBps * p.contractNetSantim) / totalWeight)
       : weightedBy === 'count'
-        ? Math.round(sum((p) => p.progressBps) / projects.length)
+        ? Math.round(sum((p) => p.progressBps) / live.length)
         : 0;
 
-  const plannedEnds = projects.map((p) => p.plannedEnd.getTime());
+  // The commitment closes when the last LIVE project is due. A cancelled job
+  // with a date next year does not hold the programme open.
+  const plannedEnds = live.map((p) => p.plannedEnd.getTime());
 
   return {
+    // Every project on the programme, so the member list and the count agree.
     projects: projects.length,
     live: projects.filter((p) => p.status === 'in_progress').length,
     completed: projects.filter((p) => p.status === 'completed').length,
     onHold: projects.filter((p) => p.status === 'on_hold').length,
     inDanger: projects.filter((p) => p.inDanger).length,
+    abandoned: projects.filter((p) => isAbandoned(p.status)).length,
 
     contractNetSantim,
     invoicedNetSantim,

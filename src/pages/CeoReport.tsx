@@ -43,7 +43,8 @@ import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
 import { ReportChart } from '../components/ReportChart.js';
 import { formatDual } from '../lib/ethiopic.js';
 import { normaliseProjectType } from '../lib/project-kind.js';
-import type { Contract, Disbursement, Invoice, Project } from '../lib/schema.js';
+import { subscribeLiveTasks } from '../data/boards.js';
+import type { Contract, Disbursement, Invoice, Project, Task } from '../lib/schema.js';
 
 const KIND_LABEL: Record<PeriodKind, string> = {
   week: 'Weekly',
@@ -67,6 +68,9 @@ export function CeoReport() {
 
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
+  // Board tasks, for the achievements report only. Everything else in this
+  // file is a figure the business is managed on; a ticked card is not one.
+  const tasks = useCollection<Task>((d, e) => subscribeLiveTasks(d, e), [], 'load tasks');
   const invoices = useCollection<Invoice>((d, e) => subscribeInvoices(d, e), [], 'load invoices');
   const disbursements = useCollection<Disbursement>(
     (d, e) => subscribeDisbursements(d, e),
@@ -170,11 +174,18 @@ export function CeoReport() {
         id: c.id,
         contractNo: c.contractNo,
         clientName: c.clientName,
+        title: c.title,
         type: c.type,
+        signedDate: c.signedDate.at.toDate(),
         endDate: c.endDate.at.toDate(),
         renewalAlertAt: c.renewalAlertAt?.toDate() ?? null,
         status: c.status,
         valueGrossSantim: c.valueGrossSantim,
+      })),
+      tasks: tasks.rows.map((t) => ({
+        title: t.title,
+        completedAt: t.completedAt?.toDate() ?? null,
+        archived: t.archived,
       })),
     };
 

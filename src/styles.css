@@ -538,6 +538,51 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 }
 .chip-ok { background: #E9F7F0; border-color: #CBEBDD; color: #176B47; }
 .chip-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+
+/* --- maintenance: duplicates and the reset --- */
+.dup-kind { margin-top: 1.25rem; }
+.dup-kind h3 { margin: 0 0 .5rem; font-size: .95rem; }
+.dup-group {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: .75rem .9rem; margin-bottom: .6rem; background: var(--surface-2);
+}
+.dup-head { margin: 0 0 .15rem; }
+.dup-list { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .4rem; }
+.dup-list li { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; font-size: .9rem; }
+.dup-keep { font-weight: 550; }
+/* The reset is the one control on the page that destroys data. It is marked
+   as such rather than left to look like the save buttons above it. */
+.danger-zone { border-color: var(--danger); }
+.danger-zone > h2 { color: var(--danger); }
+
+/* A dollar figure the client pays somebody else. Deliberately not styled like
+   the money beside it: it is a note on the contract, not a column of the
+   ledger, and the one mistake to design against is it reading as revenue. */
+/* The specification under a lift's name: secondary to the tag, and on its own
+   line so a bank of four does not wrap into an unreadable block. */
+.lift-spec { display: block; width: 100%; font-size: .8rem; }
+
+/* --- changing a link in place --- */
+/* A quiet control beside the thing it changes: it must be findable without
+   competing with the link itself, which is what people are usually here for. */
+.link-change {
+  margin-left: .5rem; padding: .1rem .45rem;
+  font-size: .72rem; font-weight: 550;
+  border-radius: var(--radius-sm); box-shadow: none;
+}
+/* Spans, not divs: the picker renders inside the paragraph carrying the link it
+   changes, so every part of it has to be phrasing content. The grid blockifies
+   them, which is what makes a stack of spans lay out like a stack of divs. */
+.link-edit { margin: .4rem 0 0; display: grid; gap: .45rem; }
+.link-edit select { max-width: 26rem; }
+.link-edit > .error { margin: 0; }
+.link-says { margin: 0; font-size: .85rem; }
+.link-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.chip.direct-usd {
+  margin-top: .3rem; font-size: .7rem; font-weight: 500; text-transform: none;
+  background: transparent; border-style: dashed; color: var(--muted);
+}
 /* A checkpoint ticked by the workbook back-fill rather than signed off on
    site. Deliberately quiet — it is provenance, not a warning. */
 .chip.from-workbook {

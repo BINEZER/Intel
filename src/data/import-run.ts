@@ -314,6 +314,13 @@ export async function runImport(
       },
       succeededByContractId: null,
       serviceDeclined: false,
+      // Only where the workbook carried a dollar row under this agreement.
+      // Spread rather than set to undefined: `exactOptionalPropertyTypes`
+      // treats an absent field and one holding undefined as different things,
+      // and Firestore rejects the second.
+      ...(contract.equipmentPaidDirectUsdCents === null
+        ? {}
+        : { equipmentPaidDirect: { amountUsdCents: contract.equipmentPaidDirectUsdCents } }),
     };
     await queue.add((batch) =>
       batch.set(
@@ -368,14 +375,10 @@ export async function runImport(
       parentProjectId: null,
       reminders: [],
       site: { name: project.title, city: project.siteCity },
-      units: [
-        {
-          tag: project.tag,
-          ...(project.capacityKg === null ? {} : { capacityKg: project.capacityKg }),
-          ...(project.stops === null ? {} : { stops: project.stops }),
-          status: unitStageOf(project.sourceStage),
-        },
-      ],
+      // The tag and how far this shaft has got. The capacity and the stop
+      // count go on the LIFT record below, once each — see the note on
+      // `Project.units` in schema.ts.
+      units: [{ tag: project.tag, status: unitStageOf(project.sourceStage) }],
       plannedStart: toDualOr(project.plannedStart, today),
       plannedEnd: toDualOr(project.plannedEnd, project.plannedStart ?? today),
       actualStart: null,

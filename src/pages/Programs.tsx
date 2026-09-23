@@ -67,6 +67,7 @@ function usePrograms() {
         clientName: project.clientName,
         status: project.status,
         progressBps: project.progressBps,
+        contractId: project.contractId,
         contractNetSantim: row?.contract?.valueNetSantim ?? project.financials?.contractNetSantim ?? 0,
         invoicedNetSantim: (row?.invoices ?? []).reduce((a, i) => a + i.netSantim, 0),
         collectedGrossSantim: (row?.invoices ?? []).reduce((a, i) => a + i.paidGrossSantim, 0),

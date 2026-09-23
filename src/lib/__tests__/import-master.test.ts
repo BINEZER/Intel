@@ -200,13 +200,33 @@ describe('buildImportPlan', () => {
     expect(plan.clients.map((c) => c.name)).toEqual(['Mohammad shemsu RE', 'Abay Alemnew BC']);
   });
 
-  it('excludes the USD equipment-cost rows and says why', () => {
+  it('keeps a USD row as a figure ON the contract, never as a contract', () => {
+    // It is the lift, bought by the client straight from the factory. Loading
+    // it as a second contract would duplicate the agreement and inflate the
+    // order book; dropping it lost the size of the job. So it is attached.
     const plan = buildImportPlan(workbook(), OPTS);
-    const usd = plan.issues.find((i) => i.ref.includes('AGR-2021-005') && i.reason.includes('equipment cost'));
-    expect(usd).toBeDefined();
-    expect(usd!.severity).toBe('skipped');
-    // The ETB contract of the same id survives — only the USD twin is dropped.
-    expect(plan.contracts.filter((c) => c.contractNo === 'AGR-2021-005')).toHaveLength(1);
+    const matching = plan.contracts.filter((c) => c.contractNo === 'AGR-2021-005');
+    expect(matching).toHaveLength(1);
+    expect(matching[0]?.equipmentPaidDirectUsdCents).toBeGreaterThan(0);
+
+    const said = plan.issues.find((i) => i.ref.includes('AGR-2021-005') && i.reason.includes('directly'));
+    expect(said?.severity).toBe('repaired');
+    expect(said?.reason).toContain('in no total');
+  });
+
+  it('carries no birr figure for it, so nothing can add it up', () => {
+    const plan = buildImportPlan(workbook(), OPTS);
+    const contract = plan.contracts.find((c) => c.contractNo === 'AGR-2021-005');
+    // The contract's own ETB value is untouched by the dollar row beside it.
+    expect(contract?.valueSantim).toBeGreaterThanOrEqual(0);
+    expect(Object.keys(contract ?? {}).filter((k) => k.toLowerCase().includes('usd')))
+      .toEqual(['equipmentPaidDirectUsdCents']);
+  });
+
+  it('leaves a contract with no USD row carrying nothing', () => {
+    const plan = buildImportPlan(workbook(), OPTS);
+    expect(plan.contracts.find((c) => c.contractNo === 'AGR-2021-001')?.equipmentPaidDirectUsdCents)
+      .toBeNull();
   });
 
   it('excludes stray cells that are not agreements', () => {

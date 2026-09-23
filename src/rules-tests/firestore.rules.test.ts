@@ -425,8 +425,17 @@ describe('technicians', () => {
         contractedMinutesPerWeek: 2400, status: 'active', ...stamped('mgr'),
       }),
     );
-    // KPI history must survive; deactivate instead.
+    // KPI history must survive; deactivate instead. The app refuses this
+    // outright, and the rule keeps a manager out of it.
     await assertFails(deleteDoc(doc(db, 'technicians/t1')));
+  });
+
+  it('lets an admin delete one, so a reset can empty the collection', async () => {
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'technicians/t9'), { name: 'Dejene', status: 'active' });
+    });
+    await assertFails(deleteDoc(doc(ctx('eng', 'engineer'), 'technicians/t9')));
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'technicians/t9')));
   });
 });
 
@@ -456,10 +465,21 @@ describe('invoice sequence counters', () => {
     await assertFails(setDoc(doc(db, 'counters/invoice'), { value: 99 }, { merge: true }));
   });
 
-  it('stops a viewer or engineer consuming numbers, and nobody may delete one', async () => {
+  it('stops a viewer or engineer consuming numbers', async () => {
     await assertFails(setDoc(doc(ctx('v', 'viewer'), 'counters/invoice'), { value: 1 }));
     await assertFails(setDoc(doc(ctx('eng', 'engineer'), 'counters/invoice'), { value: 1 }));
-    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'counters/invoice')));
+  });
+
+  it('lets only an admin delete a counter, so a reset restarts numbering', async () => {
+    // Deleting is not rewinding: it belongs to clearing the database, where
+    // leaving the sequence behind would number the first invoice of an empty
+    // book wherever yesterday had got to. Finance still cannot touch it.
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'counters/invoice'), { value: 50 });
+    });
+    await assertFails(deleteDoc(doc(ctx('fin', 'finance'), 'counters/invoice')));
+    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'counters/invoice')));
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'counters/invoice')));
   });
 });
 
@@ -517,14 +537,20 @@ describe('issued invoices are tax documents', () => {
     );
   });
 
-  it('stops an issued invoice being deleted, so the sequence stays explicable', async () => {
+  it('lets only an admin delete an issued invoice', async () => {
+    // The everyday refusal — drafts only — lives in `lib/deletion.ts`, which
+    // names the invoice and explains itself. The rule is the outer fence and
+    // has to permit the one thing the UI never offers: clearing the database.
+    // Finance raises and issues invoices and still cannot remove one.
     await testEnv.withSecurityRulesDisabled(async (admin) => {
       await setDoc(doc(admin.firestore(), 'invoices/i4'), {
         ...INVOICE, status: 'issued',
         createdAt: new Date(), updatedAt: new Date(), createdBy: 'fin', updatedBy: 'fin',
       });
     });
-    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'invoices/i4')));
+    await assertFails(deleteDoc(doc(ctx('fin', 'finance'), 'invoices/i4')));
+    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'invoices/i4')));
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'invoices/i4')));
   });
 
   it('stops a manager writing invoices at all', async () => {
@@ -535,10 +561,32 @@ describe('issued invoices are tax documents', () => {
 
 describe('KPI snapshots and audit logs cannot be tampered with', () => {
   it('refuses every client write to a KPI snapshot', async () => {
+    // Nobody edits their own numbers, an admin least of all.
     for (const role of ['admin', 'manager', 'engineer']) {
       const db = ctx(`u-${role}`, role);
       await assertFails(setDoc(doc(db, 'technicians/t1/kpiSnapshots/EC-2018-01'), { firstTimeFixBps: 10_000 }));
     }
+  });
+
+  it('lets an admin delete a snapshot, but nobody else', async () => {
+    // Deleting is not editing: it exists so a reset does not strand snapshots
+    // under a technician who is no longer there.
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'technicians/t1/kpiSnapshots/EC-2018-02'), { firstTimeFixBps: 9_000 });
+    });
+    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'technicians/t1/kpiSnapshots/EC-2018-02')));
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'technicians/t1/kpiSnapshots/EC-2018-02')));
+  });
+
+  it('still refuses to let anyone delete a user account or an audit entry', async () => {
+    // The two things a reset must never take: the account you would sign back
+    // in with, and the record that the reset happened.
+    await testEnv.withSecurityRulesDisabled(async (admin) => {
+      await setDoc(doc(admin.firestore(), 'users/someone'), { role: 'viewer', active: true });
+      await setDoc(doc(admin.firestore(), 'auditLogs/keep'), { uid: 'adm', action: 'create' });
+    });
+    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'users/someone')));
+    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'auditLogs/keep')));
   });
 
   it('makes audit logs append-only', async () => {
@@ -755,9 +803,13 @@ describe('the chase log is append-only', () => {
     );
   });
 
-  it('refuses deletion of a step, by anyone', async () => {
+  it('refuses deletion of a step by everybody except an admin', async () => {
+    // The person who made the call cannot unmake the record of it. An admin
+    // may, and only so a reset does not leave chase steps hanging under an
+    // invoice that no longer exists.
     await assertFails(deleteDoc(doc(ctx('fin', 'finance'), 'invoices/i1/collectionSteps/s1')));
-    await assertFails(deleteDoc(doc(ctx('adm', 'admin'), 'invoices/i1/collectionSteps/s1')));
+    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'invoices/i1/collectionSteps/s1')));
+    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'invoices/i1/collectionSteps/s1')));
   });
 
   it('refuses a step stamped with somebody else', async () => {

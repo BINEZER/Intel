@@ -21,6 +21,7 @@ import {
   updateUnit,
 } from '../data/units.js';
 import { subscribeClients } from '../data/clients.js';
+import { LinkPicker } from '../components/LinkPicker.js';
 import { subscribeContracts } from '../data/contracts.js';
 import { subscribeProjects } from '../data/projects.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
@@ -345,6 +346,11 @@ export function UnitDetail() {
   const editable = can(role, 'updatePhaseProgress') && user !== null;
 
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
+  // The three records a lift points at, for the pickers below. Subscribed, so
+  // a link changed here shows its new label without a reload.
+  const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients');
+  const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
+  const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const unit = units.rows.find((u) => u.id === unitId);
   const records = useSiteRecords(unit === undefined ? [] : [unit.siteName]);
   const asOf = useMemo(() => new Date(), []);
@@ -396,6 +402,79 @@ export function UnitDetail() {
       </div>
 
       {saveError !== null && <p className="error" role="alert">{saveError}</p>}
+
+      {/*
+        * Where this machine sits: whose building, which job installed it,
+        * which agreement services it. Each one changeable here, because the
+        * alternative is finding the lift in the register, opening its form and
+        * re-saving twenty fields to correct one.
+        */}
+      <section className="card link-panel">
+        <div className="link-half">
+          <h2>Client</h2>
+          <p className="link-title">
+            <Link to={`/clients?client=${unit.clientId}`}>{unit.clientName}</Link>
+            <LinkPicker
+              kind="unit.client"
+              recordId={unit.id}
+              currentId={unit.clientId}
+              currentLabel={unit.clientName}
+              options={clients.rows.map((c) => ({ id: c.id, label: c.name }))}
+              uid={user?.uid ?? null}
+              editable={editable}
+            />
+          </p>
+          <p className="muted">
+            Moving a lift to another client moves its whole service history with it.
+          </p>
+        </div>
+
+        <div className="link-half">
+          <h2>Installed by</h2>
+          <p className="link-title">
+            {unit.installedByProjectId === null ? (
+              <span className="muted">Not one of ours — we service it but did not install it.</span>
+            ) : (
+              <Link to={`/projects/${unit.installedByProjectId}`}>
+                {projects.rows.find((p) => p.id === unit.installedByProjectId)?.title ?? 'the project'}
+              </Link>
+            )}
+            <LinkPicker
+              kind="unit.project"
+              recordId={unit.id}
+              currentId={unit.installedByProjectId}
+              currentLabel={
+                projects.rows.find((p) => p.id === unit.installedByProjectId)?.title ?? null
+              }
+              options={projects.rows.map((p) => ({ id: p.id, label: p.title, hint: p.projectNo }))}
+              uid={user?.uid ?? null}
+              editable={editable}
+            />
+          </p>
+        </div>
+
+        <div className="link-half">
+          <h2>Maintenance contract</h2>
+          <p className="link-title">
+            {unit.maintenanceContractId === null ? (
+              <span className="muted">Under no service agreement.</span>
+            ) : (
+              <Link to={`/contracts?contract=${unit.maintenanceContractId}`}>
+                {unit.maintenanceContractNo ?? 'the contract'}
+              </Link>
+            )}
+            <LinkPicker
+              kind="unit.contract"
+              recordId={unit.id}
+              currentId={unit.maintenanceContractId}
+              currentLabel={unit.maintenanceContractNo}
+              options={contracts.rows.map((k) => ({ id: k.id, label: k.contractNo, hint: k.title }))}
+              uid={user?.uid ?? null}
+              editable={editable}
+            />
+          </p>
+        </div>
+      </section>
 
       <section className="card">
         <h2>Condition</h2>

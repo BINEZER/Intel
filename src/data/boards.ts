@@ -54,6 +54,25 @@ export function subscribeTasks(
   );
 }
 
+/**
+ * Every task that is still on a board, across all boards.
+ *
+ * One equality filter and no ordering, so it needs no composite index — the
+ * achievements report wants tasks finished in a window, and a window is a
+ * cheap filter over a list this size. Archived tasks are left out at the
+ * query: a card somebody swept off the board is not an achievement.
+ */
+export function subscribeLiveTasks(
+  onData: (rows: WithId<Task>[]) => void,
+  onError: (error: Error) => void,
+) {
+  return subscribe<Task>(
+    query(collectionRef(TASKS), where('archived', '==', false)),
+    onData,
+    onError,
+  );
+}
+
 export async function createBoard(
   name: string,
   scope: Board['scope'],

@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
+import { Maintenance } from '../components/Maintenance.js';
 import {
   DEFAULT_TAX_CONFIG,
   getKpiTargets,
@@ -286,6 +287,10 @@ export function Settings() {
           </button>
         </div>
       </section>
+
+      {/* Last on the page on purpose: everything above is a number somebody
+          adjusts, and these two delete records. */}
+      <Maintenance />
     </>
   );
 }

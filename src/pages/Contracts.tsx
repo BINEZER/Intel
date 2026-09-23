@@ -16,6 +16,7 @@ import type { Client, Contract } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { DeleteButton } from '../components/DeleteButton.js';
+import { directSupplyOf, formatUSD } from '../lib/direct-supply.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 import { DataTable } from '../components/DataTable.js';
 import { statusLabel } from '../lib/status.js';
@@ -132,6 +133,17 @@ export function Contracts() {
                   <strong>{k.title}</strong>
                   <br />
                   <span className="muted mono">{k.contractNo}</span>
+                  {/* Under the title rather than in a money column: every
+                      column to the right is birr, and a dollar figure sitting
+                      among them is read as one however it is labelled. */}
+                  {directSupplyOf(k) !== null && (
+                    <>
+                      <br />
+                      <span className="chip direct-usd" title="Paid by the client to the manufacturer — not ours, and in no total here">
+                        {formatUSD(directSupplyOf(k)?.amountUsdCents ?? 0)} paid direct
+                      </span>
+                    </>
+                  )}
                 </>
               ),
             },

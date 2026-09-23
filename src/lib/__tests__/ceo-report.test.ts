@@ -104,6 +104,7 @@ function inputs(over: Partial<ReportInputs> = {}): ReportInputs {
     disbursements: [disbursement()],
     milestones: [],
     contracts: [],
+  tasks: [],
     ...over,
   };
 }
@@ -318,7 +319,7 @@ describe('the plan for the period ahead', () => {
         contracts: [
           {
             id: 'c1', contractNo: 'MC-2026-04', clientName: 'Addis Towers', type: 'maintenance',
-            endDate: utc(2026, 10, 20), renewalAlertAt: utc(2026, 8, 20), status: 'active',
+            endDate: utc(2026, 10, 20), title: 'A contract', signedDate: utc(2026, 1, 15), renewalAlertAt: utc(2026, 8, 20), status: 'active',
             valueGrossSantim: 2_400_000,
           },
         ],
@@ -413,6 +414,56 @@ describe('what the work is', () => {
   });
 });
 
+describe('the record of what got done', () => {
+  const on = (y: number, m: number, d: number) => utc(y, m, d);
+
+  it('lists only things that finished, with the date that makes each a fact', () => {
+    const report = buildCeoReport(
+      {
+        ...inputs(),
+        contracts: [
+          {
+            id: 'k1', contractNo: 'AGR-2026-009', clientName: 'Addis Towers PLC',
+            title: 'Bole Tower — four lifts', type: 'supply_install',
+            signedDate: on(2026, 9, 12), endDate: on(2027, 3, 12),
+            renewalAlertAt: null, status: 'active', valueGrossSantim: 11_500_000_00,
+          },
+        ],
+      },
+      'achievements',
+    );
+    const section = report.sections.find((s) => s.id === 'achievements');
+    expect(section?.heading).toBe('What got done');
+    expect(section?.table?.rows[0]?.['what']).toContain('AGR-2026-009');
+    expect(section?.table?.rows[0]?.['group']).toBe('Work won');
+  });
+
+  it('is titled as a record handed up, not as a report to the chief executive', () => {
+    // It is written BY the person who did the work. A title addressed to its
+    // own author reads as a form rather than as a record.
+    const report = buildCeoReport(inputs(), 'achievements');
+    expect(report.title).toContain('got done');
+    expect(report.title).not.toContain('Chief Executive');
+  });
+
+  it('carries no plan: nothing in it is forward-looking', () => {
+    expect(buildCeoReport(inputs(), 'achievements').plan).toEqual([]);
+  });
+
+  it('keeps the record out of every other focus', () => {
+    for (const focus of ['overall', 'finance', 'projects', 'contracts', 'clients'] as const) {
+      expect(buildCeoReport(inputs(), focus).sections.map((s) => s.id)).not.toContain('achievements');
+    }
+  });
+
+  it('says what to do about an empty period rather than showing a bare blank', () => {
+    const bare = { ...inputs(), invoices: [], contracts: [], projects: [], stages: [], tasks: [] };
+    const section = buildCeoReport(bare, 'achievements').sections.find((s) => s.id === 'achievements');
+    expect(section?.table?.rows).toEqual([]);
+    expect(section?.table?.emptyMessage).toContain('record the finish dates');
+  });
+});
+
 describe('focusing the report', () => {
   const contract = (over = {}) => ({
     id: 'k1',
@@ -420,7 +471,7 @@ describe('focusing the report', () => {
     clientName: 'Addis Towers',
     type: 'installation',
     endDate: utc(2027, 3, 31),
-    renewalAlertAt: null,
+    title: 'A contract', signedDate: utc(2026, 1, 15), renewalAlertAt: null,
     status: 'active',
     valueGrossSantim: 10_000_000,
     ...over,
@@ -488,7 +539,7 @@ describe('focusing the report', () => {
 describe('the clients section', () => {
   const contract = (over = {}) => ({
     id: 'k1', contractNo: 'AGR-1', clientName: 'Addis Towers', type: 'installation',
-    endDate: utc(2027, 3, 31), renewalAlertAt: null, status: 'active',
+    endDate: utc(2027, 3, 31), title: 'A contract', signedDate: utc(2026, 1, 15), renewalAlertAt: null, status: 'active',
     valueGrossSantim: 10_000_000, ...over,
   });
 
@@ -534,7 +585,7 @@ describe('the clients section', () => {
 describe('the contracts section', () => {
   const contract = (over = {}) => ({
     id: 'k1', contractNo: 'AGR-1', clientName: 'Addis Towers', type: 'installation',
-    endDate: utc(2027, 3, 31), renewalAlertAt: null, status: 'active',
+    endDate: utc(2027, 3, 31), title: 'A contract', signedDate: utc(2026, 1, 15), renewalAlertAt: null, status: 'active',
     valueGrossSantim: 10_000_000, ...over,
   });
 
@@ -577,7 +628,7 @@ describe('the contracts section', () => {
 describe('client concentration in the headline', () => {
   const contract = (over = {}) => ({
     id: 'k1', contractNo: 'AGR-1', clientName: 'Addis Towers', type: 'installation',
-    endDate: utc(2027, 3, 31), renewalAlertAt: null, status: 'active',
+    endDate: utc(2027, 3, 31), title: 'A contract', signedDate: utc(2026, 1, 15), renewalAlertAt: null, status: 'active',
     valueGrossSantim: 10_000_000, ...over,
   });
 

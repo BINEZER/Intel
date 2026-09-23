@@ -38,6 +38,7 @@ import { formatDual } from './ethiopic.js';
 import type { ProjectStatusValue } from './status.js';
 import { projectTypeShort } from './project-kind.js';
 import { describeMix, workMix, type WorkMix } from './work-mix.js';
+import { collectAchievements } from './achievements.js';
 import type { ProjectType } from './project-kind.js';
 
 // ---------------------------------------------------------------------------
@@ -129,7 +130,11 @@ export interface ReportContract {
   id: string;
   contractNo: string;
   clientName: string;
+  /** What the agreement is for, so a line can name the job and not just its id. */
+  title: string;
   type: string;
+  /** When it was signed — the date a contract counts as WON. */
+  signedDate: Date;
   endDate: Date;
   renewalAlertAt: Date | null;
   status: string;
@@ -146,6 +151,18 @@ export interface ReportInputs {
   disbursements: readonly ReportDisbursement[];
   milestones: readonly ReportMilestone[];
   contracts: readonly ReportContract[];
+  /**
+   * Board tasks. Only the achievements report reads them: a task ticked is
+   * something somebody did, which belongs in "what got done" and nowhere near
+   * a figure the business is managed on.
+   */
+  tasks: readonly ReportTask[];
+}
+
+export interface ReportTask {
+  title: string;
+  completedAt: Date | null;
+  archived: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -464,7 +481,7 @@ function totalsFor(inputs: ReportInputs, period: Period): PeriodTotals {
  * default, because a reader who does not know this control exists must not be
  * quietly given less than before.
  */
-export type ReportFocus = 'overall' | 'clients' | 'finance' | 'contracts' | 'projects';
+export type ReportFocus = 'overall' | 'clients' | 'finance' | 'contracts' | 'projects' | 'achievements';
 
 export const REPORT_FOCUSES: readonly { value: ReportFocus; label: string; hint: string }[] = [
   { value: 'overall', label: 'Overall', hint: 'Everything: money in and out, delivery, trend and risk' },
@@ -472,6 +489,11 @@ export const REPORT_FOCUSES: readonly { value: ReportFocus; label: string; hint:
   { value: 'projects', label: 'Projects', hint: 'Live jobs, stages closed, what is late' },
   { value: 'contracts', label: 'Contracts', hint: 'The signed book, what it covers, what is expiring' },
   { value: 'clients', label: 'Clients', hint: 'Who the work is for, and who owes what' },
+  {
+    value: 'achievements',
+    label: 'What we got done',
+    hint: 'Only things that finished — to show what was delivered this week, month or year',
+  },
 ];
 
 /** Which body sections each focus keeps, in the order they are read. */
@@ -487,6 +509,7 @@ const FOCUS_SECTIONS: Record<ReportFocus, readonly string[]> = {
   projects: ['delivery', 'mix'],
   contracts: ['contracts'],
   clients: ['clients'],
+  achievements: ['achievements'],
 };
 
 /** Which items of the plan ahead belong to each focus. */
@@ -496,6 +519,8 @@ const FOCUS_PLAN: Record<ReportFocus, readonly string[] | null> = {
   projects: ['plan-work', 'plan-priorities'],
   contracts: ['plan-renewals'],
   clients: ['plan-cash', 'plan-renewals'],
+  // A record of what was DONE carries no plan: nothing here is forward-looking.
+  achievements: [],
 };
 
 const FOCUS_TITLE: Record<ReportFocus, string> = {
@@ -504,6 +529,7 @@ const FOCUS_TITLE: Record<ReportFocus, string> = {
   projects: 'delivery ',
   contracts: 'contracts ',
   clients: 'clients ',
+  achievements: '',
 };
 
 function keep(sections: readonly ReportSection[], allowed: readonly string[] | null): ReportSection[] {
@@ -580,8 +606,13 @@ export function buildCeoReport(inputs: ReportInputs, focus: ReportFocus = 'overa
   return {
     companyName: inputs.companyName,
     title:
-      `${period.kind === 'week' ? 'Weekly' : period.kind === 'month' ? 'Monthly' : period.kind === 'quarter' ? 'Quarterly' : 'Annual'} ` +
-      `${FOCUS_TITLE[focus]}report to the Chief Executive`,
+      focus === 'achievements'
+        ? // Not "report to the Chief Executive": this one is handed UP, by the
+          // person who did the work, and a title addressed to its own author
+          // reads as a form rather than as a record.
+          `What ${inputs.companyName} got done — ${period.label}`
+        : `${period.kind === 'week' ? 'Weekly' : period.kind === 'month' ? 'Monthly' : period.kind === 'quarter' ? 'Quarterly' : 'Annual'} ` +
+          `${FOCUS_TITLE[focus]}report to the Chief Executive`,
     period,
     comparison,
     ahead,
@@ -596,6 +627,7 @@ export function buildCeoReport(inputs: ReportInputs, focus: ReportFocus = 'overa
         moneyOutSection(inputs, now, before, noun),
         deliverySection(inputs, now, before, noun),
         mixSection(inputs),
+        achievementsSection(inputs),
         clientsSection(inputs, ageing),
         contractsSection(inputs, noun),
         trendSection(inputs),
@@ -1281,6 +1313,62 @@ function mixChart(mix: WorkMix): ChartSpec | undefined {
       shortLabel: row.label,
       values: { value: row.valueNetSantim },
     })),
+  };
+}
+
+/**
+ * What got done — the record somebody hands to the person they report to.
+ *
+ * Every other section in this file is written for deciding what to do next, so
+ * it leads with what is wrong. This one answers a different question, and the
+ * selection is the opposite: only things that FINISHED, each with the date that
+ * makes it a fact rather than a claim. See `lib/achievements.ts`.
+ *
+ * One table rather than six, because the sections of this document are the
+ * groups themselves — "Work won", "Delivered", "Money collected" — and a reader
+ * scanning for what was achieved wants them in one list they can run a finger
+ * down, ordered biggest first.
+ */
+function achievementsSection(inputs: ReportInputs): ReportSection {
+  const report = collectAchievements({
+    period: inputs.period,
+    contracts: inputs.contracts,
+    projects: inputs.projects,
+    stages: inputs.stages,
+    invoices: inputs.invoices,
+    tasks: inputs.tasks,
+  });
+
+  const rows = report.groups.flatMap((group) =>
+    group.items.map((item) => ({
+      group: group.heading,
+      what: item.headline,
+      who: item.detail,
+      when: formatDual(item.when),
+    })),
+  );
+
+  const narrative = [
+    ...report.opening,
+    ...report.groups.map((group) => `${group.heading}: ${group.summary}`),
+  ];
+
+  return {
+    id: 'achievements',
+    heading: 'What got done',
+    narrative,
+    table: {
+      caption: 'Everything completed in this period',
+      columns: [
+        { key: 'group', label: 'Kind' },
+        { key: 'what', label: 'What' },
+        { key: 'who', label: 'Who for' },
+        { key: 'when', label: 'When' },
+      ],
+      rows,
+      emptyMessage:
+        'Nothing carries a completion date inside this period. Pick a longer period, or record the finish dates as work is closed out.',
+    },
   };
 }
 
