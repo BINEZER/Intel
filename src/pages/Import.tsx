@@ -19,7 +19,11 @@ import { formatETB } from '../lib/money.js';
 import {
   buildImportPlan,
   groupIssues,
+  planIsEmpty,
   planSummary,
+  sheetsFound,
+  sheetsWithRows,
+  SOURCE_SHEETS,
   type ImportIssue,
   type ImportPlan,
   type Workbook,
@@ -110,6 +114,14 @@ export function Import() {
   }, [workbook, vatTreatment]);
 
   const summary = plan === null ? null : planSummary(plan);
+  /**
+   * Which of the importer's sheets the chosen file has, and which carry rows.
+   *
+   * Two different answers: a file with none of the tabs is the wrong file; a
+   * file with the tabs and no rows is a partial export of the right one.
+   */
+  const found = useMemo(() => (workbook === null ? [] : sheetsFound(workbook)), [workbook]);
+  const withRows = useMemo(() => (workbook === null ? [] : sheetsWithRows(workbook)), [workbook]);
 
   const onFile = useCallback(async (file: File | undefined) => {
     if (file === undefined) return;
@@ -369,7 +381,7 @@ export function Import() {
       </section>
 
       {/* --- step 2 ---------------------------------------------------- */}
-      {workbook !== null && (
+      {workbook !== null && withRows.length > 0 && (
         <section className="card">
           <h2>2. Does the contract value include VAT?</h2>
           <p className="muted">
@@ -406,8 +418,90 @@ export function Import() {
         </section>
       )}
 
+      {/*
+        Nothing recognised in the file.
+
+        The importer answers a missing sheet with no rows, which is right — a
+        workbook without the subcontractor tracker still imports. But a file
+        with none of the sheets produces a plan of zeros and NO issues, because
+        there were no rows to find fault with, and the page used to offer to
+        import that: eight zero tiles, a working button, and a cheerful report
+        of nothing written. Somebody who picked the wrong file was told the
+        import had worked.
+      */}
+      {workbook !== null && found.length === 0 && (
+        <section className="card">
+          <h2>2. This is not the master workbook</h2>
+          <p>
+            <strong>{fileName}</strong> was read, but none of the sheets the importer needs are in
+            it, so there is nothing to load. Nothing has been written.
+          </p>
+          <p className="muted">
+            It is looking for the consolidated project master — the workbook with{' '}
+            <code>Agreements_Master</code>, <code>Projects_Master</code> and{' '}
+            <code>Elevator_List_Full</code> in it. Choose that file in step 1 and this page will
+            fill in.
+          </p>
+          <details>
+            <summary>Every sheet the importer reads</summary>
+            <ul className="muted">
+              {SOURCE_SHEETS.map((name) => (
+                <li key={name}>
+                  <code>{name}</code>
+                  {found.includes(name) ? ' — found' : ' — not in this file'}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
+
+      {/*
+        The sheets are there but produced nothing. Different from the case above
+        and worth saying differently: the file IS the master workbook, so the
+        issue list below is the explanation rather than the file being wrong.
+      */}
+      {workbook !== null && found.length > 0 && withRows.length === 0 && (
+        <section className="card">
+          <h2>2. This workbook came through empty</h2>
+          <p>
+            <strong>{fileName}</strong> is the right workbook — it has {found.join(', ')} — but
+            every one of those sheets is empty. Nothing has been written.
+          </p>
+          <p className="muted">
+            This is usually a partial export: the tabs came through without their rows. Export the
+            master again and choose the new file in step 1.
+          </p>
+        </section>
+      )}
+
+      {/*
+        The rows are there but none of them could be used. Different again: the
+        issue list is the explanation, so it leads.
+      */}
+      {plan !== null && withRows.length > 0 && planIsEmpty(plan) && (
+        <section className="card">
+          <h2>3. Nothing in this file could be loaded</h2>
+          <p>
+            <strong>{fileName}</strong> has the right sheets and they have rows, but not one row
+            could be read as an agreement, a project or a lift. Nothing has been written.
+          </p>
+          {plan.issues.length > 0 && (
+            <ul className="muted">
+              {groupIssues(plan.issues)
+                .slice(0, 6)
+                .map((group) => (
+                  <li key={`${group.sheet}-${group.reason}`}>
+                    <strong>{group.sheet}</strong> — {group.reason} ({group.refs.length} rows)
+                  </li>
+                ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* --- step 3 ---------------------------------------------------- */}
-      {summary !== null && plan !== null && (
+      {summary !== null && plan !== null && !planIsEmpty(plan) && (
         <>
           <section className="card">
             <h2>3. What this will create</h2>

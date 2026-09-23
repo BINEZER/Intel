@@ -575,6 +575,71 @@ export function paymentSchedules(
 // The plan
 // ---------------------------------------------------------------------------
 
+/**
+ * The sheets the importer reads, in the order it reads them.
+ *
+ * WHY THIS IS EXPORTED
+ *   `sheet()` below answers a missing sheet with an empty list, which is the
+ *   right behaviour — a workbook without the subcontractor tracker is still
+ *   importable. But a workbook with NONE of these produces a plan of eight
+ *   zeros and no issues to report, because there were no rows to find fault
+ *   with. That is indistinguishable, on screen, from a broken importer.
+ *
+ *   So the page checks the file against this list and can say which workbook it
+ *   is actually asking for, rather than offering to import nothing.
+ */
+export const SOURCE_SHEETS = [
+  'Agreements_Master',
+  'Agreement_Payment_Plan',
+  'Project_Finance',
+  'Projects_Master',
+  'Elevator_List_Full',
+  'Elevator_Assets',
+  'HR_Roster',
+  'Eng_Technicians_List',
+  'Fin_Subcontractor_Payments',
+  'Sch_SC_Payment_Tracker',
+  'Sch_Contacts',
+] as const;
+
+/**
+ * Which of the sheets the importer wants are in this file.
+ *
+ * PRESENCE, NOT CONTENT
+ *   A tab that came through with its headers and none of its rows is still the
+ *   right workbook, and saying "none of the sheets the importer needs are in
+ *   it" to somebody holding the correct file sends them looking for a file they
+ *   already have. An empty tab is a partial export, which is a different
+ *   problem with a different answer, so the two are reported separately.
+ */
+export function sheetsFound(workbook: Workbook): string[] {
+  return SOURCE_SHEETS.filter((name) => workbook[name] !== undefined);
+}
+
+/** Of the sheets that are present, the ones that actually carry rows. */
+export function sheetsWithRows(workbook: Workbook): string[] {
+  return sheetsFound(workbook).filter((name) => (workbook[name] ?? []).length > 0);
+}
+
+/**
+ * True when the plan would write nothing at all.
+ *
+ * Not "few records" — none. A real import of this workbook writes thousands,
+ * so zero everywhere means the file is not the master workbook rather than
+ * that the business had a quiet year.
+ */
+export function planIsEmpty(plan: ImportPlan): boolean {
+  return (
+    plan.clients.length === 0 &&
+    plan.contracts.length === 0 &&
+    plan.programs.length === 0 &&
+    plan.projects.length === 0 &&
+    plan.units.length === 0 &&
+    plan.technicians.length === 0 &&
+    plan.subcontractors.length === 0
+  );
+}
+
 export function buildImportPlan(workbook: Workbook, options: ImportOptions): ImportPlan {
   const issues: ImportIssue[] = [];
   const sheet = (name: string): Row[] => workbook[name] ?? [];
