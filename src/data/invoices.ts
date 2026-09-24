@@ -26,6 +26,7 @@ import {
   type InvoiceLineInput,
 } from '../lib/invoicing.js';
 import { gregorianPeriodKey, periodKeyFor } from '../lib/returns.js';
+import { termStatusAfterSettlement } from '../lib/payment-backfill.js';
 import { stampCreate, stampUpdate, stripReserved } from './audit.js';
 import { nextSequence } from './counters.js';
 import { collectionRef, getMany, getOne, subscribe, type WithId } from './repository.js';
@@ -147,7 +148,56 @@ export async function issueInvoice(invoiceId: string, uid: string, prefix = 'INV
   const sequence = await nextSequence('invoice');
   const invoiceNo = formatInvoiceNo(prefix, sequence);
   await updateDoc(doc(db, PATH, invoiceId), { invoiceNo, status: 'issued', ...stampUpdate(uid) });
+  // The contract's own schedule has to hear about it, or the term it bills stays
+  // "pending" for ever. See `settleTermFor` below.
+  await markTerm(invoiceId, 'invoiced', null, uid);
   return invoiceNo;
+}
+
+/**
+ * Tell a contract's payment term what its invoice has done.
+ *
+ * THE GAP THIS CLOSES
+ *   An invoice records which term it bills, and nothing ever told the term. So a
+ *   client could be invoiced and pay in full while the contract still showed
+ *   every term open — the schedule only ever reflected what the workbook import
+ *   had said, and drifted from the truth from the first invoice onwards.
+ *
+ * WHY IT IS BEST-EFFORT
+ *   The money is already recorded by the time this runs: the invoice and its
+ *   receipt are the financial record, and the term's status is a convenience on
+ *   top of them. If this write fails — the term was deleted, the schedule was
+ *   rebuilt, a rule refuses it — the invoice must still stand. So it is not in
+ *   the receipt's batch and it does not throw; a term that falls behind its
+ *   invoice is a display problem, and losing a receipt is not.
+ */
+async function markTerm(
+  invoiceId: string,
+  status: 'invoiced' | 'part_paid' | 'paid',
+  money: { receivedGrossSantim: number; paidOn: DualDate | null } | null,
+  uid: string,
+): Promise<void> {
+  try {
+    const invoice = await getOne<Invoice>(PATH, invoiceId);
+    if (invoice === null) return;
+    const { contractId, milestoneId } = invoice;
+    if (contractId === null || milestoneId === null || milestoneId === '') return;
+    await updateDoc(doc(db, `contracts/${contractId}/milestones`, milestoneId), {
+      status,
+      invoiceId,
+      ...(money === null
+        ? {}
+        : {
+            receivedGrossSantim: money.receivedGrossSantim,
+            // The date goes on only once the term is fully settled: on a part
+            // payment it would read as "paid on" a day the term was not.
+            ...(status === 'paid' && money.paidOn !== null ? { paidOn: money.paidOn } : {}),
+          }),
+      ...stampUpdate(uid),
+    });
+  } catch {
+    // Deliberately swallowed, for the reason above.
+  }
 }
 
 /**
@@ -208,6 +258,20 @@ export async function recordReceipt(
   });
 
   await batch.commit();
+
+  /*
+   * Tell the contract's term what happened, with the money.
+   *
+   * A part payment makes the term `part_paid`, not `invoiced`: the client HAS
+   * paid something and the term should say so. What it must not do is close the
+   * term — the remainder is still owed and still has to be chased.
+   */
+  await markTerm(
+    invoiceId,
+    termStatusAfterSettlement(settlement.balanceSantim, settlement.paidGrossSantim),
+    { receivedGrossSantim: settlement.paidGrossSantim, paidOn: receipt.receivedDate },
+    uid,
+  );
 }
 
 /**

@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 import {
   describePaymentBackfill,
   scheduleMatches,
+  describeTermStatus,
+  termStatusAfterSettlement,
   verdictFor,
   type PaymentBackfillResult,
   type PlannedTerm,
@@ -107,6 +109,45 @@ const result = (over: Partial<PaymentBackfillResult> = {}): PaymentBackfillResul
   scheduleChanged: [],
   alreadyDone: 0,
   ...over,
+});
+
+describe('what an invoice settlement means for its term', () => {
+  it('marks the term paid when nothing is left outstanding', () => {
+    expect(termStatusAfterSettlement(0, 115_000_000)).toBe('paid');
+  });
+
+  it('says PART PAID when money arrived but a balance remains', () => {
+    // Not "invoiced". The client has paid something and the term must say so —
+    // "invoiced" reports only that a bill went out and hides the cash.
+    expect(termStatusAfterSettlement(57_500_000, 57_500_000)).toBe('part_paid');
+  });
+
+  it('says invoiced only while nothing at all has come in', () => {
+    expect(termStatusAfterSettlement(115_000_000, 0)).toBe('invoiced');
+  });
+
+  it('does not close a term over a single cent still owed', () => {
+    // A part payment acknowledges the cash; it must never forgive the rest.
+    expect(termStatusAfterSettlement(1, 114_999_999)).toBe('part_paid');
+  });
+
+  it('treats an overpayment as settled', () => {
+    // A rounding cent on the wrong side must not leave a paid contract open.
+    expect(termStatusAfterSettlement(-1, 115_000_001)).toBe('paid');
+  });
+
+  it('settles a term paid entirely by withholding, with no cash at all', () => {
+    // Withholding the client remitted to ERCA on our behalf settles the invoice
+    // without arriving as money. Leaving the term open would have somebody
+    // chasing tax that is already paid.
+    expect(termStatusAfterSettlement(0, 0)).toBe('paid');
+  });
+
+  it('reads in words a person would use', () => {
+    expect(describeTermStatus('part_paid')).toBe('part paid');
+    expect(describeTermStatus('ready_to_invoice')).toBe('ready to invoice');
+    expect(describeTermStatus('paid')).toBe('paid');
+  });
 });
 
 describe('what it says afterwards', () => {

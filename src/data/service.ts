@@ -316,6 +316,26 @@ export function subscribeScheduledVisits(
   );
 }
 
+/**
+ * Every visit, for the alerts.
+ *
+ * Both halves of "is maintenance slipping" need the whole history: the soonest
+ * scheduled visit says whether one is due, and the latest completed one says
+ * whether a lift with nothing booked has slipped or was serviced last week.
+ * Filtering to one status would answer only half the question.
+ */
+export function subscribeAllVisits(
+  onData: (rows: WithId<MaintenanceVisit>[]) => void,
+  onError: (error: Error) => void,
+  max = 1000,
+) {
+  return subscribe<MaintenanceVisit>(
+    query(collectionRef(VISITS), orderBy('scheduledDate.at', 'desc'), limit(max)),
+    onData,
+    onError,
+  );
+}
+
 export async function listCalloutsInPeriod(periodEc: string) {
   return getMany<Callout>(
     query(collectionRef(CALLOUTS), where('periodEc', '==', periodEc), orderBy('reportedAt', 'desc')),

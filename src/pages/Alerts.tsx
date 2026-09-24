@@ -12,9 +12,11 @@ import { subscribeContracts } from '../data/contracts.js';
 import { subscribeInvoices } from '../data/invoices.js';
 import { subscribeProjects } from '../data/projects.js';
 import { subscribeUnits } from '../data/units.js';
+import { subscribeAllVisits } from '../data/service.js';
 import { assessPortfolioRisk } from '../data/project-risk.js';
 import { useCollection } from '../data/useCollection.js';
 import {
+  type AlertServicedUnit,
   buildAlerts,
   countBySeverity,
   type Alert,
@@ -25,7 +27,14 @@ import {
 import { activeReminders, viewWarranty, type ReminderInput } from '../lib/reminders.js';
 import { formatETB } from '../lib/money.js';
 import { ExtensionLetter } from '../components/ExtensionLetter.js';
-import type { Contract, ElevatorUnit, Invoice, Project, RiskSeverity } from '../lib/schema.js';
+import type {
+  Contract,
+  ElevatorUnit,
+  Invoice,
+  MaintenanceVisit,
+  Project,
+  RiskSeverity,
+} from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 
@@ -60,6 +69,18 @@ export function Alerts() {
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const invoices = useCollection<Invoice>((d, e) => subscribeInvoices(d, e), [], 'load invoices');
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
+  /*
+   * Every visit, not just the ones in the diary.
+   *
+   * Both halves of the question need them: the SOONEST scheduled visit says
+   * whether one is due or overdue, and the LATEST completed one says whether a
+   * lift with nothing booked has slipped or was simply serviced last week.
+   */
+  const visits = useCollection<MaintenanceVisit>(
+    (d, e) => subscribeAllVisits(d, e),
+    [],
+    'load maintenance visits',
+  );
   const [letterFor, setLetterFor] = useState<WithId<Contract> | null>(null);
 
   const asOf = useMemo(() => new Date(), []);
@@ -70,6 +91,44 @@ export function Alerts() {
     () => assessPortfolioRisk(projects.rows, contracts.rows, invoices.rows, asOf),
     [projects.rows, contracts.rows, invoices.rows, asOf],
   );
+
+  /**
+   * Lifts under a live maintenance contract, with their visit history.
+   *
+   * Only serviced lifts: a machine we installed and do not maintain is not ours
+   * to schedule, and alerting on it would be telling somebody off for a job they
+   * were never given.
+   */
+  const servicedUnits = useMemo<AlertServicedUnit[]>(() => {
+    const soonest = new Map<string, Date>();
+    const latest = new Map<string, Date>();
+    for (const visit of visits.rows) {
+      const key = `${visit.siteName}::${visit.unitTag}`;
+      if (visit.status === 'scheduled') {
+        const at = visit.scheduledDate.at.toDate();
+        const have = soonest.get(key);
+        if (have === undefined || at < have) soonest.set(key, at);
+      }
+      if (visit.status === 'completed' && visit.completedDate !== null) {
+        const at = visit.completedDate.at.toDate();
+        const have = latest.get(key);
+        if (have === undefined || at > have) latest.set(key, at);
+      }
+    }
+
+    return units.rows
+      .filter((u) => u.maintenanceContractId !== null && u.status === 'in_service')
+      .map<AlertServicedUnit>((u) => {
+        const key = `${u.siteName}::${u.tag}`;
+        return {
+          id: u.id,
+          tag: u.tag,
+          siteName: u.siteName,
+          nextScheduled: soonest.get(key) ?? null,
+          lastCompleted: latest.get(key) ?? null,
+        };
+      });
+  }, [units.rows, visits.rows]);
 
   const alerts = useMemo(
     () =>
@@ -155,14 +214,16 @@ export function Alerts() {
             reasons: [],
             certificateExpiresOn: u.certificate?.expiresOn?.at.toDate() ?? null,
           })),
+          servicedUnits,
         },
         asOf,
       ),
-    [contracts.rows, projects.rows, risks, units.rows, asOf],
+    [contracts.rows, projects.rows, risks, units.rows, servicedUnits, asOf],
   );
 
   const counts = countBySeverity(alerts);
-  const loading = contracts.loading || projects.loading || invoices.loading || units.loading;
+  const loading =
+    contracts.loading || projects.loading || invoices.loading || units.loading || visits.loading;
   const error = contracts.error ?? projects.error ?? invoices.error ?? units.error;
 
   const expiring = alerts.filter((a) => a.kind === 'contract_expiring' || a.kind === 'contract_lapsed');

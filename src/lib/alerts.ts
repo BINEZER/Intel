@@ -31,7 +31,10 @@ export type AlertKind =
   | 'project_in_danger'
   | 'certificate_expiring'
   | 'certificate_expired'
-  | 'unit_needs_attention';
+  | 'unit_needs_attention'
+  | 'visit_overdue'
+  | 'visit_due'
+  | 'no_visit_scheduled';
 
 export interface Alert {
   id: string;
@@ -109,9 +112,25 @@ export interface AlertUnit {
 export interface AlertThresholds {
   /** A certificate inside this many days of expiry is worth chasing. */
   certificateWarningDays: number;
+  /** A promised visit inside this many days is worth a reminder. */
+  visitWarningDays: number;
+  /**
+   * How long a serviced lift may go with nothing in the diary before it is
+   * flagged.
+   *
+   * A monthly visit is the usual promise, so a lift with nothing scheduled and
+   * nothing done for six weeks has slipped rather than merely not been booked
+   * yet. Deliberately longer than a month: a reminder that fires the day after
+   * the last visit teaches people to ignore it.
+   */
+  noVisitAfterDays: number;
 }
 
-export const DEFAULT_ALERT_THRESHOLDS: AlertThresholds = { certificateWarningDays: 60 };
+export const DEFAULT_ALERT_THRESHOLDS: AlertThresholds = {
+  certificateWarningDays: 60,
+  visitWarningDays: 7,
+  noVisitAfterDays: 42,
+};
 
 // ---------------------------------------------------------------------------
 // Builders
@@ -333,12 +352,116 @@ export function reminderAlerts(reminders: readonly AlertReminder[]): Alert[] {
   }));
 }
 
+/** A lift under a live maintenance contract, and its visit history. */
+export interface AlertServicedUnit {
+  id: string;
+  tag: string;
+  siteName: string;
+  /** The soonest visit still in the diary, if any. */
+  nextScheduled: Date | null;
+  /** The last visit actually carried out, if any. */
+  lastCompleted: Date | null;
+}
+
+/**
+ * Preventive maintenance that is slipping.
+ *
+ * WHY A LIFT WITH NOTHING BOOKED IS THE IMPORTANT CASE
+ *   PM compliance is the share of PROMISED visits actually carried out, so a
+ *   lift nobody ever schedules a visit for scores nothing at all — it is not
+ *   behind, it is invisible. That is the one failure the KPI cannot show, and
+ *   the reason this alert exists: the figure looks after the visits you book,
+ *   and this looks after the ones you forget to.
+ *
+ * WHY AN OVERDUE VISIT IS ONLY "HIGH" AND A LAPSED CERTIFICATE IS CRITICAL
+ *   A missed service is a promise broken and a risk rising. A lift running on an
+ *   expired certificate is unlawful. Ranking them alike would flatten the
+ *   difference, and the whole point of this list is that the top of it means
+ *   something.
+ */
+export function visitAlerts(
+  units: readonly AlertServicedUnit[],
+  asOf: Date,
+  thresholds: AlertThresholds = DEFAULT_ALERT_THRESHOLDS,
+): Alert[] {
+  const alerts: Alert[] = [];
+
+  for (const unit of units) {
+    const subject = `${unit.tag} · ${unit.siteName}`;
+
+    if (unit.nextScheduled !== null) {
+      const days = daysBetween(asOf, unit.nextScheduled);
+      if (days < 0) {
+        alerts.push({
+          id: `visit-overdue-${unit.id}`,
+          kind: 'visit_overdue',
+          severity: 'high',
+          subject,
+          message: `A maintenance visit was promised ${-days} day${-days === 1 ? '' : 's'} ago and has not been recorded.`,
+          action: 'Record it as done, or say it did not happen',
+          href: '/service',
+          daysRemaining: days,
+        });
+      } else if (days <= thresholds.visitWarningDays) {
+        alerts.push({
+          id: `visit-due-${unit.id}`,
+          kind: 'visit_due',
+          severity: 'low',
+          subject,
+          message:
+            days === 0
+              ? 'A maintenance visit is promised today.'
+              : `A maintenance visit is promised in ${days} day${days === 1 ? '' : 's'}.`,
+          action: 'Make sure somebody is assigned',
+          href: '/service',
+          daysRemaining: days,
+        });
+      }
+      continue;
+    }
+
+    // Nothing in the diary at all. Measured from the last visit so a lift that
+    // was serviced last week is not nagged about a visit nobody needs yet.
+    const since = unit.lastCompleted === null ? null : -daysBetween(asOf, unit.lastCompleted);
+    if (since === null) {
+      alerts.push({
+        id: `no-visit-${unit.id}`,
+        kind: 'no_visit_scheduled',
+        severity: 'medium',
+        subject,
+        message:
+          'This lift is under a maintenance contract and has never had a visit scheduled, so it counts towards nothing.',
+        action: 'Put a visit in the diary',
+        href: '/service',
+        daysRemaining: null,
+      });
+      continue;
+    }
+    if (since >= thresholds.noVisitAfterDays) {
+      alerts.push({
+        id: `no-visit-${unit.id}`,
+        kind: 'no_visit_scheduled',
+        severity: 'medium',
+        subject,
+        message: `Last serviced ${since} days ago and nothing is in the diary.`,
+        action: 'Put the next visit in the diary',
+        href: '/service',
+        daysRemaining: null,
+      });
+    }
+  }
+
+  return alerts;
+}
+
 export interface AlertInputs {
   contracts: readonly AlertContract[];
   projects: readonly AlertProject[];
   units: readonly AlertUnit[];
   warranties?: readonly AlertWarranty[];
   reminders?: readonly AlertReminder[];
+  /** Lifts under a live maintenance contract, with their visit history. */
+  servicedUnits?: readonly AlertServicedUnit[];
 }
 
 export function buildAlerts(
@@ -352,6 +475,7 @@ export function buildAlerts(
     ...reminderAlerts(inputs.reminders ?? []),
     ...projectAlerts(inputs.projects, asOf),
     ...unitAlerts(inputs.units, asOf, thresholds),
+    ...visitAlerts(inputs.servicedUnits ?? [], asOf, thresholds),
   ]);
 }
 

@@ -9,6 +9,7 @@ import { subscribeClients } from '../data/clients.js';
 import { getMilestones, setRenewalStatus, subscribeContracts, updateContractStatus } from '../data/contracts.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatETB } from '../lib/money.js';
+import { describeTermStatus } from '../lib/payment-backfill.js';
 import { renewalView, sortByUrgency, type RenewalStatus } from '../lib/renewal.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { ContractForm } from './ContractForm.js';
@@ -459,12 +460,27 @@ function PaymentsCell({ contractId }: { contractId: string }) {
     return () => { live = false; };
   }, [open, terms, contractId]);
 
-  const settled = terms === null ? null : terms.filter((term) => term.status === 'paid');
-  const settledSantim = settled === null ? 0 : settled.reduce((sum, t) => sum + t.grossSantim, 0);
+  // Fully settled terms, for the date of the most recent one.
+  const fullyPaid = terms === null ? null : terms.filter((term) => term.status === 'paid');
+  /*
+   * Everything that has actually come in, part payments included.
+   *
+   * A summary that counted only fully settled terms would report a contract with
+   * ETB 500,000 received against one term as having collected nothing, which is
+   * the same mistake as calling a part-paid term "invoiced".
+   */
+  const receivedSantim =
+    terms === null
+      ? 0
+      : terms.reduce(
+          (sum, t) =>
+            sum + (t.status === 'paid' ? t.grossSantim : (t.receivedGrossSantim ?? 0)),
+          0,
+        );
   const latest =
-    settled === null
+    fullyPaid === null
       ? null
-      : settled
+      : fullyPaid
           .map((term) => term.paidOn ?? null)
           .filter((date): date is NonNullable<PaymentMilestone['paidOn']> => date !== null)
           .sort((a, b) => b.at.toMillis() - a.at.toMillis())[0] ?? null;
@@ -481,9 +497,9 @@ function PaymentsCell({ contractId }: { contractId: string }) {
 
       {open && terms !== null && (
         <>
-          {settled !== null && settled.length > 0 ? (
+          {receivedSantim > 0 ? (
             <span className="muted scope-progress">
-              {formatETB(settledSantim)} settled
+              {formatETB(receivedSantim)} received
               {latest !== null && (
                 <>
                   {' · last '}
@@ -492,7 +508,7 @@ function PaymentsCell({ contractId }: { contractId: string }) {
               )}
             </span>
           ) : (
-            <span className="muted scope-progress">Nothing settled yet</span>
+            <span className="muted scope-progress">Nothing received yet</span>
           )}
           <ul className="scope-projects">
             {terms.map((term) => (
@@ -509,8 +525,22 @@ function PaymentsCell({ contractId }: { contractId: string }) {
                     ) : (
                       <>paid <DualDateText value={term.paidOn} /></>
                     )
+                  ) : term.status === 'part_paid' ? (
+                    /* The money that arrived is named. "Part paid" on its own
+                       tells somebody cash came without saying how much, which is
+                       the question they were about to ask. */
+                    <>
+                      part paid — {formatETB(term.receivedGrossSantim ?? 0, { withSymbol: false })} in,{' '}
+                      <strong>
+                        {formatETB(
+                          Math.max(0, term.grossSantim - (term.receivedGrossSantim ?? 0)),
+                          { withSymbol: false },
+                        )}{' '}
+                        still owed
+                      </strong>
+                    </>
                   ) : (
-                    term.status.replace(/_/g, ' ')
+                    describeTermStatus(term.status)
                   )}
                 </span>
               </li>

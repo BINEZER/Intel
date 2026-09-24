@@ -271,7 +271,15 @@ export interface PaymentMilestone extends AuditFields {
   vatSantim: number;
   grossSantim: number;
   dueDate: DualDate | null;
-  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'paid' | 'waived';
+  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'part_paid' | 'paid' | 'waived';
+  /**
+   * What has actually come in against this term, gross.
+   *
+   * Separate from the status because "some of it arrived" is a figure, not a
+   * state: a term showing `part_paid` with no amount tells somebody money came
+   * without saying how much, which is the question they were going to ask next.
+   */
+  receivedGrossSantim?: number;
   /**
    * The day the money arrived, in both calendars.
    *

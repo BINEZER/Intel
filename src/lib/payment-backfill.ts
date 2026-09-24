@@ -36,7 +36,7 @@ export interface StoredTerm {
   seq: number;
   name: string;
   grossSantim: number;
-  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'paid' | 'waived';
+  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'part_paid' | 'paid' | 'waived';
   invoiceId?: string | undefined;
 }
 
@@ -87,6 +87,44 @@ export function scheduleMatches(
     const found = bySeq.get(term.seq);
     return found !== undefined && found.name.trim() === term.name.trim();
   });
+}
+
+/**
+ * What an invoice's settlement means for the contract term it bills.
+ *
+ * MONEY THAT ARRIVED IS SAID TO HAVE ARRIVED
+ *   Three states, not two. A term that has taken a part payment is `part_paid` —
+ *   NOT `invoiced`, which says only that a bill went out and hides the fact that
+ *   the client has paid something. The first attempt at this used `invoiced` for
+ *   both and was wrong for exactly that reason.
+ *
+ * WHAT A PART PAYMENT MUST NOT DO
+ *   Close the term. The remainder is still owed, still a receivable, and still
+ *   has to be chased — so `part_paid` keeps the balance open everywhere `paid`
+ *   would have closed it. That is the whole distinction: acknowledge the cash,
+ *   do not forgive the rest.
+ *
+ *   The test is the BALANCE, not the cash: withholding the client remitted to
+ *   ERCA on our behalf settles an invoice without ever arriving as money, and a
+ *   term left open over it would have somebody chasing tax already paid.
+ */
+export function termStatusAfterSettlement(
+  balanceSantim: number,
+  receivedGrossSantim: number,
+): 'paid' | 'part_paid' | 'invoiced' {
+  // `<= 0` rather than `=== 0`: an overpayment settles the term too, and a
+  // rounding cent on the wrong side must not leave a paid contract looking open.
+  if (balanceSantim <= 0) return 'paid';
+  return receivedGrossSantim > 0 ? 'part_paid' : 'invoiced';
+}
+
+/** How a term's state reads on screen, with the money where there is some. */
+export function describeTermStatus(
+  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'part_paid' | 'paid' | 'waived',
+): string {
+  if (status === 'part_paid') return 'part paid';
+  if (status === 'ready_to_invoice') return 'ready to invoice';
+  return status;
 }
 
 export interface PaymentBackfillResult {
