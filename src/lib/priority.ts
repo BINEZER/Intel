@@ -40,7 +40,7 @@ export interface InvoiceReceivable {
 export interface UpcomingMilestone {
   name: string;
   grossSantim: number;
-  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'paid' | 'waived';
+  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'part_paid' | 'paid' | 'waived';
   dueDate: Date | null;
   /**
    * Progress of the phase whose completion unlocks this milestone, 0-10000.

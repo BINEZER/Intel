@@ -122,7 +122,7 @@ export interface ReportMilestone {
   name: string;
   phaseId: string | null;
   grossSantim: number;
-  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'paid' | 'waived';
+  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'part_paid' | 'paid' | 'waived';
   dueDate: Date | null;
 }
 

@@ -40,7 +40,7 @@ export interface UnlockMilestoneInput {
   /** Phase id this milestone is gated on. */
   phaseId: string | null;
   grossSantim: number;
-  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'paid' | 'waived';
+  status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'part_paid' | 'paid' | 'waived';
 }
 
 export interface UnlockRow {
