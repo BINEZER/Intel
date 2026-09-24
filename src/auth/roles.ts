@@ -36,6 +36,18 @@ export const CAPABILITIES = {
   manageDisbursements: ['admin', 'finance'],
   viewFinancials: ['admin', 'manager', 'finance'],
   useBoards: ['admin', 'manager', 'finance', 'engineer'],
+  /**
+   * Log a callout and record its progress. Matches the `callouts` rule: an
+   * engineer is on site and is the person who knows when they arrived, so they
+   * may record it — finance and viewers may not.
+   */
+  recordService: ['admin', 'manager', 'engineer'],
+  /**
+   * Put a preventive visit in the diary. Manager-only, matching the
+   * `maintenanceVisits` create rule: the promised date is the yardstick PM
+   * compliance is measured against, so it is not a technician's to set.
+   */
+  scheduleMaintenance: ['admin', 'manager'],
   read: ['admin', 'manager', 'finance', 'engineer', 'viewer'],
 } as const satisfies Record<string, readonly Role[]>;
 

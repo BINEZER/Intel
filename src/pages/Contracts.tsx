@@ -2,18 +2,18 @@
  * Contract list, with the renewal board.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
-import { setRenewalStatus, subscribeContracts, updateContractStatus } from '../data/contracts.js';
+import { getMilestones, setRenewalStatus, subscribeContracts, updateContractStatus } from '../data/contracts.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatETB } from '../lib/money.js';
 import { renewalView, sortByUrgency, type RenewalStatus } from '../lib/renewal.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { ContractForm } from './ContractForm.js';
-import type { Client, Contract } from '../lib/schema.js';
-import type { WithId } from '../data/repository.js';
+import type { Client, Contract, PaymentMilestone } from '../lib/schema.js';
+import { describeFirestoreError, type WithId } from '../data/repository.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { directSupplyOf, formatUSD } from '../lib/direct-supply.js';
@@ -170,6 +170,15 @@ export function Contracts() {
               label: 'Type',
               value: (k) => k.type.replace(/_/g, ' '),
               filterable: true,
+            },
+            {
+              key: 'payments',
+              label: 'Paid',
+              // Not sortable on anything meaningful: the terms are not loaded
+              // until somebody asks for them, so there is no figure to sort by
+              // without a hundred extra reads on every page load.
+              value: () => '',
+              render: (k) => <PaymentsCell contractId={k.id} />,
             },
             {
               key: 'net',
@@ -419,6 +428,100 @@ function RenewalBoard({
  * named, and each project is a link, because "which ones?" is the next question
  * every time.
  */
+/**
+ * What has been paid on a contract, and when.
+ *
+ * LOADED ON DEMAND, ONE CONTRACT AT A TIME
+ *   The terms live in a subcollection, so showing them for every row would be a
+ *   hundred extra reads on a page that already loads a hundred contracts. Almost
+ *   nobody wants all of them at once; the one they are looking at, they want in
+ *   full. So the summary is free and the detail costs a click.
+ *
+ * WHY THE DATE IS THE POINT
+ *   "Half collected" is a fact about the contract; "half collected, the advance
+ *   on 21 June 2024 and nothing since" is a fact somebody can act on. The date
+ *   is what turns a balance into a story, and the ones with no date are marked
+ *   as such rather than left looking undated by accident.
+ */
+function PaymentsCell({ contractId }: { contractId: string }) {
+  const [open, setOpen] = useState(false);
+  const [terms, setTerms] = useState<WithId<PaymentMilestone>[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || terms !== null) return;
+    let live = true;
+    void getMilestones(contractId)
+      .then((rows) => { if (live) setTerms(rows); })
+      .catch((cause: unknown) => {
+        if (live) setError(describeFirestoreError(cause, 'read the payment terms'));
+      });
+    return () => { live = false; };
+  }, [open, terms, contractId]);
+
+  const settled = terms === null ? null : terms.filter((term) => term.status === 'paid');
+  const settledSantim = settled === null ? 0 : settled.reduce((sum, t) => sum + t.grossSantim, 0);
+  const latest =
+    settled === null
+      ? null
+      : settled
+          .map((term) => term.paidOn ?? null)
+          .filter((date): date is NonNullable<PaymentMilestone['paidOn']> => date !== null)
+          .sort((a, b) => b.at.toMillis() - a.at.toMillis())[0] ?? null;
+
+  return (
+    <div className="scope-cell">
+      <button type="button" className="link-button no-print" onClick={() => setOpen((v) => !v)}>
+        {open ? 'Hide payments' : 'Payments'}
+      </button>
+
+      {open && error !== null && (
+        <p className="error" role="alert">{error}</p>
+      )}
+
+      {open && terms !== null && (
+        <>
+          {settled !== null && settled.length > 0 ? (
+            <span className="muted scope-progress">
+              {formatETB(settledSantim)} settled
+              {latest !== null && (
+                <>
+                  {' · last '}
+                  <DualDateText value={latest} />
+                </>
+              )}
+            </span>
+          ) : (
+            <span className="muted scope-progress">Nothing settled yet</span>
+          )}
+          <ul className="scope-projects">
+            {terms.map((term) => (
+              <li key={term.id}>
+                <span>{term.name}</span>
+                <span className="muted">
+                  {formatETB(term.grossSantim, { withSymbol: false })} ·{' '}
+                  {term.status === 'paid' ? (
+                    term.paidOn == null ? (
+                      /* Settled by the workbook, which recorded no date for it.
+                         Said out loud: an undated receipt is a gap in the
+                         record, not a payment that happened today. */
+                      <span title="The source recorded no date for this payment">paid, date unknown</span>
+                    ) : (
+                      <>paid <DualDateText value={term.paidOn} /></>
+                    )
+                  ) : (
+                    term.status.replace(/_/g, ' ')
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ScopeCell({ scope }: { scope: ReturnType<typeof contractScope> }) {
   const [open, setOpen] = useState(false);
 

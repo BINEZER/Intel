@@ -455,6 +455,8 @@ export function buildElevatorPlan(
           shareBps: 10_000,
           paid: money.collectedBirr !== null && money.valueBirr !== null
             && money.collectedBirr >= money.valueBirr && money.valueBirr > 0,
+          // The register carries no payment dates, only a running total.
+          paidOn: null,
         },
       ],
       collectedSantim: money.collectedBirr === null ? null : birrToSantim(money.collectedBirr),
