@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildWorkbook, parseBanner, splitSheet, type Grid } from '../workbook-blocks.js';
+import { buildWorkbook, parseBanner, splitSheet, type Cell, type Grid } from '../workbook-blocks.js';
 
 describe('reading a banner', () => {
   it('reads the form the file actually uses', () => {
@@ -143,6 +143,78 @@ describe('splitting a consolidated tab', () => {
     ];
     const [block] = splitSheet('Odd', messy);
     expect(block?.rows).toEqual([{ Name: 'Fasika', __EMPTY_1: 'x', Name_1: 'Abraham' }]);
+  });
+});
+
+describe('a block whose header is not the row under the banner', () => {
+  it('steps over a title row', () => {
+    // Ops_Collection_Status opens with its title on its own line. Taking the
+    // row under the banner on faith gave the block one column called "PROJECT
+    // TRACKER for colletion" and made the real header the first row of data.
+    // The real title row is not clean: it carries two stray labels out in
+    // columns 16 and 17, which is why a plain "has a few values" test let it
+    // through. Their DISTANCE from the left is what marks the row as a caption,
+    // so the fixture keeps them out there.
+    const strays: Cell[] = Array.from({ length: 17 }, () => null);
+    strays[0] = 'PROJECT TRACKER for colletion';
+    strays[15] = 'HOLD';
+    strays[16] = 'APPROVAL MEASUREMENT';
+    const titled: Grid = [
+      ['▼ From: Ops_Collection_Status  (4 rows)'],
+      strays,
+      ['NO.', 'PROJECT', 'DATES', 'ASSIGNED TO', 'TOTAL CONTRACT VALUE', 'COMPLETED PAYMENT', 'REMAINDER'],
+      [1, 'Ato Bedrudin', null, null, 4701920.46, 2350960.23, 2350960.23],
+      [2, 'Ato Hailu', null, null, 3893389.38, 1946694.69, 1946694.69],
+    ];
+    const [block] = splitSheet('Collections', titled);
+    expect(block?.rows.map((r) => [r['PROJECT'], r['COMPLETED PAYMENT']])).toEqual([
+      ['Ato Bedrudin', 2350960.23],
+      ['Ato Hailu', 1946694.69],
+    ]);
+    // The count spans the title and the header, so it still agrees.
+    expect(block?.declaredRows).toBeUndefined();
+  });
+
+  it('steps over an entirely blank row', () => {
+    const blankFirst: Grid = [
+      ['▼ From: Fin_Receivables_Agreements  (3 rows)'],
+      [null, null, null],
+      ['S.N', 'Name of Organization', 'Total Amount', 'Amount paid up to now'],
+      [1, 'Someone', 400, 100],
+    ];
+    const [block] = splitSheet('Fin_Receivables', blankFirst);
+    expect(block?.rows).toEqual([
+      { 'S.N': 1, 'Name of Organization': 'Someone', 'Total Amount': 400, 'Amount paid up to now': 100 },
+    ]);
+  });
+
+  it('does not take a row of names for a title', () => {
+    // Eng_Technicians_List is a rota: names across the columns and no header row
+    // at all. An earlier rule judged its first row a title because the row below
+    // was wider, consumed it as the header, and lost a technician.
+    const rota: Grid = [
+      ['▼ From: Eng_Technicians_List  (3 rows)'],
+      ['FASIKA', 'ATO MILION', 'MAW'],
+      ['DEJENE', 'COL MEGERSSA', 'DR MEGERSA', 'WUBLAND'],
+    ];
+    const [block] = splitSheet('HR_Technicians', rota);
+    // The names stay data; the first row is not eaten.
+    expect(Object.keys(block?.rows[0] ?? {})).toContain('FASIKA');
+    expect(block?.rows).toHaveLength(1);
+  });
+
+  it('keeps a narrow header when nothing reads as a title', () => {
+    const narrow: Grid = [
+      ['▼ From: Maint_Contracts  (3 rows)'],
+      ['Name', 'Amount'],
+      ['Bole Tower', 1000],
+      ['Kazanchis', 2000],
+    ];
+    const [block] = splitSheet('Maint_Contracts_Service', narrow);
+    expect(block?.rows).toEqual([
+      { Name: 'Bole Tower', Amount: 1000 },
+      { Name: 'Kazanchis', Amount: 2000 },
+    ]);
   });
 });
 
