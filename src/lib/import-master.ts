@@ -184,7 +184,7 @@ export interface ImportPlan {
 // ---------------------------------------------------------------------------
 
 /** Header names in this workbook carry stray spaces; match on the trimmed name. */
-function pick(row: Row, ...names: string[]): unknown {
+export function pick(row: Row, ...names: string[]): unknown {
   for (const name of names) {
     for (const key of Object.keys(row)) {
       if (key.trim().toLowerCase() === name.trim().toLowerCase()) {
@@ -196,14 +196,14 @@ function pick(row: Row, ...names: string[]): unknown {
   return undefined;
 }
 
-function text(row: Row, ...names: string[]): string {
+export function text(row: Row, ...names: string[]): string {
   const value = pick(row, ...names);
   if (value === undefined) return '';
   if (value instanceof Date) return '';
   return String(value).trim();
 }
 
-function num(row: Row, ...names: string[]): number | null {
+export function num(row: Row, ...names: string[]): number | null {
   const value = pick(row, ...names);
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string') {
@@ -249,7 +249,7 @@ export function excelWallClockDate(
   return new Date(Math.round(shifted / DAY_MS) * DAY_MS);
 }
 
-function date(row: Row, ...names: string[]): Date | null {
+export function date(row: Row, ...names: string[]): Date | null {
   const value = pick(row, ...names);
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return excelWallClockDate(value);
@@ -303,7 +303,7 @@ export function normaliseProjectId(value: unknown): string | null {
 }
 
 /** Clients are grouped by name; the workbook has no client table of its own. */
-function clientKeyOf(name: string): string {
+export function clientKeyOf(name: string): string {
   return slug(name.replace(/\s+/g, ' ').trim());
 }
 
@@ -323,7 +323,7 @@ const CONTRACT_STATUS: Record<string, ContractStatus> = {
   'on hold': 'suspended',
 };
 
-function contractStatusOf(raw: string): ContractStatus {
+export function contractStatusOf(raw: string): ContractStatus {
   return CONTRACT_STATUS[raw.trim().toLowerCase()] ?? 'active';
 }
 
@@ -350,7 +350,7 @@ const PROJECT_LIFECYCLE: Record<string, ProjectLifecycle> = {
 
 export type ProjectLifecycle = ProjectStatusValue;
 
-function projectLifecycleOf(raw: string): ProjectLifecycle {
+export function projectLifecycleOf(raw: string): ProjectLifecycle {
   return PROJECT_LIFECYCLE[raw.trim().toLowerCase()] ?? 'planned';
 }
 
@@ -812,7 +812,11 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
   for (const row of sheet('Projects_Master')) {
     const projectId = normaliseProjectId(pick(row, 'Project_ID'));
     if (projectId === null) continue; // padding rows carry only formula output
-    const agreementId = normaliseAgreementId(pick(row, 'Agreement_ID'));
+    // `Contract_ID` in the consolidated workbook, `Agreement_ID` in the older
+    // one — the same column under two names, and every value in it is an AGR-
+    // id. Read as one rather than migrated, because both files are in
+    // circulation and a project with no contract is silently dropped.
+    const agreementId = normaliseAgreementId(pick(row, 'Agreement_ID', 'Contract_ID'));
     const contract = agreementId === null ? undefined : contractByKey.get(agreementId);
     const title = text(row, 'Project_Name (auto/optional)', 'Project_Name');
 

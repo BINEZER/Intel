@@ -18,4 +18,11 @@ ui-debug.log
 !.env.example
 !.env.production
 
+# Import workbooks are INPUTS, not source. They carry real client names,
+# contract values and phone numbers, and git history does not forget — so a
+# workbook dropped in here to try an import stays out of the repository. No
+# .xlsx has ever been tracked; this keeps it that way on purpose.
+*.xlsx
+*.xlsm
+
 .DS_Store
