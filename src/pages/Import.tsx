@@ -44,6 +44,8 @@ import {
   type BackfillProgress,
   type BackfillResult,
 } from '../data/stage-backfill.js';
+import { backfillPayments, type PaymentBackfillProgress } from '../data/payment-backfill.js';
+import type { PaymentBackfillResult } from '../lib/payment-backfill.js';
 import { hasImportedRecords } from '../data/import-state.js';
 import { buildWorkbook, type Grid, type SheetBlock } from '../lib/workbook-blocks.js';
 import { describeFirestoreError } from '../data/repository.js';
@@ -106,6 +108,8 @@ export function Import() {
   const [showAllChanges, setShowAllChanges] = useState(false);
   const [stageProgress, setStageProgress] = useState<BackfillProgress | null>(null);
   const [stageResult, setStageResult] = useState<BackfillResult | null>(null);
+  const [payProgress, setPayProgress] = useState<PaymentBackfillProgress | null>(null);
+  const [payResult, setPayResult] = useState<(PaymentBackfillResult & { said: string }) | null>(null);
   /**
    * Whether anything is loaded yet — null until the answer is back.
    *
@@ -281,6 +285,28 @@ export function Import() {
     }
   }
 
+  /**
+   * Record the workbook's payments against contracts that already exist.
+   *
+   * Needed because the importer writes a payment schedule only for a NEW
+   * contract — rewriting one that has been invoiced against would detach the
+   * invoice from the term it settled. Anybody who imported before the collection
+   * tracker was read would otherwise never see their money without clearing the
+   * database. See `data/payment-backfill.ts`.
+   */
+  async function applyPayments() {
+    if (plan === null || user === null) return;
+    setError(null);
+    setPayProgress({ stage: 'Starting', examined: 0, total: 0 });
+    try {
+      setPayResult(await backfillPayments(plan, user.uid, setPayProgress));
+    } catch (cause) {
+      setError(describeFirestoreError(cause, 'apply the payment history'));
+    } finally {
+      setPayProgress(null);
+    }
+  }
+
   const groups = useMemo(() => groupIssues(plan?.issues ?? []), [plan]);
 
   /*
@@ -323,6 +349,46 @@ export function Import() {
               expanded={showAllChanges}
               onToggle={() => setShowAllChanges((v) => !v)}
             />
+          )}
+        </section>
+    );
+  }
+
+  function paymentStep(n: number) {
+    const busy = payProgress !== null || progress !== null || stageProgress !== null || repairProgress !== null;
+    return (
+        <section className="card">
+          <h2>{n}. Apply the payment history</h2>
+          {payResult === null ? (
+            <>
+              <p className="muted">
+                Records what the collection tracker says clients have paid, against the contracts
+                already in the app. Needed separately because a full import writes a payment
+                schedule only for a contract it is creating — it will not rewrite one that exists,
+                in case an invoice has been raised against it.
+              </p>
+              <p className="muted">
+                It only ever marks a term that is still <strong>open with no invoice against it</strong>.
+                Anything invoiced, paid or waived is left exactly as it is and counted below, so this
+                cannot detach an invoice or contradict something recorded in the app. Safe to run
+                twice — the second time changes nothing.
+              </p>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void applyPayments()}
+                disabled={busy || user === null}
+              >
+                {payProgress === null ? 'Apply the payments' : 'Applying…'}
+              </button>
+              {payProgress !== null && (
+                <p className="muted" role="status" aria-live="polite">
+                  {payProgress.stage}: {payProgress.examined} of {payProgress.total} contracts.
+                </p>
+              )}
+            </>
+          ) : (
+            <PaymentsApplied result={payResult} />
           )}
         </section>
     );
@@ -711,7 +777,8 @@ export function Import() {
             <>
               {dateStep(4)}
               {stageStep(5)}
-              {loadStep(6, summary)}
+              {paymentStep(6)}
+              {loadStep(7, summary)}
             </>
           )}        </>
       )}
@@ -863,6 +930,69 @@ const FIELD_LABEL: Record<string, string> = {
  * many are still blank because the workbook had nothing to say about them.
  * The second number is the honest one, so it is not buried.
  */
+/**
+ * What applying the payments did.
+ *
+ * The money is the headline, but the counts that matter are the ones saying what
+ * was LEFT: a term protected because it carries an invoice, a contract whose
+ * schedule no longer lines up. Those are the cases where the workbook and the
+ * app disagree, and burying them would be the one way this pass could mislead.
+ */
+function PaymentsApplied({ result }: { result: PaymentBackfillResult & { said: string } }) {
+  return (
+    <>
+      <p>
+        <strong>{result.said}</strong>
+      </p>
+      <dl className="figure-list">
+        <div>
+          <dt>Contracts with a payment history</dt>
+          <dd>{result.examined}</dd>
+        </div>
+        <div>
+          <dt>Terms recorded as settled</dt>
+          <dd>{result.termsSettled}</dd>
+        </div>
+        {result.termsProtected > 0 && (
+          <div>
+            <dt>Terms left untouched</dt>
+            <dd>
+              {result.termsProtected}{' '}
+              <span className="muted">
+                already invoiced, paid or waived — not changed, so no invoice is detached
+              </span>
+            </dd>
+          </div>
+        )}
+        {result.alreadyDone > 0 && (
+          <div>
+            <dt>Contracts already up to date</dt>
+            <dd>
+              {result.alreadyDone} <span className="muted">nothing left to record</span>
+            </dd>
+          </div>
+        )}
+      </dl>
+      {result.scheduleChanged.length > 0 && (
+        <p className="muted">
+          <strong>{result.scheduleChanged.length} contracts were skipped</strong> because their
+          payment terms no longer match the workbook — renamed or renumbered since the import, so
+          "term 2 is paid" would no longer mean the same term. Nothing was written to them:{' '}
+          {result.scheduleChanged.slice(0, 8).join(', ')}
+          {result.scheduleChanged.length > 8 && ` … and ${result.scheduleChanged.length - 8} more`}.
+        </p>
+      )}
+      {result.notInApp.length > 0 && (
+        <p className="muted">
+          {result.notInApp.length} contracts in the workbook are not in the app yet, so there was
+          nothing to apply the payments to. Loading the workbook creates them with the payments
+          already recorded.
+        </p>
+      )}
+    </>
+  );
+}
+
 function StagesBuilt({ result }: { result: BackfillResult }) {
   if (result.backfilled === 0) {
     return (
