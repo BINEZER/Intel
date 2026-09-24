@@ -25,6 +25,7 @@ const Boards = lazy(() => import('./pages/Boards.js').then((m) => ({ default: m.
 const Clients = lazy(() => import('./pages/Clients.js').then((m) => ({ default: m.Clients })));
 const FinishNextRoute = lazy(() => import('./pages/FinishNext.js').then((m) => ({ default: m.FinishNextRoute })));
 const Performance = lazy(() => import('./pages/Performance.js').then((m) => ({ default: m.Performance })));
+const Service = lazy(() => import('./pages/Service.js').then((m) => ({ default: m.Service })));
 const Settings = lazy(() => import('./pages/Settings.js').then((m) => ({ default: m.Settings })));
 const Finance = lazy(() => import('./pages/Finance.js').then((m) => ({ default: m.Finance })));
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail.js').then((m) => ({ default: m.ProjectDetail })));
@@ -109,6 +110,14 @@ export function App() {
               element={
                 <RequireCapability capability="read">
                   <Performance />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="service"
+              element={
+                <RequireCapability capability="read">
+                  <Service />
                 </RequireCapability>
               }
             />

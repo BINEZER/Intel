@@ -84,6 +84,19 @@ function toDual(date: Date | null): DualDate | null {
   return date === null ? null : dualDateFromGregorian(date, (d) => Timestamp.fromDate(d));
 }
 
+/**
+ * The day a settled term's money arrived, or null.
+ *
+ * Deliberately NOT falling back to today, unlike `toDualOr` below: an undated
+ * receipt is a gap in the record, and filling it with the import date would put
+ * the money in the wrong month for the VAT period, the collections figure and
+ * every report that groups by date.
+ */
+function paidOnOf(milestone: PlannedContract['milestones'][number] | undefined): DualDate | null {
+  if (milestone === undefined || !milestone.paid) return null;
+  return toDual(milestone.paidOn);
+}
+
 /** Falls back to today so a required date field is never left empty. */
 function toDualOr(date: Date | null, fallback: Date): DualDate {
   return dualDateFromGregorian(date ?? fallback, (d) => Timestamp.fromDate(d));
@@ -350,6 +363,10 @@ export async function runImport(
           grossSantim: milestone.grossSantim,
           dueDate: null,
           status: paid ? 'paid' : 'pending',
+          // Only where the tracker dated the receipt. An undated settlement
+          // stays undated rather than being stamped with today, which would put
+          // it in the wrong month for anything grouped by period.
+          paidOn: paidOnOf(contract.milestones[index]),
           ...stampCreate(uid),
         }),
       );

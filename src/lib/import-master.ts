@@ -102,6 +102,15 @@ export interface PlannedMilestone {
   shareBps: number;
   /** Set where the payment history says this term has been settled. */
   paid: boolean;
+  /**
+   * The day the money arrived, where the tracker records one.
+   *
+   * Null on an unsettled term, and also on a settled one the tracker dated no
+   * receipt for — a payment whose date is unknown is not the same as a payment
+   * that did not happen, and guessing a date would put a receipt in a month it
+   * did not belong to.
+   */
+  paidOn: Date | null;
 }
 
 export interface PlannedContract {
@@ -504,7 +513,7 @@ function collectionsFrom(
   contracts: readonly PlannedContract[],
   contractValueBirr: ReadonlyMap<string, number>,
   issues: ImportIssue[],
-): Map<string, number> {
+): Map<string, { birr: number; paidOn: Array<Date | null> }> {
   const blocks = collectionBlocks(rows);
   if (blocks.length === 0) return new Map();
 
@@ -534,8 +543,19 @@ function collectionsFrom(
     });
   }
 
-  const collected = new Map<string, number>();
-  for (const match of result.matched) collected.set(match.agreementId, match.collectedBirr);
+  const collected = new Map<string, { birr: number; paidOn: Array<Date | null> }>();
+  for (const match of result.matched) {
+    collected.set(match.agreementId, {
+      birr: match.collectedBirr,
+      // Earliest first, so position matches the order cash is walked down the
+      // schedule. An undated receipt keeps its place rather than being dropped:
+      // it still settled a term, and removing it would shift every later date
+      // onto the wrong one.
+      paidOn: [...match.receipts]
+        .sort((a, b) => (a.paidOn?.getTime() ?? Infinity) - (b.paidOn?.getTime() ?? Infinity))
+        .map((receipt) => receipt.paidOn),
+    });
+  }
   return collected;
 }
 
@@ -552,13 +572,29 @@ export function applyCollectedToMilestones(
   shares: readonly MilestoneShare[],
   valueSantim: number,
   collectedSantim: number,
+  /**
+   * The days money arrived, earliest first, from the collection tracker.
+   *
+   * Matched to terms BY POSITION, which is the same assumption the cash-walk
+   * above already makes: the advance is collected first and the schedule runs in
+   * order, so the first receipt settles the first term. Matching the tracker's
+   * stage names to the contract's term names would be a second fuzzy comparison
+   * — "AGREEMENT (ADVANCE)" against "Advance Payment" — for no more certainty
+   * than the ordering already gives.
+   *
+   * Runs out silently: fewer dates than settled terms leaves the rest undated,
+   * which is the honest answer.
+   */
+  paidOnInOrder: readonly (Date | null)[] = [],
 ): PlannedMilestone[] {
   let left = collectedSantim;
+  let dateAt = 0;
   return shares.map((share) => {
     const due = Math.round((valueSantim * share.shareBps) / 10_000);
     const paid = left >= due && due > 0;
     if (paid) left -= due;
-    return { name: share.name, shareBps: share.shareBps, paid };
+    const paidOn = paid ? (paidOnInOrder[dateAt++] ?? null) : null;
+    return { name: share.name, shareBps: share.shareBps, paid, paidOn };
   });
 }
 
@@ -852,8 +888,15 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
     contractValueBirr,
     issues,
   );
-  for (const [agreementId, collected] of collectionsFrom(sheet('Ops_Collection_Status'), contracts, contractValueBirr, issues)) {
-    collectedBirr.set(agreementId, collected);
+  const paidOnByAgreement = new Map<string, Array<Date | null>>();
+  for (const [agreementId, tracked] of collectionsFrom(
+    sheet('Ops_Collection_Status'),
+    contracts,
+    contractValueBirr,
+    issues,
+  )) {
+    collectedBirr.set(agreementId, tracked.birr);
+    paidOnByAgreement.set(agreementId, tracked.paidOn);
   }
 
   for (const contract of contracts) {
@@ -872,6 +915,7 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
       shares,
       contract.valueSantim,
       contract.collectedSantim ?? 0,
+      paidOnByAgreement.get(contract.key) ?? [],
     );
   }
 

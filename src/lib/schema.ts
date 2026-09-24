@@ -272,6 +272,15 @@ export interface PaymentMilestone extends AuditFields {
   grossSantim: number;
   dueDate: DualDate | null;
   status: 'pending' | 'ready_to_invoice' | 'invoiced' | 'paid' | 'waived';
+  /**
+   * The day the money arrived, in both calendars.
+   *
+   * Only meaningful on a settled term, and absent even then where the source
+   * recorded no date — a receipt whose date is unknown is not the same as one
+   * that landed today, and dating it now would put it in the wrong month for
+   * every figure that groups by period.
+   */
+  paidOn?: DualDate | null;
   invoiceId?: string;
 }
 
@@ -1075,6 +1084,18 @@ export interface KpiTargets {
   repeatCalloutWindowDays: number;
   /** A certification expiring within this many days is "expiring soon". */
   certificationWarningDays: number;
+  /**
+   * The response promise, in minutes from the call being logged to a technician
+   * being on site.
+   *
+   * Kept here rather than on each contract because it is a company-wide promise
+   * — no contract in the register states its own — and snapshotted onto every
+   * callout as it is logged, so raising the target later cannot retroactively
+   * turn yesterday's breach into a pass.
+   */
+  responseSlaMinutes: number;
+  /** The same promise for having the lift back in service, from the call. */
+  resolutionSlaMinutes: number;
 }
 
 // ===========================================================================

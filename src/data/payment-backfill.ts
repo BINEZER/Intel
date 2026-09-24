@@ -6,8 +6,9 @@
  * that, and report the rest by name.
  */
 
-import { doc, getDoc, getDocs, orderBy, query, writeBatch } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, getDocs, orderBy, query, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase.js';
+import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { stampUpdate } from './audit.js';
 import { collectionRef } from './repository.js';
 import {
@@ -95,6 +96,9 @@ export async function backfillPayments(
       name: milestone.name,
       paid: milestone.paid === true,
     }));
+    const paidOnBySeq = new Map(
+      contract.milestones.map((milestone, index) => [index + 1, milestone.paidOn]),
+    );
 
     if (!scheduleMatches(stored, planned)) {
       result.scheduleChanged.push(contract.contractNo);
@@ -113,8 +117,16 @@ export async function backfillPayments(
       }
       if (verdict !== 'settle') continue;
 
+      // The date goes on with the settlement where the tracker recorded one.
+      // Where it did not, the field is left alone rather than set to null: this
+      // pass is additive, and a date somebody typed in the app is worth more
+      // than the workbook's silence.
+      const arrived = paidOnBySeq.get(term.seq) ?? null;
       batch.update(doc(db, `contracts/${id}/milestones`, found.docId), {
         status: 'paid',
+        ...(arrived === null
+          ? {}
+          : { paidOn: dualDateFromGregorian(arrived, (d) => Timestamp.fromDate(d)) }),
         ...stampUpdate(uid),
       });
       queued += 1;

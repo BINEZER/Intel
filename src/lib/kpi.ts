@@ -459,4 +459,8 @@ export const DEFAULT_KPI_TARGETS = {
   scheduleVarianceBps: -500,
   repeatCalloutWindowDays: 30,
   certificationWarningDays: 60,
+  // Four hours on site, twenty-four to have the lift running. An entrapment is
+  // not covered by either: that is an emergency, not a service level.
+  responseSlaMinutes: 240,
+  resolutionSlaMinutes: 1440,
 } as const;

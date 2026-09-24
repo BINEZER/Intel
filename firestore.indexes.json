@@ -483,6 +483,34 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "callouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "periodEc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "reportedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "maintenanceVisits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "periodEc",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scheduledDate.at",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
