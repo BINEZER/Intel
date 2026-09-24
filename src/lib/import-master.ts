@@ -35,6 +35,7 @@
  * and the page shows them before anything is written.
  */
 
+import { collectionBlocks, matchCollections } from './import-collections.js';
 import { DEFAULT_SUPPLY_INSTALL_SHARES, type MilestoneShare } from './milestones.js';
 import { birrToSantim } from './money.js';
 import { rescaleWeights } from './stage-edit.js';
@@ -487,6 +488,58 @@ function resolvePayments(
 }
 
 /**
+ * Read the collection tracker and attach each client's receipts to an agreement.
+ *
+ * The matching and its refusals live in `lib/import-collections.ts`. This turns
+ * what it decided into the import's own issue list, because every one of those
+ * decisions is about whose money is whose and none of them should be invisible:
+ *
+ *   - a match where the two sheets spelled the client differently is REPAIRED,
+ *     naming both spellings, so all of them can be read back in one place;
+ *   - a block that could not be matched is SKIPPED with the reason, which is a
+ *     receivable somebody now knows to go and look at.
+ */
+function collectionsFrom(
+  rows: readonly Row[],
+  contracts: readonly PlannedContract[],
+  contractValueBirr: ReadonlyMap<string, number>,
+  issues: ImportIssue[],
+): Map<string, number> {
+  const blocks = collectionBlocks(rows);
+  if (blocks.length === 0) return new Map();
+
+  const result = matchCollections(
+    blocks,
+    contracts.map((contract) => ({
+      id: contract.key,
+      name: contract.title,
+      valueBirr: contractValueBirr.get(contract.key) ?? null,
+    })),
+  );
+
+  for (const spelling of result.spellingDiffered) {
+    issues.push({
+      severity: 'repaired',
+      sheet: 'Ops_Collection_Status',
+      ref: `${spelling.client} → ${spelling.agreementId}`,
+      reason: `The tracker calls this client "${spelling.client}" and the agreement register calls it "${spelling.registerName}". Matched on the contract value with the names agreeing closely enough; check it is one client.`,
+    });
+  }
+  for (const missed of result.unmatched) {
+    issues.push({
+      severity: 'skipped',
+      sheet: 'Ops_Collection_Status',
+      ref: missed.client,
+      reason: missed.reason,
+    });
+  }
+
+  const collected = new Map<string, number>();
+  for (const match of result.matched) collected.set(match.agreementId, match.collectedBirr);
+  return collected;
+}
+
+/**
  * Walk cash down the payment schedule in order.
  *
  * The workbook records what has been collected per agreement but not which
@@ -592,6 +645,9 @@ export const SOURCE_SHEETS = [
   'Agreements_Master',
   'Agreement_Payment_Plan',
   'Project_Finance',
+  // The collection tracker, which replaced Project_Finance in the consolidated
+  // workbook. Both are read: either file can still turn up.
+  'Ops_Collection_Status',
   'Projects_Master',
   'Elevator_List_Full',
   'Elevator_Assets',
@@ -778,11 +834,27 @@ export function buildImportPlan(workbook: Workbook, options: ImportOptions): Imp
   // --- payment schedules and collections -----------------------------------
 
   const schedules = paymentSchedules(sheet('Agreement_Payment_Plan'), issues);
+
+  /*
+   * Two possible sources, and the newer workbook only has the second.
+   *
+   * `Project_Finance` was the old sheet, matched to agreements by contract value
+   * alone. `Ops_Collection_Status` is the collection tracker in the consolidated
+   * file: a row per payment stage with the date the money arrived, matched by
+   * value AND name. Where both exist the tracker wins — it records receipts,
+   * while the old sheet recorded a running total.
+   *
+   * Deliberately NOT `PL_Payment`, which looks like the obvious replacement and
+   * is a price template: see the header of `lib/import-collections.ts`.
+   */
   const collectedBirr = resolvePayments(
     financeBlocks(sheet('Project_Finance')),
     contractValueBirr,
     issues,
   );
+  for (const [agreementId, collected] of collectionsFrom(sheet('Ops_Collection_Status'), contracts, contractValueBirr, issues)) {
+    collectedBirr.set(agreementId, collected);
+  }
 
   for (const contract of contracts) {
     const shares = schedules.get(contract.key) ?? DEFAULT_SUPPLY_INSTALL_SHARES;

@@ -79,6 +79,66 @@ export function parseBanner(value: Cell): { sheet: string; rows: number } | null
   return { sheet, rows: Number(match[2]) };
 }
 
+/**
+ * Find the header row of a block.
+ *
+ * NOT ALWAYS THE ROW UNDER THE BANNER
+ *   `Ops_Collection_Status` opens with "PROJECT TRACKER for colletion" on its own
+ *   line and `Fin_Receivables_Agreements` with an entirely empty one, before the
+ *   real column names. Taking the row under the banner on faith gave the first a
+ *   single column called "PROJECT TRACKER for colletion" and turned its real
+ *   header into the first row of data.
+ *
+ * WIDTH IS THE WRONG TEST — TWO ATTEMPTS PROVED IT
+ *   Counting values failed: that title row carries two stray labels out in
+ *   columns 16 and 17, so it has three values and passed.
+ *
+ *   Comparing widths failed worse. `Eng_Technicians_List` is a rota — names
+ *   across the columns, no header row at all — and its first row of names was
+ *   judged a title by the wider row beneath it and consumed as the header. A
+ *   technician disappeared from the import, which is exactly the kind of quiet
+ *   loss this module exists to prevent.
+ *
+ * WHERE THE VALUES SIT IS THE RIGHT TEST
+ *   A header names the columns the data occupies, so it is DENSE ON THE LEFT: it
+ *   starts at or near the first column and runs. A title is one sentence in the
+ *   first cell, with anything else stranded far to the right past a wide gap.
+ *
+ *   So a row is stepped over only when it is empty, or when it has at most one
+ *   value among the opening columns while carrying something beyond them. By
+ *   that test the collections title is a title, a blank row is a title, and a
+ *   row of four names starting at column zero is not.
+ */
+
+/** How many of the row's first `upTo` columns carry a value. */
+function filledWithin(row: readonly Cell[], upTo: number): number {
+  return row
+    .slice(0, upTo)
+    .filter((cell) => cell !== null && cell !== undefined && cell !== '').length;
+}
+
+function looksLikeTitle(row: readonly Cell[] | undefined): boolean {
+  if (row === undefined) return true;
+  const total = row.filter((cell) => cell !== null && cell !== undefined && cell !== '').length;
+  if (total === 0) return true;
+  // One value on the left and something stranded out to the right: a caption
+  // with a stray label beside it, not a row of column names.
+  const LEFT = 6;
+  return filledWithin(row, LEFT) <= 1 && total > filledWithin(row, LEFT);
+}
+
+function headerRowIn(grid: Grid, from: number, end: number): number | null {
+  if (from >= end) return null;
+  // Two rows of look-ahead: enough for a title, or a title over a blank row,
+  // and not enough to wander into the data.
+  for (let at = from; at < Math.min(from + 3, end); at++) {
+    if (!looksLikeTitle(grid[at])) return at;
+  }
+  // Nothing that reads as a header. Keep the row under the banner rather than
+  // dropping the block.
+  return from;
+}
+
 /** True when every cell in the row is empty. */
 function isBlank(row: readonly Cell[] | undefined): boolean {
   if (row === undefined) return true;
@@ -137,26 +197,31 @@ export function splitSheet(name: string, grid: Grid): SheetBlock[] {
 
   const blocks: SheetBlock[] = [];
   banners.forEach((banner, index) => {
-    const header = grid[banner.at + 1];
-    if (header === undefined) return;
-
-    // The count spans the header too, so the last row of data sits at
-    // `at + rows`. Whichever comes first, that or the next banner.
+    // The count spans everything under the banner, so the block's last row sits
+    // at `at + rows`. Whichever comes first, that or the next banner.
     const nextBanner = banners[index + 1]?.at ?? grid.length;
     const declaredEnd = banner.at + banner.rows + 1;
     const end = Math.min(nextBanner, declaredEnd);
 
-    const rows = keyRows(header, grid.slice(banner.at + 2, end));
+    const headerAt = headerRowIn(grid, banner.at + 1, end);
+    if (headerAt === null) return;
+    const header = grid[headerAt] as readonly Cell[];
+
+    const rows = keyRows(header, grid.slice(headerAt + 1, end));
     // What was there to read, had the count not stopped it. Reported rather
     // than acted on: the count is the safer of the two and stays in charge.
-    const available = keyRows(header, grid.slice(banner.at + 2, nextBanner)).length;
+    const available = keyRows(header, grid.slice(headerAt + 1, nextBanner)).length;
 
     blocks.push({
       name: banner.sheet,
       rows,
       foundIn: name,
       ...(available === rows.length ? {} : { rowsBeyondTheCount: available - rows.length }),
-      ...(rows.length === banner.rows - 1 ? {} : { declaredRows: banner.rows }),
+      // The count spans the title rows too, so agreement is measured against
+      // everything under the banner rather than against the data alone.
+      ...(headerAt + 1 + rows.length === banner.at + banner.rows + 1
+        ? {}
+        : { declaredRows: banner.rows }),
     });
   });
   return blocks;
