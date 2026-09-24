@@ -157,12 +157,31 @@ function toHistoryVisit(visit: WithId<MaintenanceVisit>): HistoryVisit {
 export function Units() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects') && user !== null;
-  const [servicedOnly, setServicedOnly] = useState(true);
+  /**
+   * Start on the lifts under a maintenance contract — unless none is.
+   *
+   * The filter is the right default for the everyday question, which is which
+   * of the machines we are paid to look after needs attention. But after a
+   * fresh import there are no maintenance contracts yet, and a page that hides
+   * all 153 machines somebody has just loaded reads as an import that failed.
+   * So it starts off until at least one lift is actually under contract.
+   *
+   * `null` until the lifts arrive: choosing before then would pick a default
+   * from an empty list and then be wrong once it filled.
+   */
+  const [servicedOnly, setServicedOnly] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<WithId<ElevatorUnit> | 'new' | null>(null);
 
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
   const records = useSiteRecords(units.rows.map((u) => u.siteName));
   const asOf = useMemo(() => new Date(), []);
+
+  const anyServiced = units.rows.some((u) => u.maintenanceContractId !== null);
+
+  useEffect(() => {
+    if (servicedOnly !== null || units.loading) return;
+    setServicedOnly(anyServiced);
+  }, [servicedOnly, units.loading, anyServiced]);
 
   const rows = useMemo(() => {
     const callouts = records.callouts.map(toHistoryCallout);
@@ -213,13 +232,17 @@ export function Units() {
       )}
 
       <label className="filter-row">
-        <input type="checkbox" checked={servicedOnly} onChange={(e) => setServicedOnly(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={servicedOnly === true}
+          onChange={(e) => setServicedOnly(e.target.checked)}
+        />
         Only lifts under a maintenance contract
       </label>
 
       {rows.length === 0 && !units.loading ? (
         <p className="muted">
-          {servicedOnly
+          {servicedOnly === true
             ? 'No lift is currently under a maintenance contract. Untick the box above to see every machine on the register.'
             : 'No lifts on the register yet.'}
         </p>

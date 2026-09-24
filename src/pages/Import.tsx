@@ -11,7 +11,7 @@
  * can trust afterwards.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
 import { KpiTile } from '../components/KpiTile.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
@@ -19,11 +19,20 @@ import { formatETB } from '../lib/money.js';
 import {
   buildImportPlan,
   groupIssues,
+  planIsEmpty,
   planSummary,
+  sheetsFound,
+  sheetsWithRows,
+  SOURCE_SHEETS,
   type ImportIssue,
   type ImportPlan,
   type Workbook,
 } from '../lib/import-master.js';
+import {
+  buildElevatorPlan,
+  hasMoneyColumns,
+  isElevatorWorkbook,
+} from '../lib/import-elevators.js';
 import { runImport, type ImportProgress, type ImportResult } from '../data/import-run.js';
 import {
   repairImportedDates,
@@ -35,24 +44,43 @@ import {
   type BackfillProgress,
   type BackfillResult,
 } from '../data/stage-backfill.js';
+import { hasImportedRecords } from '../data/import-state.js';
+import { buildWorkbook, type Grid, type SheetBlock } from '../lib/workbook-blocks.js';
 import { describeFirestoreError } from '../data/repository.js';
 
 type VatTreatment = 'inclusive' | 'exclusive';
 
-/** Read the workbook in a worker-free way: one file, parsed on demand. */
-async function readWorkbook(file: File): Promise<Workbook> {
+/**
+ * Read the workbook in a worker-free way: one file, parsed on demand.
+ *
+ * Read POSITIONALLY, as rows of cells, rather than keyed off the first row.
+ * The consolidated master stacks several former sheets into one tab, each under
+ * a banner row, so on those tabs the first row is the banner and keying off it
+ * produces a sheet whose columns are all called `__EMPTY`. The grid is handed to
+ * `buildWorkbook`, which puts the original sheets back. See
+ * `lib/workbook-blocks.ts`.
+ */
+async function readWorkbook(file: File): Promise<{ workbook: Workbook; recovered: SheetBlock[] }> {
   // Loaded on demand: the parser is about half a megabyte, and nobody who is
   // not importing should pay for it.
   const XLSX = await import('xlsx');
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { cellDates: true });
-  const out: Workbook = {};
+  const sheets: Array<{ name: string; grid: Grid }> = [];
   for (const name of wb.SheetNames) {
     const sheet = wb.Sheets[name];
     if (sheet === undefined) continue;
-    out[name] = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+    sheets.push({
+      name,
+      grid: XLSX.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: null,
+        raw: true,
+        blankrows: true,
+      }) as Grid,
+    });
   }
-  return out;
+  return buildWorkbook(sheets);
 }
 
 const SEVERITY_LABEL: Record<ImportIssue['severity'], string> = {
@@ -65,6 +93,8 @@ export function Import() {
   const { user } = useAuth();
   const [workbook, setWorkbook] = useState<Workbook | null>(null);
   const [fileName, setFileName] = useState('');
+  /** Sheets found stacked inside a consolidated tab, for the report. */
+  const [recovered, setRecovered] = useState<SheetBlock[]>([]);
   const [vatTreatment, setVatTreatment] = useState<VatTreatment | null>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,16 +106,102 @@ export function Import() {
   const [showAllChanges, setShowAllChanges] = useState(false);
   const [stageProgress, setStageProgress] = useState<BackfillProgress | null>(null);
   const [stageResult, setStageResult] = useState<BackfillResult | null>(null);
+  /**
+   * Whether anything is loaded yet — null until the answer is back.
+   *
+   * It decides the ORDER of the steps below, not merely their wording. See
+   * `data/import-state.ts`: on a database somebody has just cleared, the two
+   * repair steps have nothing to act on and running them in the order they are
+   * numbered leaves every project at 0%.
+   */
+  const [loaded, setLoaded] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (user === null) return;
+    let live = true;
+    void hasImportedRecords()
+      .then((yes) => { if (live) setLoaded(yes); })
+      // Not worth an error banner: if this cannot be answered the page falls
+      // back to the full sequence, which is the safe assumption — it offers a
+      // repair that finds nothing rather than hiding a load that is needed.
+      .catch(() => { if (live) setLoaded(true); });
+    return () => { live = false; };
+  }, [user]);
+
+  /**
+   * Which of the eleven-sheet workbook's tabs the chosen file has, and which
+   * carry rows.
+   *
+   * Two different answers: a file with none of the tabs is the wrong file; a
+   * file with the tabs and no rows is a partial export of the right one.
+   */
+  const found = useMemo(() => (workbook === null ? [] : sheetsFound(workbook)), [workbook]);
+  const withRows = useMemo(() => (workbook === null ? [] : sheetsWithRows(workbook)), [workbook]);
+
+  /**
+   * Which source this file is.
+   *
+   *   register      the one-sheet elevator register, one row per lift
+   *   master        the original eleven-sheet workbook
+   *   empty-master  the eleven-sheet workbook, exported without its rows
+   *   unknown       neither, so there is nothing to import
+   *
+   * THE MASTER IS TESTED FIRST, AND IT HAS TO BE
+   *   The register is identified by a sheet called `Elevators` carrying
+   *   Elevator_ID, Agreement_ID and Client_Name — and the consolidated master's
+   *   FIRST tab is called `Elevators` and carries exactly those three. Tested
+   *   the other way round, the real master matched the register, the other
+   *   thirty-four tabs were never read, and the import silently produced 79
+   *   contracts and no payment terms, no rosters and no lift assets instead of
+   *   109 contracts with all three.
+   *
+   *   So a file carrying the master's own sheets is the master, whatever else
+   *   is in it. The register test is what a file falls through to, because a
+   *   one-sheet register cannot accidentally look like an eleven-sheet workbook
+   *   while the reverse has now happened on a real file.
+   */
+  const format: 'register' | 'master' | 'empty-master' | 'unknown' | null =
+    workbook === null
+      ? null
+      : withRows.length > 0
+        ? 'master'
+        : isElevatorWorkbook(workbook)
+          ? 'register'
+          : found.length > 0
+            ? 'empty-master'
+            : 'unknown';
+
+  /**
+   * Does the VAT question need asking?
+   *
+   * Only where there is a figure for VAT to be inside or outside of. The
+   * register carries no money unless somebody has added the columns, and asking
+   * about the VAT treatment of an absent number is a question with no answer
+   * that blocks the whole page behind it.
+   */
+  const needsVat =
+    format === 'master' || (format === 'register' && workbook !== null && hasMoneyColumns(workbook));
 
   const plan: ImportPlan | null = useMemo(() => {
-    if (workbook === null || vatTreatment === null) return null;
+    if (workbook === null) return null;
+    if (needsVat && vatTreatment === null) return null;
     try {
-      return buildImportPlan(workbook, { vatTreatment, vatRateBps: 1500 });
+      // `exclusive` is a placeholder where the question was not asked: with no
+      // money in the file there is nothing for it to apply to, and where the
+      // register DOES carry money the question was asked.
+      const treatment = vatTreatment ?? 'exclusive';
+      // Which mapper runs is `format`, not a second test of its own. Asking
+      // `isElevatorWorkbook` again here is how the page came to say one thing
+      // and do another: it showed the master's VAT question and then imported
+      // the file through the register mapper, reading one tab of thirty-five.
+      return format === 'register'
+        ? buildElevatorPlan(workbook, { vatTreatment: treatment, vatRateBps: 1500 })
+        : buildImportPlan(workbook, { vatTreatment: treatment, vatRateBps: 1500 });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       return null;
     }
-  }, [workbook, vatTreatment]);
+  }, [workbook, vatTreatment, needsVat, format]);
 
   const summary = plan === null ? null : planSummary(plan);
 
@@ -97,13 +213,16 @@ export function Import() {
     setStageResult(null);
     setReading(true);
     try {
-      setWorkbook(await readWorkbook(file));
+      const read = await readWorkbook(file);
+      setWorkbook(read.workbook);
+      setRecovered(read.recovered);
       setFileName(file.name);
     } catch (cause) {
       setError(
         `Could not read that file: ${cause instanceof Error ? cause.message : String(cause)}`,
       );
       setWorkbook(null);
+      setRecovered([]);
     } finally {
       setReading(false);
     }
@@ -164,6 +283,146 @@ export function Import() {
 
   const groups = useMemo(() => groupIssues(plan?.issues ?? []), [plan]);
 
+  /*
+   * The three steps that act on the database, as functions rather than markup
+   * in place: the ORDER they are offered in depends on whether anything is
+   * loaded, and the number in each heading has to follow that order rather
+   * than be written into it.
+   */
+  function dateStep(n: number) {
+    return (
+        <section className="card">
+          <h2>{n}. Correct the dates already loaded</h2>
+          {repairResult === null ? (
+            <>
+              <p className="muted">
+                The first import read every date from this workbook one day early. This puts
+                them right and changes <strong>nothing else</strong> — a contract you have put
+                on hold stays on hold, a project you marked terminated stays terminated, and
+                every payment record is left exactly as it is. Only dates that are actually
+                wrong are rewritten.
+              </p>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void repairDates()}
+                disabled={repairProgress !== null || progress !== null || user === null}
+              >
+                {repairProgress === null ? 'Correct the dates' : 'Correcting…'}
+              </button>
+              {repairProgress !== null && (
+                <p className="muted" role="status" aria-live="polite">
+                  Checking {repairProgress.stage}: {repairProgress.examined} of{' '}
+                  {repairProgress.total} records.
+                </p>
+              )}
+            </>
+          ) : (
+            <DatesCorrected
+              result={repairResult}
+              expanded={showAllChanges}
+              onToggle={() => setShowAllChanges((v) => !v)}
+            />
+          )}
+        </section>
+    );
+  }
+
+  function stageStep(n: number) {
+    return (
+        <section className="card">
+          <h2>{n}. Set up the stage trackers</h2>
+          {stageResult === null ? (
+            <>
+              <p className="muted">
+                The projects loaded from the workbook have no stages, so they all read 0% however
+                much of them is built. This creates the fourteen installation stages on each one
+                and marks the stages the workbook says are already behind the job. It only ever
+                touches a project that has <strong>no</strong> stages — anything your crews have
+                recorded is left exactly as it is.
+                {loaded === false && (
+                  <>
+                    {' '}
+                    <strong>Run this after the load above</strong> — it acts on the projects that
+                    are stored, so on an empty database it would find none.
+                  </>
+                )}
+              </p>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void backfillStages()}
+                disabled={stageProgress !== null || progress !== null || repairProgress !== null || user === null}
+              >
+                {stageProgress === null ? 'Set up the trackers' : 'Setting up…'}
+              </button>
+              {stageProgress !== null && (
+                <p className="muted" role="status" aria-live="polite">
+                  {stageProgress.stage}: {stageProgress.examined} of {stageProgress.total}{' '}
+                  projects.
+                </p>
+              )}
+            </>
+          ) : (
+            <StagesBuilt result={stageResult} />
+          )}
+        </section>
+    );
+  }
+
+  /** Takes the summary rather than reading it: it is narrowed at the call site. */
+  function loadStep(n: number, summary: ReturnType<typeof planSummary>) {
+    return (
+        <section className="card">
+          <h2>{n}. Load everything from the workbook</h2>
+          {loaded === false ? (
+            <p className="muted">
+              This is the first load, so it writes everything and overwrites nothing.
+            </p>
+          ) : (
+            <p className="muted">
+              Only needed for a first load, or after editing the workbook itself. It writes every
+              field from the spreadsheet over what is stored, so anything changed in the app since
+              the last import — a status, a warranty term, a handover date — goes back to what the
+              spreadsheet says. To fix dates alone, use step 4 instead.
+            </p>
+          )}
+          {result === null ? (
+            <>
+              <p className="muted">
+                Writes{' '}
+                {summary.clients +
+                  summary.contracts +
+                  summary.projects +
+                  summary.units +
+                  summary.technicians +
+                  summary.subcontractors}{' '}
+                records plus {summary.milestones} payment terms. Records already loaded from a
+                previous run are updated in place; payment schedules on contracts that already
+                exist are left alone, in case they have been invoiced against.
+              </p>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void write()}
+                disabled={progress !== null || user === null}
+              >
+                {progress === null ? 'Import into the app' : 'Importing…'}
+              </button>
+              {progress !== null && (
+                <p className="muted" role="status" aria-live="polite">
+                  {progress.stage}: {progress.written} of {progress.total} records written.
+                </p>
+              )}
+            </>
+          ) : (
+            <ImportDone result={result} />
+          )}
+        </section>
+
+    );
+  }
+
   return (
     <div className="page">
       <PrintHeader title="Workbook import" />
@@ -207,7 +466,7 @@ export function Import() {
       </section>
 
       {/* --- step 2 ---------------------------------------------------- */}
-      {workbook !== null && (
+      {needsVat && (
         <section className="card">
           <h2>2. Does the contract value include VAT?</h2>
           <p className="muted">
@@ -244,8 +503,99 @@ export function Import() {
         </section>
       )}
 
+      {/*
+        Nothing recognised in the file.
+
+        The importer answers a missing sheet with no rows, which is right — a
+        workbook without the subcontractor tracker still imports. But a file
+        with none of the sheets produces a plan of zeros and NO issues, because
+        there were no rows to find fault with, and the page used to offer to
+        import that: eight zero tiles, a working button, and a cheerful report
+        of nothing written. Somebody who picked the wrong file was told the
+        import had worked.
+      */}
+      {format === 'unknown' && (
+        <section className="card">
+          <h2>2. This is not a file the importer reads</h2>
+          <p>
+            <strong>{fileName}</strong> was read, but it is not one of the files the importer
+            knows, so there is nothing to load. Nothing has been written.
+          </p>
+          <p className="muted">
+            It reads either of two files, and this is neither:
+          </p>
+          <ul>
+            <li>
+              <strong>The elevator register</strong> — one sheet called <code>Elevators</code>, one
+              row per lift, with <code>Elevator_ID</code>, <code>Agreement_ID</code> and{' '}
+              <code>Client_Name</code> columns. This is the current source.
+            </li>
+            <li>
+              <strong>The original project master</strong> — the eleven-sheet workbook with{' '}
+              <code>Agreements_Master</code>, <code>Projects_Master</code> and{' '}
+              <code>Elevator_List_Full</code> in it.
+            </li>
+          </ul>
+          <details>
+            <summary>Every sheet of the eleven-sheet workbook</summary>
+            <ul className="muted">
+              {SOURCE_SHEETS.map((name) => (
+                <li key={name}>
+                  <code>{name}</code>
+                  {found.includes(name) ? ' — found' : ' — not in this file'}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
+
+      {/*
+        The sheets are there but produced nothing. Different from the case above
+        and worth saying differently: the file IS the master workbook, so the
+        issue list below is the explanation rather than the file being wrong.
+      */}
+      {format === 'empty-master' && (
+        <section className="card">
+          <h2>2. This workbook came through empty</h2>
+          <p>
+            <strong>{fileName}</strong> is the right workbook — it has {found.join(', ')} — but
+            every one of those sheets is empty. Nothing has been written.
+          </p>
+          <p className="muted">
+            This is usually a partial export: the tabs came through without their rows. Export the
+            master again and choose the new file in step 1.
+          </p>
+        </section>
+      )}
+
+      {/*
+        The rows are there but none of them could be used. Different again: the
+        issue list is the explanation, so it leads.
+      */}
+      {plan !== null && format !== 'unknown' && planIsEmpty(plan) && (
+        <section className="card">
+          <h2>3. Nothing in this file could be loaded</h2>
+          <p>
+            <strong>{fileName}</strong> has the right sheets and they have rows, but not one row
+            could be read as an agreement, a project or a lift. Nothing has been written.
+          </p>
+          {plan.issues.length > 0 && (
+            <ul className="muted">
+              {groupIssues(plan.issues)
+                .slice(0, 6)
+                .map((group) => (
+                  <li key={`${group.sheet}-${group.reason}`}>
+                    <strong>{group.sheet}</strong> — {group.reason} ({group.refs.length} rows)
+                  </li>
+                ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* --- step 3 ---------------------------------------------------- */}
-      {summary !== null && plan !== null && (
+      {summary !== null && plan !== null && !planIsEmpty(plan) && (
         <>
           <section className="card">
             <h2>3. What this will create</h2>
@@ -339,113 +689,31 @@ export function Import() {
             </button>
           </section>
 
-          <section className="card">
-            <h2>4. Correct the dates already loaded</h2>
-            {repairResult === null ? (
-              <>
-                <p className="muted">
-                  The first import read every date from this workbook one day early. This puts
-                  them right and changes <strong>nothing else</strong> — a contract you have put
-                  on hold stays on hold, a project you marked terminated stays terminated, and
-                  every payment record is left exactly as it is. Only dates that are actually
-                  wrong are rewritten.
-                </p>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void repairDates()}
-                  disabled={repairProgress !== null || progress !== null || user === null}
-                >
-                  {repairProgress === null ? 'Correct the dates' : 'Correcting…'}
-                </button>
-                {repairProgress !== null && (
-                  <p className="muted" role="status" aria-live="polite">
-                    Checking {repairProgress.stage}: {repairProgress.examined} of{' '}
-                    {repairProgress.total} records.
-                  </p>
-                )}
-              </>
-            ) : (
-              <DatesCorrected
-                result={repairResult}
-                expanded={showAllChanges}
-                onToggle={() => setShowAllChanges((v) => !v)}
-              />
-            )}
-          </section>
-
-          <section className="card">
-            <h2>5. Set up the stage trackers</h2>
-            {stageResult === null ? (
-              <>
-                <p className="muted">
-                  The projects loaded from the workbook have no stages, so they all read 0% however
-                  much of them is built. This creates the fourteen installation stages on each one
-                  and marks the stages the workbook says are already behind the job. It only ever
-                  touches a project that has <strong>no</strong> stages — anything your crews have
-                  recorded is left exactly as it is.
-                </p>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void backfillStages()}
-                  disabled={stageProgress !== null || progress !== null || repairProgress !== null || user === null}
-                >
-                  {stageProgress === null ? 'Set up the trackers' : 'Setting up…'}
-                </button>
-                {stageProgress !== null && (
-                  <p className="muted" role="status" aria-live="polite">
-                    {stageProgress.stage}: {stageProgress.examined} of {stageProgress.total}{' '}
-                    projects.
-                  </p>
-                )}
-              </>
-            ) : (
-              <StagesBuilt result={stageResult} />
-            )}
-          </section>
-
-          <section className="card">
-            <h2>6. Load everything from the workbook</h2>
-            <p className="muted">
-              Only needed for a first load, or after editing the workbook itself. It writes every
-              field from the spreadsheet over what is stored, so anything changed in the app since
-              the last import — a status, a warranty term, a handover date — goes back to what the
-              spreadsheet says. To fix dates alone, use step 4 instead.
-            </p>
-            {result === null ? (
-              <>
-                <p className="muted">
-                  Writes{' '}
-                  {summary.clients +
-                    summary.contracts +
-                    summary.projects +
-                    summary.units +
-                    summary.technicians +
-                    summary.subcontractors}{' '}
-                  records plus {summary.milestones} payment terms. Records already loaded from a
-                  previous run are updated in place; payment schedules on contracts that already
-                  exist are left alone, in case they have been invoiced against.
-                </p>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void write()}
-                  disabled={progress !== null || user === null}
-                >
-                  {progress === null ? 'Import into the app' : 'Importing…'}
-                </button>
-                {progress !== null && (
-                  <p className="muted" role="status" aria-live="polite">
-                    {progress.stage}: {progress.written} of {progress.total} records written.
-                  </p>
-                )}
-              </>
-            ) : (
-              <ImportDone result={result} />
-            )}
-          </section>
-        </>
+          {/*
+            Ordered by what is actually there. On a database somebody has just
+            cleared, the load has to come FIRST — the stage back-fill would run
+            against no projects and write nothing, and the date repair is for
+            records written by the old importer, which these are not. Numbered
+            one to six they read as a sequence, and a person following that
+            sequence on an empty database ends up with every project at 0%.
+          */}
+          {loaded === false ? (
+            <>
+              {loadStep(4, summary)}
+              {stageStep(5)}
+              <p className="muted">
+                Nothing is loaded yet, so those are the only two steps that apply. The date
+                correction is for records written by an older version of the importer; a fresh
+                load reads every date correctly.
+              </p>
+            </>
+          ) : (
+            <>
+              {dateStep(4)}
+              {stageStep(5)}
+              {loadStep(6, summary)}
+            </>
+          )}        </>
       )}
     </div>
   );
