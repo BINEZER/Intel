@@ -11,6 +11,23 @@
  *   `render` (what the cell shows). Keeping them apart is the point: sorting a
  *   money column by its formatted string puts ETB 9,000 above ETB 40,000.
  *
+ * ON A PHONE OR A TABLET HELD UPRIGHT
+ *   A table with ten columns cannot be read in 390 pixels. It used to scroll
+ *   sideways inside its card, which kept the page from overflowing but hid the
+ *   columns that mattered — on the contracts list the value and the status were
+ *   off-screen while the narrowest, least useful columns took the room, and
+ *   nothing said there was more to the right.
+ *
+ *   So below the width where the sidebar becomes a drawer, each row becomes a
+ *   card: the first column is its title and every other column is a labelled
+ *   line beneath it. The labels come from `data-label` on each cell and the
+ *   layout is entirely CSS — the same markup, the same sort and filter, the same
+ *   print output, so nothing here has to be kept in step with a second
+ *   mobile-only table.
+ *
+ *   The headers are hidden in that layout, and the headers were how a table was
+ *   sorted. A "Sort by" menu stands in for them, built from the same columns.
+ *
  * WHAT IS PRINTED
  *   Whatever is on screen. Somebody who filters to one client and presses Print
  *   expects that client's rows, not all 129 — the filter IS the report.
@@ -125,6 +142,7 @@ export function DataTable<Row>({
             Clear {filtersOn === 1 ? 'filter' : 'filters'}
           </button>
         )}
+        <SortMenu columns={columns} sort={sort} onSort={setSort} />
         <NumberListsToggle />
         <span className="muted table-count">
           {filtersOn > 0
@@ -134,10 +152,10 @@ export function DataTable<Row>({
       </div>
 
       <div className="table-scroll">
-        <table className="data-table">
+        <table className="data-table" role="table">
           {caption !== undefined && <caption>{caption}</caption>}
           <thead>
-            <tr>
+            <tr role="row">
               {/* Not a column of data: nothing sorts or filters by it, and the
                   heading is a symbol rather than a word so it takes no room. */}
               {numbered && (
@@ -152,6 +170,7 @@ export function DataTable<Row>({
                   <th
                     key={column.key}
                     scope="col"
+                    role="columnheader"
                     className={cellClass(column)}
                     aria-sort={
                       !sorted ? 'none' : sort.direction === 'asc' ? 'ascending' : 'descending'
@@ -176,19 +195,34 @@ export function DataTable<Row>({
               })}
             </tr>
           </thead>
-          <tbody>
+          {/* The roles restore the table semantics that a `display: block` card
+              layout strips in Safari, so a screen reader still hears rows and
+              columns rather than a stream of loose text. */}
+          <tbody role="rowgroup">
             {shown.map((row, index) => (
-              <tr key={rowKey(row)} className={rowClass?.(row)}>
+              <tr key={rowKey(row)} className={rowClass?.(row)} role="row">
                 {numbered && (
                   <td
+                    role="cell"
+                    data-label="#"
                     className="row-number-col"
                     style={{ '--row-number-ch': rowNumberWidth(shown.length) } as CSSProperties}
                   >
                     {index + 1}
                   </td>
                 )}
-                {columns.map((column) => (
-                  <td key={column.key} className={cellClass(column)}>
+                {columns.map((column, position) => (
+                  <td
+                    key={column.key}
+                    role="cell"
+                    // What the cell is, for the card layout. The actions column
+                    // has no label: a row of buttons does not need to be told it
+                    // is a row of buttons.
+                    data-label={column.key === 'actions' ? '' : column.label}
+                    // The first column is the card's heading and wears no label.
+                    data-primary={position === 0 ? '' : undefined}
+                    className={cellClass(column)}
+                  >
                     {column.render === undefined ? textOf(row, column) : column.render(row)}
                   </td>
                 ))}
@@ -204,6 +238,52 @@ export function DataTable<Row>({
         </p>
       )}
     </>
+  );
+}
+
+/**
+ * Sort without the headers.
+ *
+ * Only shown where the headers are hidden (see the stylesheet), and built from
+ * the same sortable columns so the two can never disagree about what can be
+ * sorted. Each column appears twice, once per direction, because on a phone
+ * "tap the heading again to reverse it" is not available.
+ */
+function SortMenu<Row>({
+  columns,
+  sort,
+  onSort,
+}: {
+  columns: readonly DataColumn<Row>[];
+  sort: SortState;
+  onSort: (state: SortState) => void;
+}) {
+  const sortable = columns.filter((c) => c.unsortable !== true && c.key !== 'actions');
+  if (sortable.length === 0) return null;
+  const current = sort.key === null ? '' : `${sort.key}:${sort.direction}`;
+  return (
+    <select
+      className="table-sort-menu"
+      aria-label="Sort by"
+      value={current}
+      onChange={(event) => {
+        const value = event.target.value;
+        if (value === '') {
+          onSort({ key: null, direction: 'asc' });
+          return;
+        }
+        const at = value.lastIndexOf(':');
+        onSort({ key: value.slice(0, at), direction: value.slice(at + 1) === 'desc' ? 'desc' : 'asc' });
+      }}
+    >
+      <option value="">Default order</option>
+      {sortable.map((column) => (
+        <optgroup key={column.key} label={column.label}>
+          <option value={`${column.key}:asc`}>{column.label} — A to Z, low to high</option>
+          <option value={`${column.key}:desc`}>{column.label} — Z to A, high to low</option>
+        </optgroup>
+      ))}
+    </select>
   );
 }
 

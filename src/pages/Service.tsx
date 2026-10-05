@@ -253,7 +253,7 @@ function LogCallout({
           </select>
         </label>
       </div>
-      <label className="field-wide">
+      <label className="stack">
         What was reported
         <textarea
           rows={2}

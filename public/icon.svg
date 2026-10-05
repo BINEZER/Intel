@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="IntelMotion">
+  <!--
+    The mark from logo.svg without its wordmark, on the app's own navigation
+    colour. Full-bleed and square on purpose: iOS rounds the corners itself and
+    shows any transparency as black, and Android's "maskable" crop keeps only the
+    middle 80%, so the glyph sits well inside that.
+  -->
+  <rect width="512" height="512" fill="#0F1826"/>
+  <g transform="translate(95 106) scale(4.35)">
+    <circle cx="17" cy="53" r="11" fill="#F9A825"/>
+    <rect x="30" y="17" width="14" height="44" rx="7" fill="#22BFC4"/>
+    <rect x="52" y="5" width="16" height="56" rx="8" fill="#2D68E0"/>
+  </g>
+</svg>
