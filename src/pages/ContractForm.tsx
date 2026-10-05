@@ -9,7 +9,25 @@
 
 import { useMemo, useState, type FormEvent } from 'react';
 import { addVat, extractVat, formatETB, VAT_RATE_BPS } from '../lib/money.js';
-import { DEFAULT_SUPPLY_INSTALL_SHARES, validateShares, type MilestoneShare } from '../lib/milestones.js';
+
+/** The VAT and gross for a net figure — the two fields a VatBreakdown needs beyond net. */
+function deriveVatOf(netSantim: number, vatRateBps: number) {
+  const { vatSantim, grossSantim } = addVat(netSantim, vatRateBps);
+  return { vatSantim, grossSantim };
+}
+import {
+  DEFAULT_SUPPLY_INSTALL_SHARES,
+  equalShares,
+  validateShares,
+  type MilestoneShare,
+} from '../lib/milestones.js';
+import {
+  DEFAULT_SERVICE_TERM_MONTHS,
+  feePerLift,
+  monthlyTerms,
+  serviceFeeFigures,
+  wholeMonthsBetween,
+} from '../lib/service-agreement.js';
 import { renewalAlertAt } from '../lib/renewal.js';
 import { formatDual } from '../lib/ethiopic.js';
 import { DualDateInput } from '../components/DualDateInput.js';
@@ -39,6 +57,10 @@ import { usdCentsFrom, usdCentsToInput } from '../lib/direct-supply.js';
  * what you typed is worse than no default.
  */
 const DEFAULT_TERM_MONTHS = 6;
+
+/** A service agreement is usually for a year; an installation, for the job. */
+const defaultTermMonths = (type: ContractType) =>
+  type === 'maintenance' ? DEFAULT_SERVICE_TERM_MONTHS : DEFAULT_TERM_MONTHS;
 
 export function ContractForm({
   initial,
@@ -78,14 +100,22 @@ export function ContractForm({
   const [endIsProposed, setEndIsProposed] = useState(initial === null);
 
   /** Signing moves the end date only while nobody has set one by hand. */
+  function proposeEnd(signed: DualDate | null, forType: ContractType) {
+    if (!endIsProposed || signed === null) return;
+    setEndDate(dualDateFromGregorian(
+      addMonthsUtc(signed.at.toDate(), defaultTermMonths(forType)),
+      toTimestamp,
+      signed.enteredIn,
+    ));
+  }
   function chooseSignedDate(next: DualDate | null) {
     setSignedDate(next);
-    if (!endIsProposed || next === null) return;
-    setEndDate(dualDateFromGregorian(
-      addMonthsUtc(next.at.toDate(), DEFAULT_TERM_MONTHS),
-      toTimestamp,
-      next.enteredIn,
-    ));
+    proposeEnd(next, type);
+  }
+  /** Choosing "maintenance" turns the proposed one-year term on, if nobody has set an end. */
+  function chooseType(next: ContractType) {
+    setType(next);
+    proposeEnd(signedDate, next);
   }
   const [renewalWindowDays, setRenewalWindowDays] = useState(initial?.renewalWindowDays ?? 60);
   const [autoRenew, setAutoRenew] = useState(initial?.autoRenew ?? false);
@@ -98,6 +128,27 @@ export function ContractForm({
     initial?.warranty?.alertDays ?? DEFAULT_WARRANTY_ALERT_DAYS,
   );
   const [reminders, setReminders] = useState<Reminder[]>(initial?.reminders ?? []);
+
+  /*
+   * MAINTENANCE: THE MONTHLY FEE IS THE NUMBER
+   *
+   * A service agreement is agreed as "X a month for a year", not as a lump sum,
+   * so that is what is asked. The whole-term value the rest of the app reads is
+   * worked out from it. `feeEdited` exists so that opening an existing agreement
+   * and changing only a date does not quietly re-derive its value from a
+   * rounded monthly figure.
+   */
+  const initialMonths =
+    initial === null ? null : wholeMonthsBetween(initial.startDate.at.toDate(), initial.endDate.at.toDate());
+  const [feeSantim, setFeeSantim] = useState(
+    initial?.serviceFee?.monthlyNetSantim ??
+      (initial?.type === 'maintenance' && initialMonths !== null
+        ? Math.round(initial.valueNetSantim / initialMonths)
+        : 0),
+  );
+  const [feeInclusive, setFeeInclusive] = useState(false);
+  const [feeEdited, setFeeEdited] = useState(false);
+  const [unitCountText, setUnitCountText] = useState(String(initial?.serviceFee?.unitCount ?? 1));
   /**
    * The lift itself, where the client buys it straight from the factory.
    *
@@ -118,7 +169,22 @@ export function ContractForm({
   );
 
   const isMaintenance = type === 'maintenance';
-  const shareValidation = validateShares(shares);
+  const unitCount = Math.max(0, Math.round(Number(unitCountText) || 0));
+  const termMonths =
+    startDate !== null && endDate !== null
+      ? wholeMonthsBetween(startDate.at.toDate(), endDate.at.toDate())
+      : DEFAULT_SERVICE_TERM_MONTHS;
+  const fee = useMemo(
+    () => serviceFeeFigures(feeSantim, termMonths, VAT_RATE_BPS, feeInclusive),
+    [feeSantim, termMonths, feeInclusive],
+  );
+  /** The stored value stays put unless the fee or the term actually changed. */
+  const keepStoredValue =
+    initial !== null &&
+    initial.type === 'maintenance' &&
+    !feeEdited &&
+    initialMonths === termMonths;
+  const shareValidation = isMaintenance ? ({ ok: true } as const) : validateShares(shares);
   const client = clients.find((c) => c.id === clientId);
 
   const alertAt = useMemo(
@@ -129,7 +195,7 @@ export function ContractForm({
   const ready =
     clientId !== '' &&
     title.trim() !== '' &&
-    valueSantim > 0 &&
+    (isMaintenance ? feeSantim > 0 : valueSantim > 0) &&
     signedDate !== null &&
     startDate !== null &&
     endDate !== null &&
@@ -142,9 +208,13 @@ export function ContractForm({
    */
   const valueChanged =
     initial !== null &&
-    (valueSantim !==
-      (initial.valueEnteredInclusive ? initial.valueGrossSantim : initial.valueNetSantim) ||
-      inclusive !== initial.valueEnteredInclusive);
+    (initial.type !== type ||
+      (isMaintenance
+        ? !keepStoredValue ||
+          (startDate !== null && startDate.at.toMillis() !== initial.startDate.at.toMillis())
+        : valueSantim !==
+            (initial.valueEnteredInclusive ? initial.valueGrossSantim : initial.valueNetSantim) ||
+          inclusive !== initial.valueEnteredInclusive));
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -157,9 +227,15 @@ export function ContractForm({
       clientName: client.name,
       title: title.trim(),
       currency: 'ETB' as const,
-      valueNetSantim: valueSantim,
+      // A service agreement's value is the fee times the term, worked out here
+      // so nobody has to multiply; an installation's is what was typed.
+      valueNetSantim: isMaintenance
+        ? keepStoredValue && initial !== null
+          ? initial.valueNetSantim
+          : fee.term.netSantim
+        : valueSantim,
       vatRateBps: VAT_RATE_BPS,
-      valueEnteredInclusive: inclusive,
+      valueEnteredInclusive: isMaintenance ? false : inclusive,
       signedDate: signedDate as DualDate,
       startDate: startDate as DualDate,
       endDate: endDate as DualDate,
@@ -169,7 +245,7 @@ export function ContractForm({
       // Data only. It is never converted to birr and appears in no total —
       // see `lib/direct-supply.ts`. Absent rather than zero where there is
       // nothing to record.
-      ...(usdCentsFrom(directUsd) === null || usdCentsFrom(directUsd) === 0
+      ...(isMaintenance || usdCentsFrom(directUsd) === null || usdCentsFrom(directUsd) === 0
         ? {}
         : {
             equipmentPaidDirect: {
@@ -180,7 +256,7 @@ export function ContractForm({
       // The warranty clock starts at HANDOVER. On an edit the dates already on
       // the contract are kept — re-deriving them from today would move an
       // expiry somebody is counting on.
-      ...(warrantyMonths > 0
+      ...(warrantyMonths > 0 && !isMaintenance
         ? {
             warranty: {
               months: warrantyMonths,
@@ -193,6 +269,7 @@ export function ContractForm({
       renewalStatus: initial?.renewalStatus ?? ('not_due' as const),
       ...(isMaintenance
         ? {
+            serviceFee: { monthlyNetSantim: fee.monthly.netSantim, unitCount },
             sla: {
               responseHours,
               resolutionHours,
@@ -212,23 +289,39 @@ export function ContractForm({
       attachments: initial?.attachments ?? [],
     };
 
+    // The schedule a saved contract gets: one term a month for a service
+    // agreement, the milestone editor's stages for anything else.
+    const scheduleShares = isMaintenance
+      ? equalShares(termMonths, Array.from({ length: termMonths }, (_, i) => `Month ${i + 1}`))
+      : shares;
+    const scheduleDates = isMaintenance
+      ? monthlyTerms(startDate.at.toDate(), termMonths, {
+          netSantim: input.valueNetSantim,
+          vatRateBps: input.vatRateBps,
+          ...deriveVatOf(input.valueNetSantim, input.vatRateBps),
+        }).map((term) => dualDateFromGregorian(term.dueDate, toTimestamp, startDate.enteredIn))
+      : [];
+
     const result = await run(async () => {
       if (initial === null) {
-        await createContract(input, shares, uid);
+        await createContract(input, scheduleShares, uid, scheduleDates);
       } else {
-        await updateContract(initial.id, input, uid);
-        // Re-proportion the payment schedule to the new value. This refuses
-        // outright once anything has been invoiced, which is the right answer:
-        // a schedule that has been billed against is not a draft any more.
+        // Re-proportion the payment schedule FIRST. It refuses outright once
+        // anything has been invoiced or paid, which is the right answer: a
+        // schedule that has been billed against is not a draft any more. Doing
+        // it before the save means a refusal changes nothing, rather than
+        // leaving the new value saved against the old schedule.
         if (valueChanged) {
           const derived = deriveContractFields(input);
           await replaceMilestones(
             initial.id,
             { ...derived, vatRateBps: input.vatRateBps },
-            shares,
+            scheduleShares,
             uid,
+            scheduleDates,
           );
         }
+        await updateContract(initial.id, input, uid);
       }
       return true;
     });
@@ -276,7 +369,7 @@ export function ContractForm({
 
           <div className="field">
             <label htmlFor="k-type">Type</label>
-            <select id="k-type" value={type} onChange={(e) => setType(e.target.value as ContractType)}>
+            <select id="k-type" value={type} onChange={(e) => chooseType(e.target.value as ContractType)}>
               <option value="supply_install">Supply &amp; install</option>
               <option value="maintenance">Maintenance</option>
               <option value="modernization">Modernisation</option>
@@ -284,23 +377,85 @@ export function ContractForm({
             </select>
           </div>
 
-          <MoneyInput
-            label={inclusive ? 'Contract value (VAT inclusive)' : 'Contract value (excluding VAT)'}
-            value={valueSantim}
-            onChange={setValueSantim}
-            required
-          />
+          {isMaintenance ? (
+            <>
+              <MoneyInput
+                label={feeInclusive ? 'Monthly fee (VAT inclusive)' : 'Monthly fee (excluding VAT)'}
+                value={feeSantim}
+                onChange={(next) => {
+                  setFeeSantim(next);
+                  setFeeEdited(true);
+                }}
+                required
+              />
 
-          <div className="field checkbox">
-            <label>
-              <input type="checkbox" checked={inclusive} onChange={(e) => setInclusive(e.target.checked)} />
-              Value agreed VAT-inclusive
-            </label>
-            <p className="hint">Tick when the client negotiated an all-in figure.</p>
-          </div>
+              <div className="field checkbox">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={feeInclusive}
+                    onChange={(e) => {
+                      setFeeInclusive(e.target.checked);
+                      setFeeEdited(true);
+                    }}
+                  />
+                  Fee agreed VAT-inclusive
+                </label>
+                <p className="hint">Tick when the client agreed an all-in monthly figure.</p>
+              </div>
+
+              <div className="field">
+                <label htmlFor="k-units">Lifts covered</label>
+                <input
+                  id="k-units"
+                  type="number"
+                  min={0}
+                  value={unitCountText}
+                  onChange={(e) => setUnitCountText(e.target.value)}
+                />
+                <p className="hint">
+                  {feePerLift(fee.monthly.netSantim, unitCount) === null
+                    ? 'Used to work out the rate per lift. Link the lifts themselves from the Lifts page.'
+                    : `${formatETB(feePerLift(fee.monthly.netSantim, unitCount) ?? 0)} per lift per month, before VAT.`}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <MoneyInput
+                label={inclusive ? 'Contract value (VAT inclusive)' : 'Contract value (excluding VAT)'}
+                value={valueSantim}
+                onChange={setValueSantim}
+                required
+              />
+
+              <div className="field checkbox">
+                <label>
+                  <input type="checkbox" checked={inclusive} onChange={(e) => setInclusive(e.target.checked)} />
+                  Value agreed VAT-inclusive
+                </label>
+                <p className="hint">Tick when the client negotiated an all-in figure.</p>
+              </div>
+            </>
+          )}
         </div>
 
-        {valueSantim > 0 && (
+        {isMaintenance && feeSantim > 0 && (
+          <>
+            <div className="vat-summary">
+              <div><span className="muted">Net a month</span><strong>{formatETB(fee.monthly.netSantim)}</strong></div>
+              <div><span className="muted">VAT @ 15%</span><strong>{formatETB(fee.monthly.vatSantim)}</strong></div>
+              <div className="total"><span className="muted">Client pays a month</span><strong>{formatETB(fee.monthly.grossSantim)}</strong></div>
+            </div>
+            <p className="hint">
+              Over {termMonths} month{termMonths === 1 ? '' : 's'} (from the dates below):{' '}
+              {formatETB(fee.term.netSantim)} before VAT, {formatETB(fee.term.grossSantim)} with it. This is
+              the contract's value in every report.
+            </p>
+          </>
+        )}
+
+        {!isMaintenance && valueSantim > 0 && (
           <div className="vat-summary">
             <div><span className="muted">Net</span><strong>{formatETB(breakdown.netSantim)}</strong></div>
             <div><span className="muted">VAT @ 15%</span><strong>{formatETB(breakdown.vatSantim)}</strong></div>
@@ -322,7 +477,7 @@ export function ContractForm({
             required
             {...(endIsProposed && endDate !== null
               ? {
-                  hint: `${DEFAULT_TERM_MONTHS} months after signing. Change it if the agreement says otherwise.`,
+                  hint: `${defaultTermMonths(type)} months after signing. Change it if the agreement says otherwise.`,
                 }
               : {})}
           />
@@ -350,6 +505,8 @@ export function ContractForm({
             </label>
           </div>
 
+          {!isMaintenance && (
+            <>
           {/*
             * The lift itself, where the client buys it straight from the
             * factory and we only install it. Recorded because it says how big
@@ -418,6 +575,8 @@ export function ContractForm({
               for free.
             </p>
           </div>
+            </>
+          )}
         </div>
 
         {isMaintenance && (
@@ -447,7 +606,27 @@ export function ContractForm({
           </fieldset>
         )}
 
-        <MilestoneEditor shares={shares} onChange={setShares} contract={breakdown} />
+        {isMaintenance ? (
+          <fieldset className="payment-terms">
+            <legend>Payment schedule</legend>
+            {feeSantim > 0 && startDate !== null ? (
+              <p>
+                {termMonths} monthly payment{termMonths === 1 ? '' : 's'} of{' '}
+                <strong>{formatETB(fee.monthly.grossSantim)}</strong> including VAT. The first falls due{' '}
+                {formatDual(addMonthsUtc(startDate.at.toDate(), 1))}, the last{' '}
+                {formatDual(addMonthsUtc(startDate.at.toDate(), termMonths))}.
+              </p>
+            ) : (
+              <p className="muted">Enter the monthly fee and the start date to see the schedule.</p>
+            )}
+            <p className="hint">
+              One payment term per month, created with the contract. Each is invoiced and marked paid on its
+              own, so a month that is only part-paid stays open.
+            </p>
+          </fieldset>
+        ) : (
+          <MilestoneEditor shares={shares} onChange={setShares} contract={breakdown} />
+        )}
 
         <ReminderEditor
           reminders={reminders}
@@ -459,14 +638,14 @@ export function ContractForm({
 
         <div className="form-actions">
           <button type="submit" className="primary" disabled={busy || !ready}>
-            {busy ? 'Saving…' : 'Create contract'}
+            {busy ? 'Saving…' : initial === null ? 'Create contract' : 'Save changes'}
           </button>
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>
         {!ready && !busy && (
           <p className="hint">
             {shareValidation.ok
-              ? 'Complete the client, title, value and all three dates.'
+              ? `Complete the client, title, ${isMaintenance ? 'monthly fee' : 'value'} and all three dates.`
               : 'Payment schedule must total 100%.'}
           </p>
         )}

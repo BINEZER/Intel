@@ -25,7 +25,7 @@ import {
   type AlertWarranty,
 } from '../lib/alerts.js';
 import { activeReminders, viewWarranty, type ReminderInput } from '../lib/reminders.js';
-import { formatETB } from '../lib/money.js';
+import { addVat, formatETB } from '../lib/money.js';
 import { ExtensionLetter } from '../components/ExtensionLetter.js';
 import type {
   Contract,
@@ -144,6 +144,11 @@ export function Alerts() {
             renewalStatus: c.renewalStatus ?? 'not_due',
             status: c.status,
             valueGrossSantim: c.valueGrossSantim,
+            monthlyGrossSantim:
+              c.serviceFee === undefined
+                ? null
+                : addVat(c.serviceFee.monthlyNetSantim, c.vatRateBps).grossSantim,
+            succeededByContractId: c.succeededByContractId ?? null,
           })),
           projects: risks.map<AlertProject>(({ project, risk }) => ({
             id: project.id,

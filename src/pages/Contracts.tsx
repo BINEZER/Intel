@@ -26,12 +26,32 @@ import { subscribeProjects } from '../data/projects.js';
 import { subscribeUnits } from '../data/units.js';
 import { contractScope, describeScope, type ScopeProject, type ScopeUnit } from '../lib/scope.js';
 import { formatBps } from '../lib/kpi.js';
+import { describeFee, wholeMonthsBetween } from '../lib/service-agreement.js';
+import { ServiceConversionForm } from '../components/ServiceConversionForm.js';
 import type { ElevatorUnit, Project } from '../lib/schema.js';
+
+/**
+ * Can this contract hand over to a maintenance agreement?
+ *
+ * Installation and modernisation work ends and is followed by service; a
+ * maintenance contract is renewed rather than converted. One that has already
+ * been followed, or that never got going or was ended badly, is not offered.
+ */
+function canConvert(contract: Contract): boolean {
+  return (
+    (contract.type === 'supply_install' || contract.type === 'modernization') &&
+    contract.succeededByContractId == null &&
+    contract.serviceDeclined !== true &&
+    contract.status !== 'draft' &&
+    contract.status !== 'terminated'
+  );
+}
 
 export function Contracts() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageContracts');
   const [editing, setEditing] = useState<WithId<Contract> | 'new' | null>(null);
+  const [converting, setConverting] = useState<WithId<Contract> | null>(null);
 
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
@@ -113,6 +133,10 @@ export function Contracts() {
         />
       )}
 
+      {converting !== null && user !== null && (
+        <ServiceConversionForm contract={converting} uid={user.uid} onDone={() => setConverting(null)} />
+      )}
+
       {contracts.loading && <p className="muted">Loading…</p>}
       {!contracts.loading && contracts.rows.length === 0 && !contracts.error && (
         <p className="muted">No contracts yet.</p>
@@ -134,6 +158,25 @@ export function Contracts() {
                   <strong>{k.title}</strong>
                   <br />
                   <span className="muted mono">{k.contractNo}</span>
+                  {k.type === 'maintenance' && k.serviceFee !== undefined && (
+                    <>
+                      <br />
+                      <span className="chip no-caps" title="The monthly fee the client agreed, before VAT">
+                        {describeFee(
+                          k.serviceFee,
+                          wholeMonthsBetween(k.startDate.at.toDate(), k.endDate.at.toDate()),
+                        )}
+                      </span>
+                    </>
+                  )}
+                  {k.succeededByContractId != null && (
+                    <>
+                      <br />
+                      <Link className="muted" to={`/contracts?contract=${k.succeededByContractId}`}>
+                        now on a maintenance agreement →
+                      </Link>
+                    </>
+                  )}
                   {/* Under the title rather than in a money column: every
                       column to the right is birr, and a dollar figure sitting
                       among them is read as one however it is labelled. */}
@@ -242,6 +285,15 @@ export function Contracts() {
                     render: (k: WithId<Contract>) => (
                       <div className="row-actions">
                         <button type="button" onClick={() => setEditing(k)}>Edit</button>
+                        {canConvert(k) && (
+                          <button
+                            type="button"
+                            title="Switch this client to a monthly maintenance agreement"
+                            onClick={() => setConverting(k)}
+                          >
+                            To maintenance
+                          </button>
+                        )}
                         <DeleteButton
                           target={{ kind: 'contract', id: k.id, name: k.contractNo, status: k.status }}
                         />
@@ -298,7 +350,9 @@ function RenewalBoard({
 
   const rows = sortByUrgency(
     contracts
-      .filter((k) => k.status === 'active' || k.status === 'expired')
+      // A contract a maintenance agreement has taken over is not lapsing, it
+      // has been succeeded; the agreement is what comes up for renewal.
+      .filter((k) => (k.status === 'active' || k.status === 'expired') && k.succeededByContractId == null)
       .map((k) => ({
         contract: k,
         renewal: renewalView(

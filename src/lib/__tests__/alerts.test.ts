@@ -80,6 +80,26 @@ describe('contractAlerts', () => {
     expect(alert?.action).toContain('extension letter');
   });
 
+  it('quotes a maintenance agreement by its monthly fee', () => {
+    const [alert] = contractAlerts([contract({ monthlyGrossSantim: 977_500 })], NOW);
+    expect(alert?.message).toContain('ETB 9,775.00 a month');
+    expect(alert?.message).not.toContain('a year');
+  });
+
+  it('does not call an installation contract recurring revenue', () => {
+    const [soon] = contractAlerts([contract({ type: 'supply_install' })], NOW);
+    expect(soon?.message).not.toContain('recurring');
+    expect(soon?.message).toContain('23 days');
+    const [late] = contractAlerts([contract({ type: 'supply_install', endDate: utc(2026, 7, 1) })], NOW);
+    expect(late?.message).not.toContain('recurring');
+  });
+
+  it('stays silent on an installation contract a maintenance agreement has taken over', () => {
+    expect(
+      contractAlerts([contract({ type: 'supply_install', endDate: utc(2026, 7, 1), succeededByContractId: 'svc1' })], NOW),
+    ).toEqual([]);
+  });
+
   it('stays silent on a contract someone is already negotiating', () => {
     expect(contractAlerts([contract({ renewalStatus: 'in_negotiation' })], NOW)).toEqual([]);
     expect(contractAlerts([contract({ renewalStatus: 'renewed' })], NOW)).toEqual([]);
