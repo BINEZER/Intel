@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IntelMotion PCM</title>
+
+    <!--
+      For somebody putting this on a phone's home screen.
+
+      The manifest and the touch icon are what make "Add to Home Screen" produce
+      an icon with the right name and an app that opens without the browser's
+      address bar. The theme colour tints the browser's own toolbar to the app's
+      navigation colour, so the top of the screen does not flash white.
+
+      Deliberately NOT a service worker, which is what would make the app work
+      offline. A finance app that serves yesterday's code after a deploy — one
+      that still has the old rules for what a payment does — is worse than one
+      that needs a connection, so the app is installable and not cached.
+    -->
+    <meta name="theme-color" content="#0F1826" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="IntelMotion" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <!--
       Two faces doing two jobs.
 

@@ -73,8 +73,8 @@ export function MilestoneEditor({
               const row = allocated?.[index];
               return (
                 <tr key={index}>
-                  <td className="num muted">{index + 1}</td>
-                  <td>
+                  <td className="num muted row-number-col" data-label="#">{index + 1}</td>
+                  <td data-label="Milestone">
                     <label className="visually-hidden" htmlFor={`ms-name-${index}`}>
                       Milestone {index + 1} name
                     </label>
@@ -85,7 +85,7 @@ export function MilestoneEditor({
                       onChange={(e) => update(index, { name: e.target.value })}
                     />
                   </td>
-                  <td className="num">
+                  <td className="num" data-label="Share %">
                     <label className="visually-hidden" htmlFor={`ms-share-${index}`}>
                       Milestone {index + 1} share percent
                     </label>
@@ -103,10 +103,10 @@ export function MilestoneEditor({
                       }}
                     />
                   </td>
-                  <td className="num">{row ? formatETB(row.netSantim, { withSymbol: false }) : '—'}</td>
-                  <td className="num muted">{row ? formatETB(row.vatSantim, { withSymbol: false }) : '—'}</td>
-                  <td className="num strong">{row ? formatETB(row.grossSantim, { withSymbol: false }) : '—'}</td>
-                  <td>
+                  <td className="num" data-label="Net">{row ? formatETB(row.netSantim, { withSymbol: false }) : '—'}</td>
+                  <td className="num muted" data-label="VAT">{row ? formatETB(row.vatSantim, { withSymbol: false }) : '—'}</td>
+                  <td className="num strong" data-label="Gross">{row ? formatETB(row.grossSantim, { withSymbol: false }) : '—'}</td>
+                  <td data-label="">
                     <button type="button" onClick={() => remove(index)} aria-label={`Remove milestone ${index + 1}`}>
                       Remove
                     </button>
@@ -118,11 +118,11 @@ export function MilestoneEditor({
           <tfoot>
             <tr className={validation.ok ? 'total-ok' : 'total-bad'}>
               <td />
-              <td><strong>Total</strong></td>
-              <td className="num strong">{formatBps(totalBps, 2)}</td>
-              <td className="num strong">{formatETB(contract.netSantim, { withSymbol: false })}</td>
-              <td className="num strong">{formatETB(contract.vatSantim, { withSymbol: false })}</td>
-              <td className="num strong">{formatETB(contract.grossSantim, { withSymbol: false })}</td>
+              <td data-label="Total"><strong>Total</strong></td>
+              <td className="num strong" data-label="Share %">{formatBps(totalBps, 2)}</td>
+              <td className="num strong" data-label="Net">{formatETB(contract.netSantim, { withSymbol: false })}</td>
+              <td className="num strong" data-label="VAT">{formatETB(contract.vatSantim, { withSymbol: false })}</td>
+              <td className="num strong" data-label="Gross">{formatETB(contract.grossSantim, { withSymbol: false })}</td>
               <td />
             </tr>
           </tfoot>
