@@ -43,6 +43,7 @@ const Units = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.Un
 const UnitDetail = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.UnitDetail })));
 const CeoReport = lazy(() => import('./pages/CeoReport.js').then((m) => ({ default: m.CeoReport })));
 const Import = lazy(() => import('./pages/Import.js').then((m) => ({ default: m.Import })));
+const Archive = lazy(() => import('./pages/Archive.js').then((m) => ({ default: m.Archive })));
 const People = lazy(() => import('./pages/People.js').then((m) => ({ default: m.People })));
 const FollowUps = lazy(() => import('./pages/FollowUps.js').then((m) => ({ default: m.FollowUps })));
 
@@ -200,6 +201,14 @@ export function App() {
               element={
                 <RequireCapability capability="manageConfig">
                   <Import />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="archive"
+              element={
+                <RequireCapability capability="archiveJobs">
+                  <Archive />
                 </RequireCapability>
               }
             />

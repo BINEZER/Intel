@@ -503,6 +503,10 @@ button.danger:hover:not(:disabled) { background: #B92A22; border-color: #B92A22;
 .banner-danger { background: #fdeceb; color: #7a1c14; border-left: 4px solid #b42318; }
 .banner-warn   { background: #fdf3e1; color: #6b4410; border-left: 4px solid #b5691a; }
 
+/* Short bulleted facts inside a card — what goes, what stays. */
+.plain-list { margin: .25rem 0 .75rem; padding-left: 1.1rem; display: grid; gap: .3rem; }
+label.check { display: block; margin: .75rem 0; }
+
 /* A short list of tick boxes, one lift per line. */
 .check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
 .check-list label { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }

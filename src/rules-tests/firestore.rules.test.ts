@@ -830,3 +830,66 @@ describe('unmatched collections are closed by default', () => {
     await assertFails(getDoc(doc(db, 'somethingNew/x1')));
   });
 });
+
+
+describe('archives', () => {
+  const RECORD = {
+    contractId: 'k1', contractNo: 'C-1', invoiceNumbers: ['INV-1', 'INV-2'], status: 'removing',
+  };
+
+  async function seed() {
+    await testEnv.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), 'archives/arc-k1'), { ...RECORD, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), createdBy: 'a', updatedBy: 'a' });
+    });
+  }
+
+  it('lets an admin write a record, and nobody else', async () => {
+    const data = { ...RECORD, ...stamped('admin1') };
+    await assertSucceeds(setDoc(doc(ctx('admin1', 'admin'), 'archives/arc-k1'), data));
+    for (const role of ['manager', 'finance', 'engineer', 'viewer']) {
+      await assertFails(setDoc(doc(ctx(`u-${role}`, role), 'archives/arc-x'), { ...RECORD, ...stamped(`u-${role}`) }));
+    }
+  });
+
+  it('refuses a record whose audit stamp is not truthful', async () => {
+    await assertFails(setDoc(doc(ctx('admin1', 'admin'), 'archives/arc-k1'), { ...RECORD, ...stamped('someone-else') }));
+  });
+
+  it('lets any role that reads the system read the record', async () => {
+    await seed();
+    for (const role of ['admin', 'manager', 'finance', 'engineer', 'viewer']) {
+      await assertSucceeds(getDoc(doc(ctx(`r-${role}`, role), 'archives/arc-k1')));
+    }
+    await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), 'archives/arc-k1')));
+  });
+
+  it('only ever moves a record from removing to done', async () => {
+    await seed();
+    const ref = doc(ctx('admin1', 'admin'), 'archives/arc-k1');
+    await assertSucceeds(updateDoc(ref, { status: 'done', updatedAt: serverTimestamp(), updatedBy: 'admin1' }));
+    // Once done, it is final.
+    await assertFails(updateDoc(ref, { status: 'removing', updatedAt: serverTimestamp(), updatedBy: 'admin1' }));
+  });
+
+  it('never lets the list of invoice numbers be rewritten', async () => {
+    await seed();
+    await assertFails(
+      updateDoc(doc(ctx('admin1', 'admin'), 'archives/arc-k1'), {
+        status: 'done', invoiceNumbers: ['INV-1'], updatedAt: serverTimestamp(), updatedBy: 'admin1',
+      }),
+    );
+  });
+
+  it('refuses a manager finishing it', async () => {
+    await seed();
+    await assertFails(
+      updateDoc(doc(ctx('m1', 'manager'), 'archives/arc-k1'), { status: 'done', updatedAt: serverTimestamp(), updatedBy: 'm1' }),
+    );
+  });
+
+  it('lets only an admin delete one', async () => {
+    await seed();
+    await assertFails(deleteDoc(doc(ctx('m1', 'manager'), 'archives/arc-k1')));
+    await assertSucceeds(deleteDoc(doc(ctx('admin1', 'admin'), 'archives/arc-k1')));
+  });
+});

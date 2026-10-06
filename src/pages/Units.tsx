@@ -456,7 +456,14 @@ export function UnitDetail() {
           <h2>Installed by</h2>
           <p className="link-title">
             {unit.installedByProjectId === null ? (
-              <span className="muted">Not one of ours — we service it but did not install it.</span>
+              unit.installedUnderContractNo != null ? (
+                <span className="muted">
+                  Installed by us under {unit.installedUnderContractNo}. That job has been archived — its
+                  full record is in the backup file saved when it was removed.
+                </span>
+              ) : (
+                <span className="muted">Not one of ours — we service it but did not install it.</span>
+              )
             ) : (
               <Link to={`/projects/${unit.installedByProjectId}`}>
                 {projects.rows.find((p) => p.id === unit.installedByProjectId)?.title ?? 'the project'}
