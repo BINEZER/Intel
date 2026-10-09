@@ -3,6 +3,7 @@
  */
 
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { createClient, subscribeClients, updateClient, type ClientInput } from '../data/clients.js';
@@ -75,7 +76,11 @@ export function Clients() {
               key: 'name',
               label: 'Name',
               value: (client) => client.name,
-              render: (client) => <strong>{client.name}</strong>,
+              render: (client) => (
+                <Link to={`/clients/${client.id}`}>
+                  <strong>{client.name}</strong>
+                </Link>
+              ),
             },
             {
               key: 'tin',
@@ -147,7 +152,7 @@ export function Clients() {
   );
 }
 
-function ClientForm({
+export function ClientForm({
   initial,
   uid,
   onDone,
@@ -317,7 +322,7 @@ function ClientForm({
 
         <div className="form-actions form-wide">
           <button type="submit" className="primary" disabled={busy || form.name.trim() === ''}>
-            {busy ? 'Saving…' : 'Save client'}
+            {busy ? 'Saving…' : initial === null ? 'Save client' : 'Save changes'}
           </button>
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>

@@ -7,8 +7,15 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { getProject, subscribePhases } from '../data/projects.js';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { getProject, subscribePhases, subscribeProjects } from '../data/projects.js';
+import { subscribeInvoices } from '../data/invoices.js';
+import { DeleteButton } from '../components/DeleteButton.js';
+import { RelatedList, type RelatedItem } from '../components/RelatedList.js';
+import { StatusChip } from '../components/StatusSelect.js';
+import { formatETB } from '../lib/money.js';
+import { ProjectForm } from './Projects.js';
+import { UnitForm } from './Units.js';
 import { getPaymentStagesForProject, subscribeContracts } from '../data/contracts.js';
 import { subscribeUnits } from '../data/units.js';
 import { subscribePrograms } from '../data/programs.js';
@@ -30,7 +37,7 @@ import { ProjectKpiPanel } from './ProjectKpis.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { isElevatorWork, projectTypeLabel, projectTypeShort } from '../lib/project-kind.js';
 import { describeFleet, describeMake, describeSpec } from '../lib/lift-spec.js';
-import type { Client, Contract, ElevatorUnit, Program, Project, ProjectPhase, Technician } from '../lib/schema.js';
+import type { Client, Contract, ElevatorUnit, Invoice, Program, Project, ProjectPhase, Technician } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ProjectDetail() {
@@ -46,6 +53,11 @@ export function ProjectDetail() {
    */
   const [reloadAt, setReloadAt] = useState(0);
   const reload = () => setReloadAt((n) => n + 1);
+  const navigate = useNavigate();
+  /** The form open on this page, if any: this project, or one of the records listed on it. */
+  const [editing, setEditing] = useState<
+    { kind: 'project'; row: WithId<Project> } | { kind: 'unit'; row: WithId<ElevatorUnit> } | null
+  >(null);
 
   const phases = useCollection<ProjectPhase>(
     (d, e) => subscribePhases(projectId ?? '', d, e),
@@ -60,6 +72,12 @@ export function ProjectDetail() {
   // projects, and from a project you have to be able to get back up to it.
   const programs = useCollection<Program>((d, e) => subscribePrograms(d, e), [], 'load programmes');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients');
+  const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
+  const invoices = useCollection<Invoice>(
+    (d, e) => subscribeInvoices(d, e, { projectId: projectId ?? '' }),
+    [projectId],
+    'load invoices',
+  );
 
   const technicians = useCollection<Technician>(
     (d, e) => subscribeTechnicians(d, e, { activeOnly: true }),
@@ -171,20 +189,59 @@ export function ProjectDetail() {
               the other in a meeting. */}
           <span className="chip">{projectTypeShort(project.type)}</span>
           <span className="chip">{project.status.replace(/_/g, ' ')}</span>
+          {editable && user !== null && (
+            <>
+              <button type="button" className="no-print" onClick={() => setEditing({ kind: 'project', row: project })}>
+                Edit project
+              </button>
+              <DeleteButton
+                target={{ kind: 'project', id: project.id, name: project.projectNo }}
+                onDeleted={() => navigate('/projects')}
+              />
+            </>
+          )}
         </div>
       </div>
+
+      {editing !== null && user !== null && (
+        <>
+          {editing.kind === 'project' && (
+            <ProjectForm
+              initial={editing.row}
+              clients={clients.rows}
+              uid={user.uid}
+              onDone={() => {
+                setEditing(null);
+                reload();
+              }}
+            />
+          )}
+          {editing.kind === 'unit' && <UnitForm initial={editing.row} uid={user.uid} onDone={() => setEditing(null)} />}
+        </>
+      )}
 
       <ProjectLinks
         project={project}
         contract={contracts.rows.find((k) => k.id === project.contractId) ?? null}
         program={programs.rows.find((g) => g.id === project.programId) ?? null}
-        units={units.rows.filter((u) => u.installedByProjectId === project.id)}
         clients={clients.rows}
         allContracts={contracts.rows}
         allPrograms={programs.rows}
         uid={user?.uid ?? null}
         editable={editable}
         onChanged={reload}
+      />
+
+      <ProjectRelated
+        project={project}
+        units={units.rows.filter((u) => u.installedByProjectId === project.id)}
+        subProjects={allProjects.rows.filter((p) => p.parentProjectId === project.id)}
+        invoices={invoices.rows}
+        editable={editable}
+        canInvoices={can(role, 'manageInvoices')}
+        loading={{ units: units.loading, children: allProjects.loading, invoices: invoices.loading }}
+        onEditUnit={(row) => setEditing({ kind: 'unit', row })}
+        onEditProject={(row) => setEditing({ kind: 'project', row })}
       />
 
       {risk.flags.length > 0 && (
@@ -222,7 +279,6 @@ function ProjectLinks({
   project,
   contract,
   program,
-  units,
   clients,
   allContracts,
   allPrograms,
@@ -233,7 +289,6 @@ function ProjectLinks({
   project: WithId<Project>;
   contract: WithId<Contract> | null;
   program: WithId<Program> | null;
-  units: readonly WithId<ElevatorUnit>[];
   clients: readonly WithId<Client>[];
   allContracts: readonly WithId<Contract>[];
   allPrograms: readonly WithId<Program>[];
@@ -246,7 +301,7 @@ function ProjectLinks({
       <div className="link-half">
         <h2>Client &amp; programme</h2>
         <p className="link-title">
-          <Link to={`/clients?client=${project.clientId}`}>{project.clientName}</Link>
+          <Link to={`/clients/${project.clientId}`}>{project.clientName}</Link>
           {/* Changed here rather than by finding the project in its own list
               and re-saving twenty other fields to correct one. */}
           <LinkPicker
@@ -325,7 +380,7 @@ function ProjectLinks({
         ) : (
           <>
             <p className="link-title">
-              <Link to={`/contracts?contract=${contract.id}`}>{contract.title}</Link>
+              <Link to={`/contracts/${contract.id}`}>{contract.title}</Link>
               <LinkPicker
                 kind="project.contract"
                 recordId={project.id}
@@ -345,56 +400,121 @@ function ProjectLinks({
         )}
       </div>
 
-      <div className="link-half">
-        <h2>Lifts on this project</h2>
-        {units.length === 0 ? (
-          /*
-           * What "no lifts" MEANS depends on the work. On a lift job it is a
-           * gap to go and fill; on a renovation it is simply the right answer,
-           * and sending somebody to the lift register to fix it is sending them
-           * to fix something that is not broken.
-           */
+    </section>
+  );
+}
+
+/**
+ * What is tied to this project: its lifts, its sub-projects, its invoices.
+ *
+ * Plain lists, each with the two things you do to a row. They sit above the
+ * stages and the KPIs because they answer the first question about a job —
+ * "what does it consist of" — and let a wrong row be corrected or removed from
+ * where it was noticed.
+ */
+function ProjectRelated({
+  project,
+  units,
+  subProjects,
+  invoices,
+  editable,
+  canInvoices,
+  loading,
+  onEditUnit,
+  onEditProject,
+}: {
+  project: WithId<Project>;
+  units: readonly WithId<ElevatorUnit>[];
+  subProjects: readonly WithId<Project>[];
+  invoices: readonly WithId<Invoice>[];
+  editable: boolean;
+  canInvoices: boolean;
+  loading: { units: boolean; children: boolean; invoices: boolean };
+  onEditUnit: (row: WithId<ElevatorUnit>) => void;
+  onEditProject: (row: WithId<Project>) => void;
+}) {
+  const fleet = describeFleet(units.map((unit) => ({ tag: unit.tag, spec: unit })));
+
+  const unitItems: RelatedItem[] = units.map((unit) => ({
+    key: unit.id,
+    to: `/units/${unit.id}`,
+    title: unit.tag,
+    detail: [
+      unit.unitCode,
+      describeMake(unit),
+      describeSpec(unit),
+    ].filter((part): part is string => part !== null && part !== '').join(' · '),
+    meta: <span className="chip no-caps">{unit.status.replace(/_/g, ' ')}</span>,
+    ...(editable ? { onEdit: () => onEditUnit(unit) } : {}),
+    ...(editable
+      ? { deleteTarget: { kind: 'unit' as const, id: unit.id, name: unit.tag, unit: { tag: unit.tag, clientId: unit.clientId } } }
+      : {}),
+  }));
+
+  const childItems: RelatedItem[] = subProjects.map((child) => ({
+    key: child.id,
+    to: `/projects/${child.id}`,
+    title: child.title,
+    detail: `${child.projectNo} · ${child.site?.name ?? '—'}`,
+    meta: <StatusChip kind="project" value={child.status} />,
+    ...(editable ? { onEdit: () => onEditProject(child) } : {}),
+    ...(editable ? { deleteTarget: { kind: 'project' as const, id: child.id, name: child.projectNo } } : {}),
+  }));
+
+  const invoiceItems: RelatedItem[] = [...invoices]
+    .sort((a, b) => b.issueDate.at.toMillis() - a.issueDate.at.toMillis())
+    .map((invoice) => ({
+      key: invoice.id,
+      to: '/finance/invoices',
+      title: invoice.invoiceNo === '' ? 'Draft invoice' : invoice.invoiceNo,
+      detail: (
+        <>
+          {formatETB(invoice.grossSantim)} with VAT · issued <DualDateText value={invoice.issueDate} />
+        </>
+      ),
+      meta: <span className="chip no-caps">{invoice.status.replace(/_/g, ' ')}</span>,
+      ...(canInvoices
+        ? {
+            deleteTarget: {
+              kind: 'invoice' as const,
+              id: invoice.id,
+              name: invoice.invoiceNo === '' ? 'this draft' : invoice.invoiceNo,
+              status: invoice.status,
+            },
+          }
+        : {}),
+    }));
+
+  return (
+    <>
+      <RelatedList
+        title="Lifts on this project"
+        items={unitItems}
+        loading={loading.units}
+        hint={fleet}
+        empty={
           isElevatorWork(project.type) ? (
-            <p className="muted">
+            <>
               No lift on the register names this project as the one that installed it.{' '}
               <Link to="/units">Open the register</Link> to link them.
-            </p>
+            </>
           ) : (
-            <p className="muted">
-              {projectTypeLabel(project.type)} — no lift is expected on this job. If one is
-              involved after all, link it from the <Link to="/units">lift register</Link>.
-            </p>
+            <>
+              {projectTypeLabel(project.type)} — no lift is expected on this job. If one is involved after
+              all, link it from the <Link to="/units">lift register</Link>.
+            </>
           )
-        ) : (
-          <>
-            {/* One line for the whole set, because four identical lifts in a
-                shaft bank is the common case and the same spec four times is
-                noise where "4 × 630 kg · 8 stops" is information. */}
-            {describeFleet(units.map((unit) => ({ tag: unit.tag, spec: unit }))) !== null && (
-              <p className="muted">
-                {describeFleet(units.map((unit) => ({ tag: unit.tag, spec: unit })))}
-              </p>
-            )}
-            <ul className="link-units">
-              {units.map((unit) => (
-                <li key={unit.id}>
-                  <Link to={`/units/${unit.id}`}>{unit.tag}</Link>
-                  <span className="muted">
-                    {unit.unitCode}
-                    {describeMake(unit) === null ? '' : ` · ${describeMake(unit)}`} ·{' '}
-                    {unit.status.replace(/_/g, ' ')}
-                  </span>
-                  {/* The specification, read from the LIFT and never from a
-                      copy on the project — see schema.ts. */}
-                  {describeSpec(unit) !== null && (
-                    <span className="muted lift-spec">{describeSpec(unit)}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
-    </section>
+        }
+      />
+      {(subProjects.length > 0 || loading.children) && (
+        <RelatedList title="Sub-projects" items={childItems} loading={loading.children} empty="No sub-projects." />
+      )}
+      <RelatedList
+        title="Invoices"
+        items={invoiceItems}
+        loading={loading.invoices}
+        empty="No invoice has been raised against this project."
+      />
+    </>
   );
 }

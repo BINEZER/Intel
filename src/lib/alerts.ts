@@ -85,6 +85,13 @@ export interface AlertContract {
   renewalStatus: RenewalStatus;
   status: 'draft' | 'active' | 'suspended' | 'completed' | 'terminated' | 'expired';
   valueGrossSantim: number;
+  /**
+   * What a maintenance agreement bills each month, VAT included. Present only
+   * where a monthly fee was agreed; its absence means "say the whole-term value".
+   */
+  monthlyGrossSantim?: number | null;
+  /** Set once a maintenance agreement has taken over from this contract. */
+  succeededByContractId?: string | null;
 }
 
 export interface AlertProject {
@@ -137,6 +144,33 @@ export const DEFAULT_ALERT_THRESHOLDS: AlertThresholds = {
 // ---------------------------------------------------------------------------
 
 /**
+ * What the renewal alert says, in the terms the contract was agreed in.
+ *
+ * A maintenance agreement is a monthly fee, so that is the figure to put in
+ * front of whoever writes the extension letter; the whole-term value alone
+ * hides what is actually being renewed. An installation contract is not
+ * recurring revenue, so it is not described as though it were.
+ */
+function renewalMessage(contract: AlertContract, daysUntilExpiry: number): string {
+  const lapsed = daysUntilExpiry < 0;
+  const recurring = contract.type === 'maintenance';
+  const monthly =
+    contract.monthlyGrossSantim != null && contract.monthlyGrossSantim > 0
+      ? `${formatETB(contract.monthlyGrossSantim)} a month`
+      : null;
+  const worth = monthly ?? `${formatETB(contract.valueGrossSantim)} over the term`;
+
+  if (lapsed) {
+    return recurring
+      ? `Expired ${Math.abs(daysUntilExpiry)} days ago and has not been renewed. ${worth} of recurring revenue has stopped.`
+      : `Ended ${Math.abs(daysUntilExpiry)} days ago and is still open. ${formatETB(contract.valueGrossSantim)} contract.`;
+  }
+  return recurring
+    ? `Expires in ${daysUntilExpiry} days. ${worth} is up for renewal.`
+    : `Ends in ${daysUntilExpiry} days. ${formatETB(contract.valueGrossSantim)} contract.`;
+}
+
+/**
  * Contracts inside their renewal window.
  *
  * A contract already marked renewed or in negotiation is NOT an alert — someone
@@ -149,6 +183,9 @@ export function contractAlerts(contracts: readonly AlertContract[], asOf: Date):
 
   for (const contract of contracts) {
     if (contract.status !== 'active') continue;
+    // An installation contract that has handed over to a maintenance agreement
+    // is not lapsing — it has been succeeded, and the agreement carries the alert.
+    if (contract.succeededByContractId != null) continue;
 
     const view = renewalView(
       {
@@ -171,13 +208,11 @@ export function contractAlerts(contracts: readonly AlertContract[], asOf: Date):
       kind: lapsed ? 'contract_lapsed' : 'contract_expiring',
       severity: lapsed ? 'critical' : view.urgency,
       subject,
-      message: lapsed
-        ? `Expired ${Math.abs(view.daysUntilExpiry)} days ago and has not been renewed. ${formatETB(contract.valueGrossSantim)} a year of recurring revenue has stopped.`
-        : `Expires in ${view.daysUntilExpiry} days. ${formatETB(contract.valueGrossSantim)} a year is up for renewal.`,
+      message: renewalMessage(contract, view.daysUntilExpiry),
       action: lapsed
         ? 'Contact the client before another provider does, and record the outcome against the contract.'
         : 'Write the extension letter and record it as in negotiation.',
-      href: `/contracts?contract=${contract.id}`,
+      href: `/contracts/${contract.id}`,
       daysRemaining: view.daysUntilExpiry,
       amountSantim: contract.valueGrossSantim,
     });
@@ -328,7 +363,7 @@ export function warrantyAlerts(warranties: readonly AlertWarranty[]): Alert[] {
         w.state === 'expired'
           ? 'Anything found now is chargeable. Close the file, or agree a goodwill position deliberately rather than by default.'
           : 'Book the end-of-warranty inspection while defects are still ours to fix for free.',
-      href: `/contracts?contract=${w.contractId}`,
+      href: `/contracts/${w.contractId}`,
       daysRemaining: Math.round((w.endsOn.getTime() - Date.now()) / 86_400_000),
     }));
 }
@@ -347,7 +382,7 @@ export function reminderAlerts(reminders: readonly AlertReminder[]): Alert[] {
       reminder.state === 'overdue'
         ? 'Deal with it or mark it done — a reminder nobody closes teaches everyone to ignore the list.'
         : 'Act on it now, while there is still time for it to matter.',
-    href: reminder.sourceKind === 'project' ? `/projects/${reminder.sourceId}` : `/contracts?contract=${reminder.sourceId}`,
+    href: reminder.sourceKind === 'project' ? `/projects/${reminder.sourceId}` : `/contracts/${reminder.sourceId}`,
     daysRemaining: reminder.daysRemaining,
   }));
 }

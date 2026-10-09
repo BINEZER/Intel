@@ -75,6 +75,7 @@ const NAV: NavGroup[] = [
     label: 'Setup',
     items: [
       { to: '/import', label: 'Import data', capability: 'manageConfig' },
+      { to: '/archive', label: 'Archive', capability: 'archiveJobs' },
       { to: '/settings', label: 'Settings', capability: 'manageConfig' },
     ],
   },

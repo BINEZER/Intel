@@ -48,6 +48,12 @@ export const CAPABILITIES = {
    * compliance is measured against, so it is not a technician's to set.
    */
   scheduleMaintenance: ['admin', 'manager'],
+  /**
+   * Remove a finished job — contract, projects, invoices and all — once it has
+   * been backed up. Admin only, matching the delete rules on every collection
+   * it touches: an admin is the only role that may delete an invoice.
+   */
+  archiveJobs: ['admin'],
   read: ['admin', 'manager', 'finance', 'engineer', 'viewer'],
 } as const satisfies Record<string, readonly Role[]>;
 

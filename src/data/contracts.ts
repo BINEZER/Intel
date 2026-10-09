@@ -19,7 +19,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import type { Contract, PaymentMilestone } from '../lib/schema.js';
+import type { Contract, DualDate, PaymentMilestone } from '../lib/schema.js';
 import { addVat, extractVat } from '../lib/money.js';
 import { allocateMilestones, type MilestoneShare } from '../lib/milestones.js';
 import { renewalAlertAt } from '../lib/renewal.js';
@@ -172,6 +172,12 @@ export async function createContract(
   input: ContractInput,
   shares: readonly MilestoneShare[],
   uid: string,
+  /**
+   * When each term falls due, in the same order as `shares`. Absent for an
+   * installation contract, whose terms fall due when a stage is signed off; a
+   * monthly service agreement supplies one per month.
+   */
+  dueDates: readonly DualDate[] = [],
 ): Promise<string> {
   const derived = deriveContractFields(input);
   const contractId = newId(PATH);
@@ -191,7 +197,7 @@ export async function createContract(
     shares,
   );
 
-  for (const milestone of allocated) {
+  for (const [index, milestone] of allocated.entries()) {
     batch.set(doc(db, milestonePath(contractId), newId(milestonePath(contractId))), {
       seq: milestone.seq,
       name: milestone.name,
@@ -200,7 +206,7 @@ export async function createContract(
       netSantim: milestone.netSantim,
       vatSantim: milestone.vatSantim,
       grossSantim: milestone.grossSantim,
-      dueDate: null,
+      dueDate: dueDates[index] ?? null,
       status: 'pending',
       ...stampCreate(uid),
     });
@@ -231,12 +237,15 @@ export async function replaceMilestones(
   contract: Pick<Contract, 'valueNetSantim' | 'vatSantim' | 'valueGrossSantim' | 'vatRateBps'>,
   shares: readonly MilestoneShare[],
   uid: string,
+  dueDates: readonly DualDate[] = [],
 ): Promise<void> {
   const existing = await getDocs(query(collectionRef(milestonePath(contractId)), orderBy('seq')));
 
   const locked = existing.docs.filter((d) => {
     const status = (d.data() as PaymentMilestone).status;
-    return status === 'invoiced' || status === 'paid';
+    // A part-paid term has money against it as surely as an invoiced one;
+    // rewriting it would orphan what the client has already handed over.
+    return status === 'invoiced' || status === 'part_paid' || status === 'paid';
   });
   if (locked.length > 0) {
     throw new Error(
@@ -257,7 +266,7 @@ export async function replaceMilestones(
 
   const batch = writeBatch(db);
   for (const d of existing.docs) batch.delete(d.ref);
-  for (const milestone of allocated) {
+  for (const [index, milestone] of allocated.entries()) {
     batch.set(doc(db, milestonePath(contractId), newId(milestonePath(contractId))), {
       seq: milestone.seq,
       name: milestone.name,
@@ -266,7 +275,7 @@ export async function replaceMilestones(
       netSantim: milestone.netSantim,
       vatSantim: milestone.vatSantim,
       grossSantim: milestone.grossSantim,
-      dueDate: null,
+      dueDate: dueDates[index] ?? null,
       status: 'pending',
       ...stampCreate(uid),
     });

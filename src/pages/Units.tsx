@@ -436,7 +436,7 @@ export function UnitDetail() {
         <div className="link-half">
           <h2>Client</h2>
           <p className="link-title">
-            <Link to={`/clients?client=${unit.clientId}`}>{unit.clientName}</Link>
+            <Link to={`/clients/${unit.clientId}`}>{unit.clientName}</Link>
             <LinkPicker
               kind="unit.client"
               recordId={unit.id}
@@ -456,7 +456,14 @@ export function UnitDetail() {
           <h2>Installed by</h2>
           <p className="link-title">
             {unit.installedByProjectId === null ? (
-              <span className="muted">Not one of ours — we service it but did not install it.</span>
+              unit.installedUnderContractNo != null ? (
+                <span className="muted">
+                  Installed by us under {unit.installedUnderContractNo}. That job has been archived — its
+                  full record is in the backup file saved when it was removed.
+                </span>
+              ) : (
+                <span className="muted">Not one of ours — we service it but did not install it.</span>
+              )
             ) : (
               <Link to={`/projects/${unit.installedByProjectId}`}>
                 {projects.rows.find((p) => p.id === unit.installedByProjectId)?.title ?? 'the project'}
@@ -482,7 +489,7 @@ export function UnitDetail() {
             {unit.maintenanceContractId === null ? (
               <span className="muted">Under no service agreement.</span>
             ) : (
-              <Link to={`/contracts?contract=${unit.maintenanceContractId}`}>
+              <Link to={`/contracts/${unit.maintenanceContractId}`}>
                 {unit.maintenanceContractNo ?? 'the contract'}
               </Link>
             )}
@@ -619,7 +626,7 @@ export function UnitDetail() {
 // Adding a lift
 // ---------------------------------------------------------------------------
 
-function UnitForm({
+export function UnitForm({
   initial,
   uid,
   onDone,
@@ -794,7 +801,7 @@ function UnitForm({
         {error && <p className="error" role="alert">{error}</p>}
         <div className="form-actions">
           <button type="submit" className="primary" disabled={busy || !ready}>
-            {busy ? 'Adding…' : 'Add lift'}
+            {busy ? (initial === null ? 'Adding…' : 'Saving…') : initial === null ? 'Add lift' : 'Save changes'}
           </button>
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>

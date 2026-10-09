@@ -338,6 +338,22 @@ service cloud.firestore {
       allow delete: if isManager();
     }
 
+    // --- archives: what is left of a job after it has been removed ----------
+    // Written by an admin in the same batch that removes the job, and only ever
+    // flipped from `removing` to `done` after that. It is the explanation for a
+    // gap in the invoice numbering, so nobody rewrites it; an admin may delete
+    // one only so that a reset leaves nothing behind.
+    match /archives/{archiveId} {
+      allow read:   if canRead();
+      allow create: if isAdmin() && stampedCreate();
+      allow update: if isAdmin() && stampedUpdate()
+                    && resource.data.status == 'removing'
+                    && request.resource.data.status == 'done'
+                    && request.resource.data.contractId == resource.data.contractId
+                    && request.resource.data.invoiceNumbers == resource.data.invoiceNumbers;
+      allow delete: if isAdmin();
+    }
+
     // --- audit log: append-only, never mutable ----------------------------
     match /auditLogs/{logId} {
       allow read:   if isAdmin();

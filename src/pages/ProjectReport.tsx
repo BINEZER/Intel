@@ -164,7 +164,7 @@ export function ProjectReport() {
               {contract === null ? (
                 <span className="muted">Not under a contract.</span>
               ) : (
-                <Link to={`/contracts?contract=${contract.id}`}>
+                <Link to={`/contracts/${contract.id}`}>
                   {contract.contractNo} · {contract.title}
                 </Link>
               )}

@@ -20,10 +20,10 @@ import { db } from '../firebase.js';
 import { stampCreate, stampUpdate } from './audit.js';
 import { collectionRef, newId } from './repository.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
-import { addVat } from '../lib/money.js';
-import { allocateMilestones, equalShares } from '../lib/milestones.js';
+import { monthlyTerms, serviceFeeFigures } from '../lib/service-agreement.js';
 import { warrantyEnd, type ConsequenceAction } from '../lib/lifecycle.js';
-import type { Contract } from '../lib/schema.js';
+import type { Contract, ElevatorUnit, PaymentMilestone } from '../lib/schema.js';
+import { getMilestones } from './contracts.js';
 
 const toTimestamp = (date: Date) => Timestamp.fromDate(date);
 const dual = (date: Date) => dualDateFromGregorian(date, toTimestamp, 'GC');
@@ -97,12 +97,64 @@ export async function declineService(contractId: string, uid: string): Promise<v
   await batch.commit();
 }
 
+export interface ConversionContext {
+  /** The installation contract's payment terms, for what is still owed on it. */
+  terms: PaymentMilestone[];
+  /** Every lift the client has, with whether it came from this contract. */
+  lifts: Array<ElevatorUnit & { id: string; installedHere: boolean }>;
+}
+
+/** What the conversion form needs to show before anybody commits to it. */
+export async function loadConversionContext(
+  original: Pick<Contract, 'clientId'> & { id: string },
+): Promise<ConversionContext> {
+  const [terms, here, clientUnits] = await Promise.all([
+    getMilestones(original.id),
+    liftsInstalledUnder(original),
+    getDocs(query(collectionRef('units'), where('clientId', '==', original.clientId))),
+  ]);
+  const hereIds = new Set(here.map((d) => d.id));
+  return {
+    terms,
+    lifts: clientUnits.docs
+      .map((d) => ({ ...(d.data() as ElevatorUnit), id: d.id, installedHere: hereIds.has(d.id) }))
+      .sort((a, b) => a.siteName.localeCompare(b.siteName) || a.tag.localeCompare(b.tag)),
+  };
+}
+
 export interface ServiceConversion {
   monthlyNetSantim: number;
   /** Term in months. Twelve unless somebody says otherwise. */
   months: number;
   vatRateBps: number;
   startsOn: Date;
+  /**
+   * The lifts the agreement covers, where somebody has chosen them. Absent means
+   * "the lifts installed under the contract being replaced" — see
+   * `liftsInstalledUnder`.
+   */
+  unitIds?: readonly string[];
+}
+
+/**
+ * The lifts that were installed under a contract.
+ *
+ * Not every lift the client owns: a client with two buildings on two contracts
+ * must not have the second building swept into the first one's service
+ * agreement.
+ */
+export async function liftsInstalledUnder(original: Pick<Contract, 'clientId'> & { id: string }) {
+  const projects = await getDocs(
+    query(collectionRef('projects'), where('contractId', '==', original.id)),
+  );
+  const projectIds = new Set(projects.docs.map((d) => d.id));
+  const clientUnits = await getDocs(
+    query(collectionRef('units'), where('clientId', '==', original.clientId)),
+  );
+  return clientUnits.docs.filter((u) => {
+    const installedBy = u.data()['installedByProjectId'];
+    return typeof installedBy === 'string' && projectIds.has(installedBy);
+  });
 }
 
 /**
@@ -120,29 +172,20 @@ export async function convertToServiceContract(
   const { monthlyNetSantim, months, vatRateBps, startsOn } = conversion;
   if (monthlyNetSantim <= 0) throw new Error('A service agreement needs a monthly fee.');
   if (months < 1) throw new Error('A service agreement needs a term of at least one month.');
+  if (original.succeededByContractId !== null && original.succeededByContractId !== undefined) {
+    throw new Error(`${original.contractNo} already has a service agreement.`);
+  }
 
-  const netSantim = monthlyNetSantim * months;
-  const money = addVat(netSantim, vatRateBps);
+  const { term: money } = serviceFeeFigures(monthlyNetSantim, months, vatRateBps);
   const endsOn = warrantyEnd(startsOn, months);
 
   const serviceId = newId('contracts');
   const batch = writeBatch(db);
 
-  // The lifts this agreement covers are the ones installed under THIS contract,
-  // not every lift the client happens to own. A client with two buildings on
-  // two contracts must not have the second building swept into the first
-  // building's service agreement.
-  const projects = await getDocs(
-    query(collectionRef('projects'), where('contractId', '==', original.id)),
-  );
-  const projectIds = new Set(projects.docs.map((d) => d.id));
-  const clientUnits = await getDocs(
-    query(collectionRef('units'), where('clientId', '==', original.clientId)),
-  );
-  const covered = clientUnits.docs.filter((u) => {
-    const installedBy = u.data()['installedByProjectId'];
-    return typeof installedBy === 'string' && projectIds.has(installedBy);
-  });
+  const covered =
+    conversion.unitIds === undefined
+      ? (await liftsInstalledUnder(original)).map((d) => d.ref)
+      : conversion.unitIds.map((id) => doc(db, 'units', id));
 
   const contractNo = `${original.contractNo}-SVC`;
 
@@ -179,23 +222,15 @@ export async function convertToServiceContract(
   batch.set(doc(db, 'contracts', serviceId), { ...payload, ...stampCreate(uid) });
 
   // One term per month — the way it is billed.
-  const shares = equalShares(
-    months,
-    Array.from({ length: months }, (_, i) => `Month ${i + 1}`),
-  );
-  const allocated = allocateMilestones(money, shares);
-  for (const [index, milestone] of allocated.entries()) {
-    const due = new Date(
-      Date.UTC(startsOn.getUTCFullYear(), startsOn.getUTCMonth() + index + 1, startsOn.getUTCDate()),
-    );
+  for (const [index, term] of monthlyTerms(startsOn, months, money).entries()) {
     batch.set(doc(db, `contracts/${serviceId}/milestones`, `m${String(index + 1).padStart(2, '0')}`), {
-      seq: milestone.seq,
-      name: milestone.name,
-      shareBps: milestone.shareBps,
-      netSantim: milestone.netSantim,
-      vatSantim: milestone.vatSantim,
-      grossSantim: milestone.grossSantim,
-      dueDate: dual(due),
+      seq: term.seq,
+      name: term.name,
+      shareBps: term.shareBps,
+      netSantim: term.netSantim,
+      vatSantim: term.vatSantim,
+      grossSantim: term.grossSantim,
+      dueDate: dual(term.dueDate),
       status: 'pending',
       ...stampCreate(uid),
     });
@@ -210,7 +245,7 @@ export async function convertToServiceContract(
   });
 
   for (const unit of covered) {
-    batch.update(unit.ref, {
+    batch.update(unit, {
       maintenanceContractId: serviceId,
       maintenanceContractNo: contractNo,
       ...stampUpdate(uid),

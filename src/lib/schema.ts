@@ -116,6 +116,52 @@ export interface Client extends AuditFields {
 }
 
 // ===========================================================================
+// archives/{archiveId} — what is left of a job once it has been removed
+// ===========================================================================
+
+/**
+ * The small record kept when a finished job is removed from the app.
+ *
+ * It exists for two reasons. It explains the gap: the invoice numbers are listed
+ * here, so a hole in the VAT sequence is accounted for by a dated, attributed
+ * entry rather than by nothing. And it points to the backup: the fingerprint
+ * identifies the exact file that holds everything else.
+ *
+ * Written in the same batch as the removal, so there is never a removal without
+ * one. Only the figures survive here; the job itself lives in the backup.
+ */
+export interface ArchiveRecord extends AuditFields {
+  contractId: string;
+  contractNo: string;
+  title: string;
+  clientId: string;
+  clientName: string;
+  contractType: ContractType;
+  valueNetSantim: number;
+  valueGrossSantim: number;
+  startDate: DualDate;
+  endDate: DualDate;
+  /** The maintenance agreement that took over, where there was one. */
+  followedBy: { contractId: string; contractNo: string } | null;
+  serviceDeclined: boolean;
+  projectNos: string[];
+  /** What was removed, by kind: `{ "invoices": 6, "stages": 25 }`. */
+  removed: Record<string, number>;
+  /** Every invoice number that left with the job. */
+  invoiceNumbers: string[];
+  invoicedNetSantim: number;
+  invoicedVatSantim: number;
+  invoicedGrossSantim: number;
+  receivedGrossSantim: number;
+  backup: { fileStem: string; contentSha256: string };
+  /**
+   * `removing` while a removal too large for one write is part-way through, so
+   * that it can be finished rather than left half done. `done` otherwise.
+   */
+  status: 'removing' | 'done';
+}
+
+// ===========================================================================
 // contracts/{contractId}
 // ===========================================================================
 
@@ -874,6 +920,13 @@ export interface ElevatorUnit extends AuditFields {
   /** The maintenance contract it is currently under, if any. */
   maintenanceContractId: string | null;
   maintenanceContractNo: string | null;
+  /**
+   * The number of the contract that installed it, once that contract has been
+   * archived and its project removed. `installedByProjectId` is cleared at the
+   * same moment, so this is what is left of the answer to "who put this lift
+   * in" — a number to find in the backup, not a link that goes anywhere.
+   */
+  installedUnderContractNo?: string | null;
 
   commissionedOn: DualDate | null;
   status: 'under_installation' | 'in_service' | 'out_of_service' | 'decommissioned';

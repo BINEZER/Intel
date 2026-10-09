@@ -465,7 +465,7 @@ function ProgramForm({
         {error && <p className="error" role="alert">{error}</p>}
         <div className="form-actions">
           <button type="submit" className="primary" disabled={busy || !ready}>
-            {busy ? 'Creating…' : 'Create program'}
+            {busy ? (initial === null ? 'Creating…' : 'Saving…') : initial === null ? 'Create program' : 'Save changes'}
           </button>
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>

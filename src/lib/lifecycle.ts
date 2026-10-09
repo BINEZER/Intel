@@ -239,7 +239,7 @@ export function findConsequences(input: LifecycleInput): Consequence[] {
         severity: 'high',
         subject: `${contract.contractNo} · ${contract.clientName}`,
         detail: `${handedOver.length === 1 ? 'The lift has' : `${handedOver.length} lifts have`} been handed over, but the warranty period has not been started, so nothing is counting down to the service decision.`,
-        href: `/contracts?contract=${contract.id}`,
+        href: `/contracts/${contract.id}`,
         action: {
           label: `Start the ${contract.warranty.months}-month warranty`,
           effect: `Warranty runs from today to ${warrantyEnd(asOf, contract.warranty.months).toISOString().slice(0, 10)}. You will be prompted about a service agreement ${contract.warranty.alertDays} days before it ends.`,
@@ -284,7 +284,7 @@ export function findConsequences(input: LifecycleInput): Consequence[] {
       detail: lapsed
         ? `Free warranty ended ${Math.abs(daysLeft)} days ago and nothing replaced it. Whatever we are doing for this client now, we are doing for nothing.`
         : `Free warranty ends in ${daysLeft} days. This is when it becomes a paying maintenance agreement — or stops being ours.`,
-      href: `/contracts?contract=${contract.id}`,
+      href: `/contracts/${contract.id}`,
       action: null,
       choices,
     });
@@ -313,7 +313,7 @@ export function findConsequences(input: LifecycleInput): Consequence[] {
         detail: contract.succeededByContractId !== null
           ? 'Every project is closed and a service agreement has taken over, but this contract is still open.'
           : 'Every project is closed, the warranty has ended and the client declined service, but this contract is still open.',
-        href: `/contracts?contract=${contract.id}`,
+        href: `/contracts/${contract.id}`,
         action: {
           label: 'Mark completed',
           effect: 'Sets the contract to completed. It stops raising renewal alerts.',
@@ -334,7 +334,7 @@ export function findConsequences(input: LifecycleInput): Consequence[] {
         severity: 'high',
         subject: `${contract.contractNo} · ${contract.clientName}`,
         detail: `Ran past its end date ${Math.abs(daysBetween(asOf, contract.endDate))} days ago with work still open.`,
-        href: `/contracts?contract=${contract.id}`,
+        href: `/contracts/${contract.id}`,
         action: {
           label: 'Mark expired',
           effect: 'Sets the contract to expired, which is what it is until it is extended or closed.',
