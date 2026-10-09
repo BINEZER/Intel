@@ -48,6 +48,7 @@ import { DEFAULT_WARRANTY_ALERT_DAYS, DEFAULT_WARRANTY_MONTHS, addMonthsUtc } fr
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
 import { usdCentsFrom, usdCentsToInput } from '../lib/direct-supply.js';
+import { clientChoices, clientOptionLabel, resolveClient } from '../lib/client-choice.js';
 
 /**
  * How long a contract runs unless somebody says otherwise.
@@ -185,7 +186,8 @@ export function ContractForm({
     !feeEdited &&
     initialMonths === termMonths;
   const shareValidation = isMaintenance ? ({ ok: true } as const) : validateShares(shares);
-  const client = clients.find((c) => c.id === clientId);
+  const currentClient = initial === null ? null : { id: initial.clientId, name: initial.clientName };
+  const client = resolveClient(clients, clientId, currentClient);
 
   const alertAt = useMemo(
     () => (endDate === null ? null : renewalAlertAt(endDate.at.toDate(), renewalWindowDays)),
@@ -218,7 +220,7 @@ export function ContractForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!ready || client === undefined) return;
+    if (!ready || client === null) return;
 
     const input = {
       contractNo: contractNo.trim() || `C-${Date.now()}`,
@@ -344,8 +346,8 @@ export function ContractForm({
             <label htmlFor="k-client">Client <span className="req" aria-hidden="true">*</span></label>
             <select id="k-client" required value={clientId} onChange={(e) => setClientId(e.target.value)}>
               <option value="">Select a client…</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {clientChoices(clients, currentClient).map((c) => (
+                <option key={c.id} value={c.id}>{clientOptionLabel(c)}</option>
               ))}
             </select>
             {clients.length === 0 && <p className="hint">Add a client first.</p>}

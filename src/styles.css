@@ -2485,3 +2485,7 @@ fieldset { min-width: 0; }
 .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .75rem 1.5rem; margin: 0; }
 .detail-grid dt { color: var(--muted); font-size: .8rem; }
 .detail-grid dd { margin: 0; font-weight: 550; overflow-wrap: anywhere; }
+
+/* Why a form would not submit. Sticky, so it is still on screen when the browser
+   scrolls the offending field into view. */
+.form-blocked { position: sticky; top: .5rem; z-index: 6; margin: .5rem 0; padding: .6rem .8rem; border-radius: var(--radius-sm); background: #fdeceb; border-left: 4px solid #b42318; }

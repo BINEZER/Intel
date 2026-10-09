@@ -22,11 +22,12 @@ import { DeleteButton } from '../components/DeleteButton.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { RelatedList, type RelatedItem } from '../components/RelatedList.js';
 import { ServiceConversionForm } from '../components/ServiceConversionForm.js';
+import { RenewalForm } from '../components/RenewalForm.js';
 import { StatusChip } from '../components/StatusSelect.js';
 import { describeMake } from '../lib/lift-spec.js';
 import { formatETB } from '../lib/money.js';
 import { projectTypeShort } from '../lib/project-kind.js';
-import { describeFee, wholeMonthsBetween } from '../lib/service-agreement.js';
+import { canRenew, describeFee, wholeMonthsBetween } from '../lib/service-agreement.js';
 import { ContractForm } from './ContractForm.js';
 import { canConvert } from './Contracts.js';
 import { ProjectForm } from './Projects.js';
@@ -35,6 +36,7 @@ import { UnitForm } from './Units.js';
 type Editing =
   | { kind: 'contract' }
   | { kind: 'convert' }
+  | { kind: 'renew' }
   | { kind: 'project'; row: WithId<Project> }
   | { kind: 'unit'; row: WithId<ElevatorUnit> };
 
@@ -95,6 +97,10 @@ export function ContractDetail() {
     contract.succeededByContractId == null
       ? null
       : (contracts.rows.find((k) => k.id === contract.succeededByContractId) ?? null);
+  const renewedAs =
+    contract.renewedIntoContractId == null
+      ? null
+      : (contracts.rows.find((k) => k.id === contract.renewedIntoContractId) ?? null);
   const follows =
     contract.supersedesContractId === undefined
       ? null
@@ -165,12 +171,18 @@ export function ContractDetail() {
           {follows !== null && (
             <p className="muted">Follows <Link to={`/contracts/${follows.id}`}>{follows.contractNo}</Link>.</p>
           )}
+          {renewedAs !== null && (
+            <p className="muted">Renewed as <Link to={`/contracts/${renewedAs.id}`}>{renewedAs.contractNo}</Link>.</p>
+          )}
         </div>
         <div className="chip-row">
           <StatusChip kind="contract" value={contract.status} />
           {editableContract && user !== null && (
             <>
               <button type="button" onClick={() => setEditing({ kind: 'contract' })}>Edit contract</button>
+              {canRenew(contract) && (
+                <button type="button" className="primary" onClick={() => setEditing({ kind: 'renew' })}>Renew</button>
+              )}
               {canConvert(contract) && (
                 <button type="button" onClick={() => setEditing({ kind: 'convert' })}>To maintenance</button>
               )}
@@ -190,6 +202,16 @@ export function ContractDetail() {
           )}
           {editing.kind === 'convert' && (
             <ServiceConversionForm contract={contract} uid={user.uid} onDone={() => setEditing(null)} />
+          )}
+          {editing.kind === 'renew' && (
+            <RenewalForm
+              contract={contract}
+              uid={user.uid}
+              onDone={(newId) => {
+                setEditing(null);
+                if (newId !== null) navigate(`/contracts/${newId}`);
+              }}
+            />
           )}
           {editing.kind === 'project' && (
             <ProjectForm initial={editing.row} clients={clients.rows} uid={user.uid} onDone={() => setEditing(null)} />

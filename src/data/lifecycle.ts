@@ -15,12 +15,12 @@
  *   would then stop asking about a decision nobody actually made.
  */
 
-import { Timestamp, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { stampCreate, stampUpdate } from './audit.js';
 import { collectionRef, newId } from './repository.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
-import { monthlyTerms, serviceFeeFigures } from '../lib/service-agreement.js';
+import { canRenew, monthlyTerms, nextAgreementNo, serviceFeeFigures } from '../lib/service-agreement.js';
 import { warrantyEnd, type ConsequenceAction } from '../lib/lifecycle.js';
 import type { Contract, ElevatorUnit, PaymentMilestone } from '../lib/schema.js';
 import { getMilestones } from './contracts.js';
@@ -254,4 +254,141 @@ export async function convertToServiceContract(
 
   await batch.commit();
   return serviceId;
+}
+
+
+export interface MaintenanceRenewal {
+  monthlyNetSantim: number;
+  months: number;
+  vatRateBps: number;
+  /** Usually the day the old agreement ends, so there is no gap in cover. */
+  startsOn: Date;
+}
+
+/**
+ * Renew a maintenance agreement: write the next one and hand everything over.
+ *
+ * ONE BATCH, FOR THE SAME REASON AS THE CONVERSION
+ *   The new agreement, its monthly terms, the old agreement's "renewed" mark and
+ *   the move of the lifts either all happen or none do. A new agreement with the
+ *   lifts still on the old one bills nothing and covers nothing; an old one
+ *   marked renewed with no successor stops raising alerts about a renewal that
+ *   never happened.
+ *
+ * WHAT CARRIES OVER, AND WHAT DOES NOT
+ *   The client, title, service levels and renewal settings carry over; the fee
+ *   and the term are whatever was asked for, because a renewal is the moment the
+ *   fee changes. The service-level METRICS start from zero — they describe a
+ *   period, and the new agreement is a new one. Payments still owed on the old
+ *   agreement stay on it and are still collected.
+ */
+export async function renewMaintenanceContract(
+  original: Contract & { id: string },
+  renewal: MaintenanceRenewal,
+  uid: string,
+): Promise<string> {
+  const { monthlyNetSantim, months, vatRateBps, startsOn } = renewal;
+  if (monthlyNetSantim <= 0) throw new Error('A renewed agreement needs a monthly fee.');
+  if (months < 1) throw new Error('A renewed agreement needs a term of at least one month.');
+
+  // Read it again: the page it was opened from may be minutes old, and a second
+  // person may have renewed it since.
+  const fresh = await getDoc(doc(db, 'contracts', original.id));
+  if (!fresh.exists()) throw new Error(`${original.contractNo} no longer exists.`);
+  const current = fresh.data() as Contract;
+  if (!canRenew(current)) {
+    throw new Error(
+      current.renewedIntoContractId
+        ? `${original.contractNo} has already been renewed.`
+        : `${original.contractNo} is ${current.status}, so it cannot be renewed.`,
+    );
+  }
+
+  const { term: money } = serviceFeeFigures(monthlyNetSantim, months, vatRateBps);
+  const endsOn = warrantyEnd(startsOn, months);
+  const renewalWindowDays = current.renewalWindowDays > 0 ? current.renewalWindowDays : 60;
+  const contractNo = nextAgreementNo(current.contractNo);
+
+  const lifts = await getDocs(query(collectionRef('units'), where('maintenanceContractId', '==', original.id)));
+
+  const newContractId = newId('contracts');
+  const batch = writeBatch(db);
+
+  const payload: Omit<Contract, 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'> = {
+    contractNo,
+    type: 'maintenance',
+    clientId: current.clientId,
+    clientName: current.clientName,
+    title: current.title,
+    currency: 'ETB',
+    valueNetSantim: money.netSantim,
+    vatRateBps,
+    vatSantim: money.vatSantim,
+    valueGrossSantim: money.grossSantim,
+    valueEnteredInclusive: false,
+    signedDate: dual(new Date()),
+    startDate: dual(startsOn),
+    endDate: dual(endsOn),
+    autoRenew: current.autoRenew,
+    renewalWindowDays,
+    renewalAlertAt: Timestamp.fromDate(new Date(endsOn.getTime() - renewalWindowDays * 24 * 60 * 60 * 1000)),
+    renewalStatus: 'not_due',
+    status: 'active',
+    attachments: [],
+    // The agreement this one follows, so the chain can be walked back.
+    supersedesContractId: original.id,
+    succeededByContractId: null,
+    serviceFee: { monthlyNetSantim, unitCount: lifts.size > 0 ? lifts.size : (current.serviceFee?.unitCount ?? 0) },
+    ...(current.sla === undefined
+      ? {}
+      : {
+          sla: {
+            responseHours: current.sla.responseHours,
+            resolutionHours: current.sla.resolutionHours,
+            preventiveVisitsPerYear: current.sla.preventiveVisitsPerYear,
+            metrics: {
+              callouts: 0,
+              breaches: 0,
+              avgResponseHours: 0,
+              visitsCompletedThisYear: 0,
+              lastComputedAt: Timestamp.now(),
+            },
+          },
+        }),
+  };
+  batch.set(doc(db, 'contracts', newContractId), { ...payload, ...stampCreate(uid) });
+
+  for (const [index, term] of monthlyTerms(startsOn, months, money).entries()) {
+    batch.set(doc(db, `contracts/${newContractId}/milestones`, `m${String(index + 1).padStart(2, '0')}`), {
+      seq: term.seq,
+      name: term.name,
+      shareBps: term.shareBps,
+      netSantim: term.netSantim,
+      vatSantim: term.vatSantim,
+      grossSantim: term.grossSantim,
+      dueDate: dual(term.dueDate),
+      status: 'pending',
+      ...stampCreate(uid),
+    });
+  }
+
+  // The old agreement is finished: renewed into the new one. Completed, so it
+  // leaves the renewal board and stops raising alerts about its own end.
+  batch.update(doc(db, 'contracts', original.id), {
+    renewedIntoContractId: newContractId,
+    renewalStatus: 'renewed',
+    status: 'completed',
+    ...stampUpdate(uid),
+  });
+
+  for (const lift of lifts.docs) {
+    batch.update(lift.ref, {
+      maintenanceContractId: newContractId,
+      maintenanceContractNo: contractNo,
+      ...stampUpdate(uid),
+    });
+  }
+
+  await batch.commit();
+  return newContractId;
 }

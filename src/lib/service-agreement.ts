@@ -131,3 +131,42 @@ export function outstandingOn(terms: readonly TermLike[]): { count: number; sant
   }
   return { count, santim };
 }
+
+// ---------------------------------------------------------------------------
+// Renewal
+// ---------------------------------------------------------------------------
+
+/**
+ * The number of the agreement that follows this one: `C-1-SVC` becomes
+ * `C-1-SVC-R1`, and that becomes `C-1-SVC-R2`.
+ *
+ * The suffix is counted rather than appended, so the fifth renewal reads `-R5`
+ * and not `-R1-R1-R1-R1-R1`.
+ */
+export function nextAgreementNo(contractNo: string): string {
+  const match = /^(.*)-R(\d+)$/.exec(contractNo);
+  return match === null ? `${contractNo}-R1` : `${match[1] as string}-R${Number(match[2]) + 1}`;
+}
+
+export interface RenewableContract {
+  type: string;
+  status: string;
+  renewedIntoContractId?: string | null | undefined;
+}
+
+/**
+ * May this agreement be renewed?
+ *
+ * Only a maintenance agreement that is running, or has just run out, and has not
+ * already been renewed — renewing twice would leave two live agreements for the
+ * same lifts, each billing a month at a time.
+ */
+export function canRenew(contract: RenewableContract): boolean {
+  return (
+    contract.type === 'maintenance' &&
+    (contract.status === 'active' || contract.status === 'expired') &&
+    (contract.renewedIntoContractId === undefined ||
+      contract.renewedIntoContractId === null ||
+      contract.renewedIntoContractId === '')
+  );
+}
