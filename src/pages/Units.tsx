@@ -21,6 +21,7 @@ import {
   updateUnit,
 } from '../data/units.js';
 import { subscribeClients } from '../data/clients.js';
+import { clientChoices, clientOptionLabel, resolveClient } from '../lib/client-choice.js';
 import { LinkPicker } from '../components/LinkPicker.js';
 import { subscribeContracts } from '../data/contracts.js';
 import { subscribeProjects } from '../data/projects.js';
@@ -643,6 +644,7 @@ export function UnitForm({
   const [siteName, setSiteName] = useState(initial?.siteName ?? '');
   const [city, setCity] = useState(initial?.city ?? 'Addis Ababa');
   const [clientId, setClientId] = useState(initial?.clientId ?? '');
+  const currentClient = initial === null ? null : { id: initial.clientId, name: initial.clientName };
   const [contractId, setContractId] = useState(initial?.maintenanceContractId ?? '');
   /*
    * Which project installed this lift.
@@ -666,8 +668,8 @@ export function UnitForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const client = clients.find((c) => c.id === clientId);
-    if (!ready || client === undefined) return;
+    const client = resolveClient(clients, clientId, currentClient);
+    if (!ready || client === null) return;
 
     const contract = contracts.find((c) => c.id === contractId);
 
@@ -734,12 +736,14 @@ export function UnitForm({
             <label htmlFor="u-client">Client <span className="req" aria-hidden="true">*</span></label>
             <select id="u-client" required value={clientId} onChange={(e) => setClientId(e.target.value)}>
               <option value="">Select a client…</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {clientChoices(clients, currentClient).map((c) => (
+                <option key={c.id} value={c.id}>{clientOptionLabel(c)}</option>
+              ))}
             </select>
           </div>
           <div className="field">
             <label htmlFor="u-capacity">Capacity, kg</label>
-            <input id="u-capacity" type="number" min="0" value={capacityKg}
+            <input id="u-capacity" type="number" min="0" step="any" value={capacityKg}
               onChange={(e) => setCapacityKg(e.target.value)} />
           </div>
           <div className="field">
@@ -749,7 +753,7 @@ export function UnitForm({
           </div>
           <div className="field">
             <label htmlFor="u-speed">Speed, m/s</label>
-            <input id="u-speed" type="number" min="0" step="0.01" value={speedMps}
+            <input id="u-speed" type="number" min="0" step="any" value={speedMps}
               onChange={(e) => setSpeedMps(e.target.value)} />
           </div>
           <div className="field">

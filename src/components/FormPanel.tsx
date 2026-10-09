@@ -12,7 +12,7 @@
  * own way down the page either.
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export function FormPanel({
   title,
@@ -26,6 +26,16 @@ export function FormPanel({
   children: ReactNode;
 }) {
   const panel = useRef<HTMLElement>(null);
+  /**
+   * Why the browser refused to submit, in words.
+   *
+   * A form with a field the browser considers invalid is not submitted at all:
+   * our handler never runs and the only sign is a small pop-up by the field,
+   * which on a long form is off-screen and gone in a couple of seconds. From the
+   * chair that is a Save button that does nothing. So the refusal is caught and
+   * said here, where it stays until the person acts on it.
+   */
+  const [blocked, setBlocked] = useState<string | null>(null);
 
   useEffect(() => {
     const node = panel.current;
@@ -57,7 +67,19 @@ export function FormPanel({
   }, [onClose]);
 
   return (
-    <section className="card form-panel no-print" ref={panel} aria-label={title}>
+    <section
+      className="card form-panel no-print"
+      ref={panel}
+      aria-label={title}
+      onInvalidCapture={(event) => {
+        const field = event.target as HTMLInputElement;
+        const label = field.labels?.[0]?.textContent?.replace(/[\s*]+$/, '').trim() || field.name || 'A field';
+        // The browser reports every invalid field; the first one is enough.
+        setBlocked((current) => current ?? `Not saved — ${label}: ${field.validationMessage}`);
+      }}
+      onChangeCapture={() => setBlocked(null)}
+      onSubmitCapture={() => setBlocked(null)}
+    >
       <div className="form-panel-head">
         <div>
           <h2>{title}</h2>
@@ -67,6 +89,11 @@ export function FormPanel({
           ✕
         </button>
       </div>
+      {blocked !== null && (
+        <p className="error form-blocked" role="alert">
+          {blocked}
+        </p>
+      )}
       {children}
     </section>
   );

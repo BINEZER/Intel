@@ -95,3 +95,34 @@ describe('outstandingOn', () => {
     expect(outstandingOn([{ status: 'paid', grossSantim: 10 }])).toEqual({ count: 0, santim: 0 });
   });
 });
+
+import { canRenew, nextAgreementNo } from '../service-agreement.js';
+
+describe('nextAgreementNo', () => {
+  it('adds -R1 to an agreement that has never been renewed', () => {
+    expect(nextAgreementNo('C-1-SVC')).toBe('C-1-SVC-R1');
+  });
+  it('counts on rather than piling suffixes up', () => {
+    expect(nextAgreementNo('C-1-SVC-R1')).toBe('C-1-SVC-R2');
+    expect(nextAgreementNo('C-1-SVC-R9')).toBe('C-1-SVC-R10');
+  });
+  it('leaves an -R inside a number alone', () => {
+    expect(nextAgreementNo('R-7')).toBe('R-7-R1');
+  });
+});
+
+describe('canRenew', () => {
+  it('allows a running or just-expired maintenance agreement', () => {
+    expect(canRenew({ type: 'maintenance', status: 'active' })).toBe(true);
+    expect(canRenew({ type: 'maintenance', status: 'expired' })).toBe(true);
+  });
+  it('refuses anything that is not a maintenance agreement', () => {
+    expect(canRenew({ type: 'supply_install', status: 'active' })).toBe(false);
+  });
+  it('refuses one that is finished, still a draft, or already renewed', () => {
+    expect(canRenew({ type: 'maintenance', status: 'completed' })).toBe(false);
+    expect(canRenew({ type: 'maintenance', status: 'terminated' })).toBe(false);
+    expect(canRenew({ type: 'maintenance', status: 'draft' })).toBe(false);
+    expect(canRenew({ type: 'maintenance', status: 'active', renewedIntoContractId: 'k2' })).toBe(false);
+  });
+});

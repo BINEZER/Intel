@@ -26,8 +26,9 @@ import { subscribeProjects } from '../data/projects.js';
 import { subscribeUnits } from '../data/units.js';
 import { contractScope, describeScope, type ScopeProject, type ScopeUnit } from '../lib/scope.js';
 import { formatBps } from '../lib/kpi.js';
-import { describeFee, wholeMonthsBetween } from '../lib/service-agreement.js';
+import { canRenew, describeFee, wholeMonthsBetween } from '../lib/service-agreement.js';
 import { ServiceConversionForm } from '../components/ServiceConversionForm.js';
+import { RenewalForm } from '../components/RenewalForm.js';
 import type { ElevatorUnit, Project } from '../lib/schema.js';
 
 /**
@@ -52,6 +53,7 @@ export function Contracts() {
   const editable = can(role, 'manageContracts');
   const [editing, setEditing] = useState<WithId<Contract> | 'new' | null>(null);
   const [converting, setConverting] = useState<WithId<Contract> | null>(null);
+  const [renewing, setRenewing] = useState<WithId<Contract> | null>(null);
 
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
@@ -137,6 +139,10 @@ export function Contracts() {
         <ServiceConversionForm contract={converting} uid={user.uid} onDone={() => setConverting(null)} />
       )}
 
+      {renewing !== null && user !== null && (
+        <RenewalForm contract={renewing} uid={user.uid} onDone={() => setRenewing(null)} />
+      )}
+
       {contracts.loading && <p className="muted">Loading…</p>}
       {!contracts.loading && contracts.rows.length === 0 && !contracts.error && (
         <p className="muted">No contracts yet.</p>
@@ -169,6 +175,14 @@ export function Contracts() {
                           wholeMonthsBetween(k.startDate.at.toDate(), k.endDate.at.toDate()),
                         )}
                       </span>
+                    </>
+                  )}
+                  {k.renewedIntoContractId != null && (
+                    <>
+                      <br />
+                      <Link className="muted" to={`/contracts/${k.renewedIntoContractId}`}>
+                        renewed →
+                      </Link>
                     </>
                   )}
                   {k.succeededByContractId != null && (
@@ -293,6 +307,16 @@ export function Contracts() {
                     render: (k: WithId<Contract>) => (
                       <div className="row-actions">
                         <button type="button" onClick={() => setEditing(k)}>Edit</button>
+                        {canRenew(k) && (
+                          <button
+                            type="button"
+                            className="primary"
+                            title="Write the next agreement and move the lifts across"
+                            onClick={() => setRenewing(k)}
+                          >
+                            Renew
+                          </button>
+                        )}
                         {canConvert(k) && (
                           <button
                             type="button"
@@ -329,6 +353,7 @@ export function Contracts() {
         editable={editable}
         uid={user?.uid ?? null}
         onEdit={setEditing}
+        onRenew={setRenewing}
       />
     </>
   );
@@ -346,11 +371,13 @@ function RenewalBoard({
   editable,
   uid,
   onEdit,
+  onRenew,
 }: {
   contracts: readonly WithId<Contract>[];
   editable: boolean;
   uid: string | null;
   onEdit: (contract: WithId<Contract>) => void;
+  onRenew: (contract: WithId<Contract>) => void;
 }) {
   const asOf = new Date();
   const { busy, error, run } = useAsyncAction('update this renewal');
@@ -470,6 +497,9 @@ function RenewalBoard({
                           flagged it, rather than by hunting for it again in
                           the list above. */}
                       <button type="button" onClick={() => onEdit(contract)}>Edit</button>
+                      {canRenew(contract) && (
+                        <button type="button" className="primary" onClick={() => onRenew(contract)}>Renew</button>
+                      )}
                     </div>
                   </td>
                 )}

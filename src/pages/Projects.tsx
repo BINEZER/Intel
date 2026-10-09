@@ -16,6 +16,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
+import { clientChoices, clientOptionLabel, resolveClient } from '../lib/client-choice.js';
 import { subscribeContracts } from '../data/contracts.js';
 import {
   createProject,
@@ -305,6 +306,7 @@ export function ProjectForm({
 }) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [clientId, setClientId] = useState(initial?.clientId ?? '');
+  const currentClient = initial === null ? null : { id: initial.clientId, name: initial.clientName };
   const [siteName, setSiteName] = useState(initial?.site?.name ?? '');
   const [city, setCity] = useState(initial?.site?.city ?? 'Addis Ababa');
   const [units, setUnits] = useState(initial?.units?.length ?? 1);
@@ -363,8 +365,8 @@ export function ProjectForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const client = clients.find((c) => c.id === clientId);
-    if (!ready || client === undefined) return;
+    const client = resolveClient(clients, clientId, currentClient);
+    if (!ready || client === null) return;
 
     const input = {
       projectNo: initial?.projectNo ?? `P-${Date.now()}`,
@@ -433,7 +435,9 @@ export function ProjectForm({
             <label htmlFor="p-client">Client <span className="req" aria-hidden="true">*</span></label>
             <select id="p-client" required value={clientId} onChange={(e) => setClientId(e.target.value)}>
               <option value="">Select a client…</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {clientChoices(clients, currentClient).map((c) => (
+                <option key={c.id} value={c.id}>{clientOptionLabel(c)}</option>
+              ))}
             </select>
           </div>
 
@@ -534,7 +538,7 @@ export function ProjectForm({
           {/* Asked only where there are lifts to count. On a renovation the
               field has no answer, and a required-looking box with no answer is
               how a form teaches people to type something untrue. */}
-          {isElevatorWork(type) && (
+          {initial === null && isElevatorWork(type) && (
             <div className="field">
               <label htmlFor="p-units">Units</label>
               <input id="p-units" type="number" min={1} value={units}
