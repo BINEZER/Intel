@@ -30,7 +30,7 @@ describe('listing references', () => {
 });
 
 describe('records something else points at', () => {
-  it('refuses a client that still has contracts', () => {
+  it('refuses a client that still has contracts, but lets it be forced', () => {
     const verdict = assessDeletion({
       kind: 'client',
       name: 'Adera Hospital',
@@ -40,7 +40,10 @@ describe('records something else points at', () => {
       ],
     });
     expect(verdict.allowed).toBe(false);
+    expect(verdict.forceable).toBe(true);
     expect(verdict.reason).toContain('2 contracts and 4 projects');
+    expect(verdict.leftBehind.join(' ')).toMatch(/2 contracts — kept, still showing “Adera Hospital”/);
+    expect(verdict.leftBehind.join(' ')).toMatch(/4 projects — kept/);
     // Deleting the client would not delete the contracts — it would blank the
     // name on them, which is worse than refusing.
     expect(verdict.alternative).toContain('inactive');
@@ -77,7 +80,7 @@ describe('records something else points at', () => {
       references: [{ label: 'issued invoices', count: 1 }],
     });
     expect(verdict.allowed).toBe(false);
-    expect(verdict.alternative).toContain('cancel');
+    expect(verdict.alternative).toMatch(/cancel/i);
   });
 });
 
@@ -150,5 +153,72 @@ describe('technicians', () => {
       references: [{ label: 'callouts', count: 0 }],
     });
     expect(verdict.allowed).toBe(false);
+  });
+});
+
+
+describe('deleting over a warning', () => {
+  it('may be forced for a contract, naming what happens to each thing tied to it', () => {
+    const v = assessDeletion({
+      kind: 'contract',
+      name: 'C-1',
+      references: [
+        { label: 'projects', count: 2 },
+        { label: 'invoices', count: 1 },
+        { label: 'lifts', count: 3 },
+        { label: 'callouts', count: 4 },
+      ],
+      cascade: [{ label: 'payment terms', count: 4 }],
+    });
+    expect(v.allowed).toBe(false);
+    expect(v.forceable).toBe(true);
+    expect(v.cascade).toEqual(['4 payment terms']);
+    const text = v.leftBehind.join('\n');
+    expect(text).toMatch(/2 projects — unlinked from the contract/);
+    expect(text).toMatch(/1 invoice — kept but unlinked.*VAT numbering stays whole/);
+    expect(text).toMatch(/3 lifts — no longer under a maintenance contract/);
+    expect(text).toMatch(/4 callouts — kept as history/);
+  });
+
+  it('may be forced for a project, which leaves vouchers where they are', () => {
+    const v = assessDeletion({
+      kind: 'project',
+      name: 'PRJ-1',
+      references: [
+        { label: 'payment vouchers', count: 1 },
+        { label: 'sub-projects', count: 2 },
+        { label: 'lifts', count: 1 },
+      ],
+    });
+    expect(v.forceable).toBe(true);
+    const text = v.leftBehind.join('\n');
+    expect(text).toMatch(/1 payment voucher — kept.*withholding record/);
+    expect(text).toMatch(/2 sub-projects — become stand-alone/);
+    expect(text).toMatch(/1 lift — no longer name a project/);
+  });
+
+  it('may be forced for a lift that has service history', () => {
+    const v = assessDeletion({ kind: 'unit', name: 'LIFT-01', references: [{ label: 'callouts', count: 3 }] });
+    expect(v.forceable).toBe(true);
+    expect(v.leftBehind[0]).toMatch(/3 callouts — kept as the history/);
+  });
+
+  it('is not an option when nothing is in the way', () => {
+    const v = assessDeletion({ kind: 'contract', name: 'C-1', references: [{ label: 'projects', count: 0 }] });
+    expect(v.allowed).toBe(true);
+    expect(v.forceable).toBe(false);
+    expect(v.leftBehind).toEqual([]);
+  });
+
+  it('never applies to an issued invoice, an approved voucher or a technician', () => {
+    expect(assessDeletion({ kind: 'invoice', name: 'INV-1', status: 'issued' }).forceable).toBe(false);
+    expect(assessDeletion({ kind: 'disbursement', name: 'PV-1', status: 'approved' }).forceable).toBe(false);
+    expect(assessDeletion({ kind: 'technician', name: 'Abel' }).forceable).toBe(false);
+  });
+
+  it('is not extended to a subcontractor', () => {
+    const v = assessDeletion({ kind: 'subcontractor', name: 'Sub', references: [{ label: 'payment vouchers', count: 2 }] });
+    expect(v.allowed).toBe(false);
+    expect(v.forceable).toBe(false);
   });
 });

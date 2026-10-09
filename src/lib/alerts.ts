@@ -212,7 +212,7 @@ export function contractAlerts(contracts: readonly AlertContract[], asOf: Date):
       action: lapsed
         ? 'Contact the client before another provider does, and record the outcome against the contract.'
         : 'Write the extension letter and record it as in negotiation.',
-      href: `/contracts?contract=${contract.id}`,
+      href: `/contracts/${contract.id}`,
       daysRemaining: view.daysUntilExpiry,
       amountSantim: contract.valueGrossSantim,
     });
@@ -363,7 +363,7 @@ export function warrantyAlerts(warranties: readonly AlertWarranty[]): Alert[] {
         w.state === 'expired'
           ? 'Anything found now is chargeable. Close the file, or agree a goodwill position deliberately rather than by default.'
           : 'Book the end-of-warranty inspection while defects are still ours to fix for free.',
-      href: `/contracts?contract=${w.contractId}`,
+      href: `/contracts/${w.contractId}`,
       daysRemaining: Math.round((w.endsOn.getTime() - Date.now()) / 86_400_000),
     }));
 }
@@ -382,7 +382,7 @@ export function reminderAlerts(reminders: readonly AlertReminder[]): Alert[] {
       reminder.state === 'overdue'
         ? 'Deal with it or mark it done — a reminder nobody closes teaches everyone to ignore the list.'
         : 'Act on it now, while there is still time for it to matter.',
-    href: reminder.sourceKind === 'project' ? `/projects/${reminder.sourceId}` : `/contracts?contract=${reminder.sourceId}`,
+    href: reminder.sourceKind === 'project' ? `/projects/${reminder.sourceId}` : `/contracts/${reminder.sourceId}`,
     daysRemaining: reminder.daysRemaining,
   }));
 }

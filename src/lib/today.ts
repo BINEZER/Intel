@@ -198,7 +198,7 @@ export function buildToday(inputs: TodayInputs): TodayTask[] {
           ? `Lapsed ${Math.abs(days)} days ago — call the client today`
           : 'Write the extension letter',
       figure: null,
-      href: `/contracts?contract=${contract.id}`,
+      href: `/contracts/${contract.id}`,
       daysRemaining: days,
     });
   }

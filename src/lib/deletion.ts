@@ -53,6 +53,18 @@ export interface DeletionVerdict {
   cascade: string[];
   /** What to do instead. Null when the delete is allowed. */
   alternative: string | null;
+  /**
+   * True when the delete is refused ONLY because other records point at it, and
+   * the person may go ahead anyway. The reason is then a warning, not a wall.
+   * Never true for an issued invoice, an approved voucher or a technician: those
+   * are refused because of what they are, not because of what points at them.
+   */
+  forceable: boolean;
+  /**
+   * What deleting it anyway will do to the records that point at it, one
+   * sentence each. Empty unless `forceable`.
+   */
+  leftBehind: string[];
 }
 
 const LABEL: Record<DeletableKind, string> = {
@@ -116,6 +128,8 @@ export function assessDeletion(input: AssessInput): DeletionVerdict {
       cascade: [],
       alternative:
         'Set them to inactive instead. They drop out of the assignment lists and the roster, and everything they did stays attributable.',
+      forceable: false,
+      leftBehind: [],
     };
   }
 
@@ -134,6 +148,8 @@ export function assessDeletion(input: AssessInput): DeletionVerdict {
           kind === 'invoice'
             ? 'Void it instead. The number stays on file, marked cancelled, and the sequence stays whole.'
             : 'Put it on hold or cancel it instead, so the withholding record stays complete.',
+        forceable: false,
+        leftBehind: [],
       };
     }
     return {
@@ -141,6 +157,8 @@ export function assessDeletion(input: AssessInput): DeletionVerdict {
       reason: `${name} is still a draft, so deleting it leaves no gap in the numbering.`,
       cascade: describeCascade(input.cascade),
       alternative: null,
+      forceable: false,
+      leftBehind: [],
     };
   }
 
@@ -152,20 +170,27 @@ export function assessDeletion(input: AssessInput): DeletionVerdict {
       reason: `Deletes the program ${name}.`,
       cascade: describeCascade(input.cascade),
       alternative: null,
+      forceable: false,
+      leftBehind: [],
     };
   }
 
   // --- everything else: refuse while something still points at it ----------
 
   if (blocking.length > 0) {
+    const forceable = FORCEABLE.has(kind);
     return {
       allowed: false,
-      reason: `${name} still has ${listReferences(blocking)} attached, and deleting it would leave them pointing at a ${noun} that no longer exists.`,
-      cascade: [],
+      reason: forceable
+        ? `${name} still has ${listReferences(blocking)} tied to it.`
+        : `${name} still has ${listReferences(blocking)} attached, and deleting it would leave them pointing at a ${noun} that no longer exists.`,
+      cascade: forceable ? describeCascade(input.cascade) : [],
       alternative:
         kind === 'client' || kind === 'subcontractor'
-          ? `Delete those first if they are wrong too, or set this ${noun} to inactive to take it out of the lists while keeping the history.`
-          : `Delete those first if they are wrong too, or cancel this ${noun} instead of removing it.`,
+          ? `Set this ${noun} to inactive to take it out of the lists while keeping the history${forceable ? ', or delete it anyway' : ''}.`
+          : `Cancel this ${noun} instead of removing it${forceable ? ', or delete it anyway' : ''}.`,
+      forceable,
+      leftBehind: forceable ? leftBehindBy(kind, name, blocking) : [],
     };
   }
 
@@ -174,7 +199,73 @@ export function assessDeletion(input: AssessInput): DeletionVerdict {
     reason: `Nothing else points at ${name}, so it can be removed.`,
     cascade: describeCascade(input.cascade),
     alternative: null,
+    forceable: false,
+    leftBehind: [],
   };
+}
+
+/**
+ * The kinds that may be deleted over a warning.
+ *
+ * What makes these safe to force is that what points at them can be left
+ * standing without being wrong: it is unlinked, or it keeps the name it
+ * already carries. An issued invoice and an approved voucher are not in this
+ * list because deleting THEM is the harm, however nothing points at them.
+ */
+const FORCEABLE: ReadonlySet<DeletableKind> = new Set(['client', 'contract', 'project', 'unit']);
+
+/**
+ * What happens to each thing that points at the record, in plain words.
+ *
+ * Nothing that points at the record is deleted with it. Deleting a client does
+ * not delete its contracts, and deleting a contract does not delete its
+ * invoices — those carry their own meaning, and an issued invoice's number is
+ * never removed this way. They are unlinked where the link can be empty, and
+ * left carrying the name they already hold where it cannot.
+ */
+function leftBehindBy(kind: DeletableKind, name: string, refs: readonly Reference[]): string[] {
+  const out: string[] = [];
+  for (const ref of refs) {
+    const what = `${ref.count} ${ref.count === 1 ? singular(ref.label) : ref.label}`;
+    switch (`${kind}:${ref.label}`) {
+      case 'client:contracts':
+      case 'client:projects':
+      case 'client:invoices':
+      case 'client:lifts':
+        out.push(`${what} — kept, still showing “${name}” as the client but no longer linked to a client record. Open each and choose another client to re-link it.`);
+        break;
+      case 'contract:projects':
+        out.push(`${what} — unlinked from the contract; they carry on as stand-alone projects.`);
+        break;
+      case 'contract:invoices':
+      case 'project:invoices':
+        out.push(`${what} — kept but unlinked. An invoice is never deleted along with something else, so the VAT numbering stays whole.`);
+        break;
+      case 'contract:lifts':
+        out.push(`${what} — no longer under a maintenance contract.`);
+        break;
+      case 'contract:callouts':
+      case 'contract:maintenance visits':
+        out.push(`${what} — kept as history, still naming a contract that no longer exists.`);
+        break;
+      case 'project:payment vouchers':
+        out.push(`${what} — kept, still naming a project that no longer exists. They are part of the withholding record.`);
+        break;
+      case 'project:sub-projects':
+        out.push(`${what} — become stand-alone projects.`);
+        break;
+      case 'project:lifts':
+        out.push(`${what} — no longer name a project as the one that installed them.`);
+        break;
+      case 'unit:callouts':
+      case 'unit:maintenance visits':
+        out.push(`${what} — kept as the history of this lift's tag, but the lift itself will no longer be on the register.`);
+        break;
+      default:
+        out.push(`${what} — left pointing at nothing.`);
+    }
+  }
+  return out;
 }
 
 function describeCascade(cascade: readonly Reference[] | undefined): string[] {

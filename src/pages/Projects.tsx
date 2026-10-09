@@ -217,7 +217,7 @@ export function Projects() {
                     ) : (
                       <>
                         Under{' '}
-                        <Link to={`/contracts?contract=${project.contractId}`}>
+                        <Link to={`/contracts/${project.contractId}`}>
                           {contractById.get(project.contractId)?.contractNo ?? 'a contract'}
                         </Link>
                       </>
@@ -292,7 +292,7 @@ export function Projects() {
   );
 }
 
-function ProjectForm({
+export function ProjectForm({
   initial,
   clients,
   uid,
@@ -589,7 +589,7 @@ function ProjectForm({
 
         <div className="form-actions">
           <button type="submit" className="primary" disabled={busy || !ready}>
-            {busy ? 'Creating…' : 'Create project'}
+            {busy ? (initial === null ? 'Creating…' : 'Saving…') : initial === null ? 'Create project' : 'Save changes'}
           </button>
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>

@@ -43,6 +43,8 @@ const Units = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.Un
 const UnitDetail = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.UnitDetail })));
 const CeoReport = lazy(() => import('./pages/CeoReport.js').then((m) => ({ default: m.CeoReport })));
 const Import = lazy(() => import('./pages/Import.js').then((m) => ({ default: m.Import })));
+const ClientDetail = lazy(() => import('./pages/ClientDetail.js').then((m) => ({ default: m.ClientDetail })));
+const ContractDetail = lazy(() => import('./pages/ContractDetail.js').then((m) => ({ default: m.ContractDetail })));
 const Archive = lazy(() => import('./pages/Archive.js').then((m) => ({ default: m.Archive })));
 const People = lazy(() => import('./pages/People.js').then((m) => ({ default: m.People })));
 const FollowUps = lazy(() => import('./pages/FollowUps.js').then((m) => ({ default: m.FollowUps })));
@@ -157,10 +159,26 @@ export function App() {
               }
             />
             <Route
+              path="clients/:clientId"
+              element={
+                <RequireCapability capability="read">
+                  <ClientDetail />
+                </RequireCapability>
+              }
+            />
+            <Route
               path="contracts"
               element={
                 <RequireCapability capability="read">
                   <Contracts />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="contracts/:contractId"
+              element={
+                <RequireCapability capability="read">
+                  <ContractDetail />
                 </RequireCapability>
               }
             />

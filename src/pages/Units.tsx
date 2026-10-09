@@ -436,7 +436,7 @@ export function UnitDetail() {
         <div className="link-half">
           <h2>Client</h2>
           <p className="link-title">
-            <Link to={`/clients?client=${unit.clientId}`}>{unit.clientName}</Link>
+            <Link to={`/clients/${unit.clientId}`}>{unit.clientName}</Link>
             <LinkPicker
               kind="unit.client"
               recordId={unit.id}
@@ -489,7 +489,7 @@ export function UnitDetail() {
             {unit.maintenanceContractId === null ? (
               <span className="muted">Under no service agreement.</span>
             ) : (
-              <Link to={`/contracts?contract=${unit.maintenanceContractId}`}>
+              <Link to={`/contracts/${unit.maintenanceContractId}`}>
                 {unit.maintenanceContractNo ?? 'the contract'}
               </Link>
             )}
@@ -626,7 +626,7 @@ export function UnitDetail() {
 // Adding a lift
 // ---------------------------------------------------------------------------
 
-function UnitForm({
+export function UnitForm({
   initial,
   uid,
   onDone,
@@ -801,7 +801,7 @@ function UnitForm({
         {error && <p className="error" role="alert">{error}</p>}
         <div className="form-actions">
           <button type="submit" className="primary" disabled={busy || !ready}>
-            {busy ? 'Adding…' : 'Add lift'}
+            {busy ? (initial === null ? 'Adding…' : 'Saving…') : initial === null ? 'Add lift' : 'Save changes'}
           </button>
           <button type="button" onClick={onDone} disabled={busy}>Cancel</button>
         </div>

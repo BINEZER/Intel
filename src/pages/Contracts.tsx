@@ -37,7 +37,7 @@ import type { ElevatorUnit, Project } from '../lib/schema.js';
  * maintenance contract is renewed rather than converted. One that has already
  * been followed, or that never got going or was ended badly, is not offered.
  */
-function canConvert(contract: Contract): boolean {
+export function canConvert(contract: Contract): boolean {
   return (
     (contract.type === 'supply_install' || contract.type === 'modernization') &&
     contract.succeededByContractId == null &&
@@ -155,7 +155,9 @@ export function Contracts() {
               text: (k) => `${k.title} ${k.contractNo}`,
               render: (k) => (
                 <>
-                  <strong>{k.title}</strong>
+                  <Link to={`/contracts/${k.id}`}>
+                    <strong>{k.title}</strong>
+                  </Link>
                   <br />
                   <span className="muted mono">{k.contractNo}</span>
                   {k.type === 'maintenance' && k.serviceFee !== undefined && (
@@ -172,7 +174,7 @@ export function Contracts() {
                   {k.succeededByContractId != null && (
                     <>
                       <br />
-                      <Link className="muted" to={`/contracts?contract=${k.succeededByContractId}`}>
+                      <Link className="muted" to={`/contracts/${k.succeededByContractId}`}>
                         now on a maintenance agreement →
                       </Link>
                     </>
@@ -191,7 +193,13 @@ export function Contracts() {
                 </>
               ),
             },
-            { key: 'client', label: 'Client', value: (k) => k.clientName, filterable: true },
+            {
+              key: 'client',
+              label: 'Client',
+              value: (k) => k.clientName,
+              filterable: true,
+              render: (k) => <Link to={`/clients/${k.clientId}`}>{k.clientName}</Link>,
+            },
             {
               key: 'scope',
               label: 'Covers',

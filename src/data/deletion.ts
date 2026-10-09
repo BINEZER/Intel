@@ -18,13 +18,16 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getCountFromServer,
+  getDoc,
   getDocs,
   query,
   where,
   writeBatch,
   type Query,
+  type WriteBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase.js';
 import { stampUpdate } from './audit.js';
@@ -64,6 +67,9 @@ async function contractReferences(id: string): Promise<Reference[]> {
   return countAll([
     { label: 'projects', query: whereEq('projects', 'contractId', id) },
     { label: 'invoices', query: whereEq('invoices', 'contractId', id) },
+    { label: 'lifts', query: whereEq('units', 'maintenanceContractId', id) },
+    { label: 'callouts', query: whereEq('callouts', 'contractId', id) },
+    { label: 'maintenance visits', query: whereEq('maintenanceVisits', 'contractId', id) },
   ]);
 }
 
@@ -72,6 +78,7 @@ async function projectReferences(id: string): Promise<Reference[]> {
     { label: 'invoices', query: whereEq('invoices', 'projectId', id) },
     { label: 'payment vouchers', query: whereEq('disbursements', 'projectId', id) },
     { label: 'sub-projects', query: whereEq('projects', 'parentProjectId', id) },
+    { label: 'lifts', query: whereEq('units', 'installedByProjectId', id) },
   ]);
 }
 
@@ -194,16 +201,27 @@ async function cascadeOf(kind: DeletableKind, id: string): Promise<Reference[]> 
  * The verdict shown in the confirm step can be seconds old, and in that time
  * somebody else may have raised an invoice against the contract being deleted.
  * Re-asking costs a few reads and closes the window.
+ *
+ * `force` is for the person who has read the warning and wants it gone anyway.
+ * It only ever lifts a refusal that was ABOUT other records pointing at this
+ * one (`verdict.forceable`); an issued invoice or an approved voucher is still
+ * refused whatever is passed.
  */
-export async function deleteTarget(target: DeletionTarget, uid: string): Promise<void> {
+export async function deleteTarget(
+  target: DeletionTarget,
+  uid: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
   const verdict = await assessTarget(target);
-  if (!verdict.allowed) throw new Error(verdict.reason);
+  if (!verdict.allowed && !(options.force === true && verdict.forceable)) {
+    throw new Error(verdict.reason);
+  }
 
   switch (target.kind) {
     case 'contract':
-      return deleteWithSubcollection(`contracts/${target.id}/milestones`, 'contracts', target.id);
+      return deleteContractUnlinking(target.id, uid);
     case 'project':
-      return deleteWithSubcollection(`projects/${target.id}/phases`, 'projects', target.id);
+      return deleteProjectUnlinking(target.id, uid);
     case 'program':
       return deleteProgramReleasingMembers(target.id, uid);
     case 'client':
@@ -222,6 +240,103 @@ export async function deleteTarget(target: DeletionTarget, uid: string): Promise
       // through to doing nothing.
       throw new Error('A technician is set to inactive rather than deleted.');
   }
+}
+
+type Write = (batch: WriteBatch) => void;
+/** A batch holds 500 writes; stay well inside it. */
+const BATCH_SIZE = 400;
+
+/**
+ * Run the unlinking writes, then delete the record itself in the LAST batch.
+ *
+ * The record goes last so that an interruption leaves it still there and still
+ * deletable — running the delete again simply finishes the job. Deleting it
+ * first would strand whatever had not yet been unlinked, pointing at nothing
+ * with no page left to fix it from.
+ */
+async function runUnlinking(writes: readonly Write[], last: Write): Promise<void> {
+  for (let i = 0; i < writes.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const write of writes.slice(i, i + BATCH_SIZE)) write(batch);
+    await batch.commit();
+  }
+  const final = writeBatch(db);
+  last(final);
+  await final.commit();
+}
+
+/**
+ * Delete a contract, and let go of everything that pointed at it.
+ *
+ * Its projects, invoices and lifts are NOT deleted — they are unlinked, so each
+ * carries on as a record in its own right. An invoice in particular is never
+ * removed as a side effect of something else.
+ */
+async function deleteContractUnlinking(id: string, uid: string): Promise<void> {
+  const stamp = stampUpdate(uid);
+  const [projects, invoices, units, predecessors, terms] = await Promise.all([
+    getDocs(whereEq('projects', 'contractId', id)),
+    getDocs(whereEq('invoices', 'contractId', id)),
+    getDocs(whereEq('units', 'maintenanceContractId', id)),
+    // An installation contract that names this one as its successor would go on
+    // saying a service agreement took over when there is none — and the
+    // follow-up engine would stop asking about a decision that is now open again.
+    getDocs(whereEq('contracts', 'succeededByContractId', id)),
+    getDocs(collection(db, `contracts/${id}/milestones`)),
+  ]);
+
+  const writes: Write[] = [
+    ...projects.docs.map<Write>((d) => (b) => b.update(d.ref, { contractId: null, ...stamp })),
+    ...invoices.docs.map<Write>((d) => (b) => b.update(d.ref, { contractId: null, ...stamp })),
+    ...units.docs.map<Write>((d) => (b) =>
+      b.update(d.ref, { maintenanceContractId: null, maintenanceContractNo: null, ...stamp }),
+    ),
+    ...predecessors.docs.map<Write>((d) => (b) => b.update(d.ref, { succeededByContractId: null, ...stamp })),
+    ...terms.docs.map<Write>((d) => (b) => b.delete(d.ref)),
+  ];
+  await runUnlinking(writes, (b) => b.delete(doc(db, 'contracts', id)));
+}
+
+/**
+ * Delete a project, its stages and its crew, and let go of the rest.
+ *
+ * A payment term tied to one of its stages loses that tie: a term whose stage
+ * no longer exists would otherwise never become due, and nothing would ever
+ * say so.
+ */
+async function deleteProjectUnlinking(id: string, uid: string): Promise<void> {
+  const stamp = stampUpdate(uid);
+  const project = await getDoc(doc(db, 'projects', id));
+  const contractId = project.exists() ? ((project.data()['contractId'] as string | null) ?? null) : null;
+
+  const [phases, invoices, units, children, tasks, assignments] = await Promise.all([
+    getDocs(collection(db, `projects/${id}/phases`)),
+    getDocs(whereEq('invoices', 'projectId', id)),
+    getDocs(whereEq('units', 'installedByProjectId', id)),
+    getDocs(whereEq('projects', 'parentProjectId', id)),
+    getDocs(whereEq('tasks', 'projectId', id)),
+    getDocs(whereEq('projectAssignments', 'projectId', id)),
+  ]);
+
+  const phaseIds = new Set(phases.docs.map((d) => d.id));
+  const tiedTerms =
+    contractId === null
+      ? []
+      : (await getDocs(collection(db, `contracts/${contractId}/milestones`))).docs.filter((d) =>
+          phaseIds.has(String(d.data()['phaseId'] ?? '')),
+        );
+
+  const writes: Write[] = [
+    ...invoices.docs.map<Write>((d) => (b) => b.update(d.ref, { projectId: null, ...stamp })),
+    ...units.docs.map<Write>((d) => (b) => b.update(d.ref, { installedByProjectId: null, ...stamp })),
+    ...children.docs.map<Write>((d) => (b) => b.update(d.ref, { parentProjectId: null, ...stamp })),
+    ...tasks.docs.map<Write>((d) => (b) => b.update(d.ref, { projectId: deleteField(), ...stamp })),
+    ...tiedTerms.map<Write>((d) => (b) => b.update(d.ref, { phaseId: deleteField(), ...stamp })),
+    // Crew assignments mean nothing without the project they assign to.
+    ...assignments.docs.map<Write>((d) => (b) => b.delete(d.ref)),
+    ...phases.docs.map<Write>((d) => (b) => b.delete(d.ref)),
+  ];
+  await runUnlinking(writes, (b) => b.delete(doc(db, 'projects', id)));
 }
 
 /**

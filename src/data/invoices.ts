@@ -65,6 +65,20 @@ export function subscribeInvoices(
   return subscribe<Invoice>(q, onData, onError);
 }
 
+/**
+ * Every invoice raised against one contract.
+ *
+ * Not ordered in the query: ordering by issue date as well would need a
+ * composite index for a list of a handful of rows, so it is sorted by the caller.
+ */
+export function subscribeInvoicesForContract(
+  contractId: string,
+  onData: (rows: WithId<Invoice>[]) => void,
+  onError: (error: Error) => void,
+) {
+  return subscribe<Invoice>(query(collectionRef(PATH), where('contractId', '==', contractId)), onData, onError);
+}
+
 /** Every invoice in one Ethiopian month — the VAT return query. */
 export function subscribeInvoicesForPeriod(
   periodEc: string,

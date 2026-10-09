@@ -47,12 +47,12 @@ export function DeleteButton({
     }
   }
 
-  async function confirm() {
+  async function confirm(force = false) {
     if (user === null) return;
     setBusy(true);
     setError(null);
     try {
-      await deleteTarget(target, user.uid);
+      await deleteTarget(target, user.uid, { force });
       setOpen(false);
       onDeleted?.();
     } catch (cause) {
@@ -72,7 +72,7 @@ export function DeleteButton({
 
   return (
     <div
-      className={`delete-confirm ${verdict !== null && !verdict.allowed ? 'is-blocked' : ''}`}
+      className={`delete-confirm ${verdict !== null && !verdict.allowed && !verdict.forceable ? 'is-blocked' : ''}`}
       role="group"
       aria-label={`Delete ${target.name}`}
     >
@@ -86,10 +86,22 @@ export function DeleteButton({
 
       {verdict !== null && (
         <>
-          <p className={verdict.allowed ? undefined : 'muted'}>{verdict.reason}</p>
+          <p className={verdict.allowed ? undefined : verdict.forceable ? 'warning-text' : 'muted'}>
+            {verdict.reason}
+          </p>
 
           {verdict.cascade.length > 0 && (
             <p className="muted">Also deletes {verdict.cascade.join(', ')}.</p>
+          )}
+
+          {/* The warning, in full, BEFORE the button that goes past it. */}
+          {verdict.forceable && verdict.leftBehind.length > 0 && (
+            <>
+              <p><strong>If you delete it anyway:</strong></p>
+              <ul className="plain-list">
+                {verdict.leftBehind.map((line) => <li key={line}>{line}</li>)}
+              </ul>
+            </>
           )}
 
           {verdict.alternative !== null && <p className="muted">{verdict.alternative}</p>}
@@ -100,8 +112,13 @@ export function DeleteButton({
                 {busy ? 'Deleting…' : `Yes, delete ${target.name}`}
               </button>
             )}
+            {!verdict.allowed && verdict.forceable && (
+              <button type="button" className="danger" disabled={busy} onClick={() => void confirm(true)}>
+                {busy ? 'Deleting…' : `Delete ${target.name} anyway`}
+              </button>
+            )}
             <button type="button" onClick={() => setOpen(false)} disabled={busy}>
-              {verdict.allowed ? 'Keep it' : 'Close'}
+              {verdict.allowed || verdict.forceable ? 'Keep it' : 'Close'}
             </button>
           </div>
         </>
