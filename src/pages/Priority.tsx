@@ -11,6 +11,9 @@ import { subscribeProjects } from '../data/projects.js';
 import { subscribeContracts } from '../data/contracts.js';
 import { subscribeInvoices } from '../data/invoices.js';
 import { useCollection } from '../data/useCollection.js';
+import { usePortfolioDetail } from '../data/portfolio.js';
+import { pipelineInputs } from '../data/pipeline.js';
+import { rankMaintenance, readyToInvoice, termsByProject } from '../lib/cash-pipeline.js';
 import { computeProjectKpis } from '../lib/kpi.js';
 import { assessProjectRisk } from '../lib/risk.js';
 import { DEFAULT_PRIORITY_CONFIG, rankProjects, type PriorityInput } from '../lib/priority.js';
@@ -23,10 +26,38 @@ export function Priority() {
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const invoices = useCollection<Invoice>((d, e) => subscribeInvoices(d, e), [], 'load invoices');
 
-  const now = new Date();
-  const asOf = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  // The payment terms and stages live in subcollections, so they are read in the
+  // background. Until they arrive the board still draws, from the invoices alone.
+  const detail = usePortfolioDetail(projects.rows, contracts.rows, invoices.rows);
+
+  // Fixed for the life of the page. A new Date on every render would make every
+  // memo below recompute on every render.
+  const asOf = useMemo(() => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  }, []);
+
+  const pipeline = useMemo(
+    () => pipelineInputs(contracts.rows, invoices.rows, detail),
+    [contracts.rows, invoices.rows, detail],
+  );
+  const ready = useMemo(
+    () => readyToInvoice(pipeline.contracts, pipeline.terms, pipeline.stages, pipeline.invoices, asOf),
+    [pipeline, asOf],
+  );
+  const maintenance = useMemo(
+    () => rankMaintenance(pipeline.contracts, pipeline.terms, pipeline.invoices, asOf, DEFAULT_PRIORITY_CONFIG),
+    [pipeline, asOf],
+  );
 
   const rows: PriorityRow[] = useMemo(() => {
+    // Each payment term is credited to ONE project — see `termsByProject`.
+    const termsOf = termsByProject(
+      projects.rows.map((p) => ({ id: p.id, contractId: p.contractId })),
+      pipeline.terms,
+      pipeline.stages,
+      new Set(ready.map((r) => r.termId)),
+    );
     const scored: (PriorityInput & { title: string; clientName: string })[] = projects.rows.map(
       (project) => {
         const contract = contracts.rows.find((c) => c.id === project.contractId) ?? null;
@@ -85,7 +116,7 @@ export function Priority() {
             dueDate: i.dueDate.at.toDate(),
             status: i.status,
           })),
-          milestones: [],
+          milestones: termsOf.get(project.id) ?? [],
           risk: assessProjectRisk({
             kpi,
             status: project.status,
@@ -102,13 +133,17 @@ export function Priority() {
 
     return rankProjects(scored, asOf, DEFAULT_PRIORITY_CONFIG).map((ranked) => {
       const source = scored.find((s) => s.projectId === ranked.projectId);
+      const mine = source?.milestones ?? [];
       return {
         ...ranked,
         title: source?.title ?? ranked.projectId,
         clientName: source?.clientName ?? '',
+        readyToInvoiceSantim: mine
+          .filter((m) => m.status === 'ready_to_invoice')
+          .reduce((a, m) => a + m.grossSantim, 0),
       };
     });
-  }, [projects.rows, contracts.rows, invoices.rows, asOf]);
+  }, [projects.rows, contracts.rows, invoices.rows, pipeline, ready, asOf]);
 
   const loading = projects.loading || contracts.loading || invoices.loading;
   const error = projects.error ?? contracts.error ?? invoices.error;
@@ -116,7 +151,7 @@ export function Priority() {
   if (error !== null) return <p className="error" role="alert">{error}</p>;
   if (loading) return <p className="muted">Loading…</p>;
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && maintenance.length === 0) {
     return (
       <>
         <h1>Priority</h1>
@@ -132,5 +167,13 @@ export function Priority() {
     );
   }
 
-  return <PriorityBoard rows={rows} horizonDays={DEFAULT_PRIORITY_CONFIG.horizonDays} />;
+  return (
+    <PriorityBoard
+      rows={rows}
+      horizonDays={DEFAULT_PRIORITY_CONFIG.horizonDays}
+      ready={ready}
+      maintenance={maintenance}
+      termsLoading={detail.loading}
+    />
+  );
 }

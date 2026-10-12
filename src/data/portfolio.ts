@@ -57,7 +57,37 @@ async function mapLimited<T, R>(items: readonly T[], limit: number, fn: (item: T
   return out;
 }
 
-export async function loadPortfolioDetail(
+/**
+ * A short memory of what was just read.
+ *
+ * Priority, the cash forecast and the dashboard all want the same hundreds of
+ * small reads, and somebody moving between them would pay for them three times in
+ * a minute. Thirty seconds is long enough to cover that and short enough that a
+ * receipt recorded a moment ago shows up on the next page.
+ */
+const CACHE_MS = 30_000;
+const recent = new Map<string, { at: number; detail: Promise<PortfolioDetail> }>();
+
+export function loadPortfolioDetail(
+  projects: readonly WithId<Project>[],
+  contracts: readonly WithId<Contract>[],
+  invoices: readonly WithId<Invoice>[],
+): Promise<PortfolioDetail> {
+  const key = [
+    projects.map((p) => p.id).join(','),
+    contracts.map((c) => c.id).join(','),
+    invoices.filter((i) => i.status !== 'draft' && i.status !== 'void').map((i) => `${i.id}:${i.status}`).join(','),
+  ].join('|');
+  const hit = recent.get(key);
+  if (hit !== undefined && Date.now() - hit.at < CACHE_MS) return hit.detail;
+  const detail = readPortfolioDetail(projects, contracts, invoices);
+  recent.set(key, { at: Date.now(), detail });
+  // A failed read must not be served from memory for the next thirty seconds.
+  detail.catch(() => recent.delete(key));
+  return detail;
+}
+
+async function readPortfolioDetail(
   projects: readonly WithId<Project>[],
   contracts: readonly WithId<Contract>[],
   invoices: readonly WithId<Invoice>[],
