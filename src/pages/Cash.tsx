@@ -157,6 +157,9 @@ export function Cash() {
                     <strong>{labelOf(b)}</strong>
                     {altOf(b) !== null && <span className="muted"> · {altOf(b)}</span>}
                     {BUCKET_NOTE[b.key] !== '' && <><br /><span className="muted">{BUCKET_NOTE[b.key]}</span></>}
+                    {b.key === 'undated' && bucketTotal(b) > 0 && (
+                      <> <Link to="/payment-dates" className="no-print">Date them together →</Link></>
+                    )}
                   </td>
                   <td className="num" data-label="To collect">{money(b.collectSantim)}</td>
                   <td className="num" data-label="To bill">{money(b.billSantim)}</td>

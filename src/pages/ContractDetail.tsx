@@ -24,6 +24,8 @@ import { RelatedList, type RelatedItem } from '../components/RelatedList.js';
 import { ServiceConversionForm } from '../components/ServiceConversionForm.js';
 import { RenewalForm } from '../components/RenewalForm.js';
 import { TermScheduleForm, type StageChoice } from '../components/TermScheduleForm.js';
+import { BulkDateForm } from '../components/BulkDateForm.js';
+import type { BulkTerm } from '../lib/term-bulk.js';
 import { termScheduleRights } from '../lib/milestones.js';
 import { StatusChip } from '../components/StatusSelect.js';
 import { describeMake } from '../lib/lift-spec.js';
@@ -40,6 +42,7 @@ type Editing =
   | { kind: 'convert' }
   | { kind: 'renew' }
   | { kind: 'term'; row: WithId<PaymentMilestone> }
+  | { kind: 'bulk' }
   | { kind: 'project'; row: WithId<Project> }
   | { kind: 'unit'; row: WithId<ElevatorUnit> };
 
@@ -48,6 +51,8 @@ export function ContractDetail() {
   const { user, role } = useAuth();
   const navigate = useNavigate();
   const [editing, setEditing] = useState<Editing | null>(null);
+  /** Payment terms ticked for dating together. */
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients');
@@ -228,6 +233,20 @@ export function ContractDetail() {
           {editing.kind === 'convert' && (
             <ServiceConversionForm contract={contract} uid={user.uid} onDone={() => setEditing(null)} />
           )}
+          {editing.kind === 'bulk' && (
+            <BulkDateForm
+              terms={terms.rows.filter((t) => picked.has(t.id)).map((t): BulkTerm => ({
+                contractId: contract.id, termId: t.id, seq: t.seq, name: t.name, status: t.status,
+                grossSantim: t.grossSantim, dueDate: t.dueDate?.at.toDate() ?? null,
+              }))}
+              labels={new Map(terms.rows.map((t) => [t.id, `${contract.contractNo} · ${t.name}`]))}
+              uid={user.uid}
+              onDone={(saved) => {
+                setEditing(null);
+                if (saved) setPicked(new Set());
+              }}
+            />
+          )}
           {editing.kind === 'term' && (
             <TermScheduleForm
               contractId={contract.id}
@@ -299,6 +318,26 @@ export function ContractDetail() {
           A term is ready to invoice when its date arrives or the stage that releases it is complete. A
           term with neither is never flagged — set one with Schedule.
         </p>
+        {editableContract && terms.rows.some((t) => termScheduleRights(t.status).date) && (
+          <div className="form-actions no-print">
+            <button
+              type="button"
+              onClick={() =>
+                setPicked(new Set(terms.rows.filter((t) => termScheduleRights(t.status).date && t.dueDate === null).map((t) => t.id)))
+              }
+            >
+              Select every undated term
+            </button>
+            {picked.size > 0 && (
+              <>
+                <button type="button" className="primary" onClick={() => setEditing({ kind: 'bulk' })}>
+                  Date {picked.size} selected
+                </button>
+                <button type="button" onClick={() => setPicked(new Set())}>Clear</button>
+              </>
+            )}
+          </div>
+        )}
         {terms.loading ? (
           <p className="muted">Loading…</p>
         ) : terms.rows.length === 0 ? (
@@ -308,6 +347,7 @@ export function ContractDetail() {
             <table className="milestone-table">
               <thead>
                 <tr>
+                  {editableContract && <th scope="col"><span className="visually-hidden">Select</span></th>}
                   <th scope="col">#</th>
                   <th scope="col">Term</th>
                   <th scope="col">Due</th>
@@ -321,6 +361,25 @@ export function ContractDetail() {
               <tbody>
                 {terms.rows.map((t) => (
                   <tr key={t.id}>
+                    {editableContract && (
+                      <td data-label="Select">
+                        {termScheduleRights(t.status).date ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${t.name}`}
+                            checked={picked.has(t.id)}
+                            onChange={() =>
+                              setPicked((current) => {
+                                const next = new Set(current);
+                                if (next.has(t.id)) next.delete(t.id);
+                                else next.add(t.id);
+                                return next;
+                              })
+                            }
+                          />
+                        ) : null}
+                      </td>
+                    )}
                     <td data-label="#">{t.seq}</td>
                     <td data-label="Term">{t.name}</td>
                     <td data-label="Due">{t.dueDate === null ? <span className="muted">—</span> : <DualDateText value={t.dueDate} />}</td>

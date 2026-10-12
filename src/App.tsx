@@ -45,6 +45,7 @@ const CeoReport = lazy(() => import('./pages/CeoReport.js').then((m) => ({ defau
 const Import = lazy(() => import('./pages/Import.js').then((m) => ({ default: m.Import })));
 const ClientDetail = lazy(() => import('./pages/ClientDetail.js').then((m) => ({ default: m.ClientDetail })));
 const ContractDetail = lazy(() => import('./pages/ContractDetail.js').then((m) => ({ default: m.ContractDetail })));
+const PaymentDates = lazy(() => import('./pages/PaymentDates.js').then((m) => ({ default: m.PaymentDates })));
 const Cash = lazy(() => import('./pages/Cash.js').then((m) => ({ default: m.Cash })));
 const Archive = lazy(() => import('./pages/Archive.js').then((m) => ({ default: m.Archive })));
 const People = lazy(() => import('./pages/People.js').then((m) => ({ default: m.People })));
@@ -188,6 +189,14 @@ export function App() {
               element={
                 <RequireCapability capability="viewFinancials">
                   <Finance />
+                </RequireCapability>
+              }
+            />
+            <Route
+              path="payment-dates"
+              element={
+                <RequireCapability capability="manageContracts">
+                  <PaymentDates />
                 </RequireCapability>
               }
             />

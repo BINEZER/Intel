@@ -118,6 +118,13 @@ async function readPortfolioDetail(
 export interface PortfolioDetailState extends PortfolioDetail {
   loading: boolean;
   error: string | null;
+  /** Read it again now, ignoring what was remembered. For after a change. */
+  reload: () => void;
+}
+
+/** Forget what was read, so the next read goes to the database. */
+export function forgetPortfolioDetail(): void {
+  recent.clear();
 }
 
 /**
@@ -135,6 +142,11 @@ export function usePortfolioDetail(
   const [state, setState] = useState<PortfolioDetail>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bump, setBump] = useState(0);
+  const reload = () => {
+    forgetPortfolioDetail();
+    setBump((n) => n + 1);
+  };
 
   const key = [
     projects.map((p) => p.id).join(','),
@@ -169,7 +181,7 @@ export function usePortfolioDetail(
     // The id list is the real dependency; the arrays themselves are new objects
     // on every snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, bump]);
 
-  return { ...state, loading, error };
+  return { ...state, loading, error, reload };
 }
