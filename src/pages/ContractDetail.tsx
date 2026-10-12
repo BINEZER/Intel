@@ -13,7 +13,7 @@ import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
 import { subscribeContracts, subscribeMilestones } from '../data/contracts.js';
 import { subscribeInvoicesForContract } from '../data/invoices.js';
-import { subscribeProjects } from '../data/projects.js';
+import { getPhases, subscribeProjects } from '../data/projects.js';
 import { subscribeUnits } from '../data/units.js';
 import { useCollection } from '../data/useCollection.js';
 import type { WithId } from '../data/repository.js';
@@ -23,6 +23,8 @@ import { DualDateText } from '../components/DualDateInput.js';
 import { RelatedList, type RelatedItem } from '../components/RelatedList.js';
 import { ServiceConversionForm } from '../components/ServiceConversionForm.js';
 import { RenewalForm } from '../components/RenewalForm.js';
+import { TermScheduleForm, type StageChoice } from '../components/TermScheduleForm.js';
+import { termScheduleRights } from '../lib/milestones.js';
 import { StatusChip } from '../components/StatusSelect.js';
 import { describeMake } from '../lib/lift-spec.js';
 import { formatETB } from '../lib/money.js';
@@ -37,6 +39,7 @@ type Editing =
   | { kind: 'contract' }
   | { kind: 'convert' }
   | { kind: 'renew' }
+  | { kind: 'term'; row: WithId<PaymentMilestone> }
   | { kind: 'project'; row: WithId<Project> }
   | { kind: 'unit'; row: WithId<ElevatorUnit> };
 
@@ -77,6 +80,28 @@ export function ContractDetail() {
         u.maintenanceContractId === contractId,
     );
   }, [units.rows, myProjects, contractId]);
+
+  /*
+   * The stages a payment term can be tied to: those of this contract's projects.
+   * Loaded once per set of projects rather than subscribed — they change when
+   * somebody edits the project, not while this page is open.
+   */
+  const [stages, setStages] = useState<StageChoice[]>([]);
+  const projectKey = myProjects.map((p) => p.id).join(',');
+  useEffect(() => {
+    let live = true;
+    void Promise.all(
+      myProjects.map(async (project) =>
+        (await getPhases(project.id)).map((phase) => ({ id: phase.id, label: `${project.projectNo} · ${phase.name}` })),
+      ),
+    )
+      .then((groups) => { if (live) setStages(groups.flat()); })
+      .catch(() => { if (live) setStages([]); });
+    return () => { live = false; };
+    // The ids are the real dependency; `myProjects` is a new array every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey]);
+  const stageLabel = new Map(stages.map((s) => [s.id, s.label]));
 
   // Close an open form when the contract it was opened for disappears (deleted).
   useEffect(() => {
@@ -203,6 +228,15 @@ export function ContractDetail() {
           {editing.kind === 'convert' && (
             <ServiceConversionForm contract={contract} uid={user.uid} onDone={() => setEditing(null)} />
           )}
+          {editing.kind === 'term' && (
+            <TermScheduleForm
+              contractId={contract.id}
+              term={editing.row}
+              stages={stages}
+              uid={user.uid}
+              onDone={() => setEditing(null)}
+            />
+          )}
           {editing.kind === 'renew' && (
             <RenewalForm
               contract={contract}
@@ -261,6 +295,10 @@ export function ContractDetail() {
 
       <section className="card">
         <h2>Payment schedule</h2>
+        <p className="muted">
+          A term is ready to invoice when its date arrives or the stage that releases it is complete. A
+          term with neither is never flagged — set one with Schedule.
+        </p>
         {terms.loading ? (
           <p className="muted">Loading…</p>
         ) : terms.rows.length === 0 ? (
@@ -274,8 +312,10 @@ export function ContractDetail() {
                   <th scope="col">Term</th>
                   <th scope="col">Due</th>
                   <th scope="col">With VAT</th>
+                  <th scope="col">Released by</th>
                   <th scope="col">Received</th>
                   <th scope="col">Status</th>
+                  {editableContract && <th scope="col">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -285,10 +325,32 @@ export function ContractDetail() {
                     <td data-label="Term">{t.name}</td>
                     <td data-label="Due">{t.dueDate === null ? <span className="muted">—</span> : <DualDateText value={t.dueDate} />}</td>
                     <td data-label="With VAT" className="num">{formatETB(t.grossSantim, { withSymbol: false })}</td>
+                    <td data-label="Released by">
+                      {t.phaseId === undefined ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        stageLabel.get(t.phaseId) ?? <span className="muted">a stage that no longer exists</span>
+                      )}
+                    </td>
                     <td data-label="Received" className="num">
                       {formatETB(t.status === 'paid' ? t.grossSantim : (t.receivedGrossSantim ?? 0), { withSymbol: false })}
                     </td>
                     <td data-label="Status">{t.status.replace(/_/g, ' ')}</td>
+                    {editableContract && (
+                      <td data-label="Actions">
+                        {termScheduleRights(t.status).date ? (
+                          <button
+                            type="button"
+                            aria-label={`Schedule ${t.name}`}
+                            onClick={() => setEditing({ kind: 'term', row: t })}
+                          >
+                            Schedule
+                          </button>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
