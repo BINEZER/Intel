@@ -56,6 +56,7 @@ const NAV: NavGroup[] = [
     label: 'Money',
     items: [
       { to: '/finance', label: 'Finance', capability: 'viewFinancials' },
+      { to: '/cash', label: 'Cash forecast', capability: 'viewFinancials' },
       { to: '/collections', label: 'Collections', capability: 'viewFinancials' },
       { to: '/payouts', label: 'Payouts', capability: 'viewFinancials' },
       { to: '/reports', label: 'Reports', capability: 'viewFinancials' },

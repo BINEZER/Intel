@@ -23,9 +23,11 @@
 import { daysBetween } from './kpi.js';
 import { formatETB } from './money.js';
 import { isClosedProject } from './status.js';
+import { describeReady, type ReadyItem } from './cash-pipeline.js';
 
 export type TaskKind =
   | 'collect'
+  | 'invoice'
   | 'stage_overdue'
   | 'stage_due'
   | 'contract_expiring'
@@ -106,6 +108,11 @@ export interface TodayInputs {
   contracts: readonly TodayContract[];
   units: readonly TodayUnit[];
   vouchers: readonly TodayVoucher[];
+  /**
+   * Payment terms that can be invoiced now and have not been. Optional because
+   * they live in subcollections and arrive after the rest of the page has drawn.
+   */
+  readyToInvoice?: readonly ReadyItem[];
   /** Decisions the lifecycle engine is waiting on. */
   decisions: readonly { id: string; subject: string; href: string }[];
   /** Anything further out than this is not today's problem. */
@@ -241,6 +248,35 @@ export function buildToday(inputs: TodayInputs): TodayTask[] {
     });
   }
 
+  // --- money we have earned and not yet asked for -----------------------------
+  //
+  // One task per CONTRACT, not per term. A maintenance agreement that has gone
+  // three months unbilled is one thing to do — raise the invoices — and three
+  // identical lines would bury everything else on the list.
+
+  const readyByContract = new Map<string, ReadyItem[]>();
+  for (const item of inputs.readyToInvoice ?? []) {
+    readyByContract.set(item.contractId, [...(readyByContract.get(item.contractId) ?? []), item]);
+  }
+  for (const [contractId, items] of readyByContract) {
+    const first = items[0] as ReadyItem;
+    const late = Math.max(0, ...items.map((i) => i.daysPastDue ?? 0));
+    const total = items.reduce((a, i) => a + i.amountSantim, 0);
+    tasks.push({
+      id: `invoice-${contractId}`,
+      kind: 'invoice',
+      urgency: late > 0 ? 'overdue' : 'today',
+      subject: `${first.contractNo} · ${first.clientName}`,
+      action:
+        items.length === 1
+          ? `Raise the invoice for ${first.termName} — ${describeReady(first)}`
+          : `Raise ${items.length} invoices — ${items.slice(0, 3).map((i) => i.termName).join(', ')}${items.length > 3 ? '…' : ''} are ready`,
+      figure: formatETB(total),
+      href: `/contracts/${contractId}`,
+      daysRemaining: late > 0 ? -late : 0,
+    });
+  }
+
   // --- decisions -----------------------------------------------------------
 
   for (const decision of inputs.decisions) {
@@ -281,7 +317,7 @@ export function summariseToday(tasks: readonly TodayTask[]) {
     total: tasks.length,
     overdue: tasks.filter((t) => t.urgency === 'overdue').length,
     today: tasks.filter((t) => t.urgency === 'today').length,
-    money: tasks.filter((t) => t.kind === 'collect').length,
+    money: tasks.filter((t) => t.kind === 'collect' || t.kind === 'invoice').length,
   };
 }
 

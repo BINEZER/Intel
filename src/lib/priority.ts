@@ -107,7 +107,14 @@ export function milestoneExpectedValue(
   asOf: Date,
   horizonDays: number,
 ): number {
-  if (milestone.status === 'invoiced' || milestone.status === 'paid' || milestone.status === 'waived') {
+  // `part_paid` is already an invoice with a balance, so it is counted as a
+  // receivable. Counting the term as well would put the same money in two pools.
+  if (
+    milestone.status === 'invoiced' ||
+    milestone.status === 'part_paid' ||
+    milestone.status === 'paid' ||
+    milestone.status === 'waived'
+  ) {
     return 0;
   }
   if (milestone.status === 'ready_to_invoice') return milestone.grossSantim;

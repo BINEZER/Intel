@@ -32,6 +32,9 @@ import { subscribeTechnicians } from '../data/technicians.js';
 import { subscribeUnits } from '../data/units.js';
 import { assessPortfolioRisk } from '../data/project-risk.js';
 import { useCollection } from '../data/useCollection.js';
+import { usePortfolioDetail } from '../data/portfolio.js';
+import { pipelineInputs } from '../data/pipeline.js';
+import { readyToInvoice } from '../lib/cash-pipeline.js';
 import { buildAlerts, type AlertProject } from '../lib/alerts.js';
 import { buildDashboard, type DashboardModel, type MoneyFigure, type SetupStep } from '../lib/dashboard.js';
 import { chaseState, type ChaseInvoice } from '../lib/collection-chase.js';
@@ -62,6 +65,10 @@ export function Dashboard() {
   const subcontractors = useCollection<Subcontractor>((d, e) => subscribeSubcontractors(d, e), [], 'load subcontractors');
   const technicians = useCollection<Technician>((d, e) => subscribeTechnicians(d, e), [], 'load technicians');
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
+  // Read in the BACKGROUND: the payment terms live in subcollections, and the
+  // dashboard must not wait for them. The list below draws at once and gains its
+  // "raise the invoice" lines when they arrive.
+  const detail = usePortfolioDetail(projects.rows, contracts.rows, invoices.rows);
 
   const asOf = useMemo(() => new Date(), []);
 
@@ -198,6 +205,11 @@ export function Dashboard() {
     vouchers.rows, subcontractors.rows, technicians.rows, units.rows, asOf,
   ]);
 
+  const pipeline = useMemo(
+    () => pipelineInputs(contracts.rows, invoices.rows, detail),
+    [contracts.rows, invoices.rows, detail],
+  );
+
   /** What to actually do today, and where every live job is. */
   const work = useMemo(() => {
     const decisions = contracts.rows
@@ -224,6 +236,9 @@ export function Dashboard() {
         balanceGrossSantim: i.balanceGrossSantim,
         status: i.status,
       })),
+      readyToInvoice: readyToInvoice(
+        pipeline.contracts, pipeline.terms, pipeline.stages, pipeline.invoices, asOf,
+      ),
       // One entry per project, from the denormalised current stage — no fan-out
       // to the phase subcollections, which would be a query per project.
       stages: projects.rows.flatMap((p) =>
@@ -282,7 +297,7 @@ export function Dashboard() {
     );
 
     return { tasks, board };
-  }, [asOf, invoices.rows, projects.rows, contracts.rows, units.rows, vouchers.rows]);
+  }, [asOf, invoices.rows, projects.rows, contracts.rows, units.rows, vouchers.rows, pipeline]);
 
   /** The month, drawn. Three charts, three different questions. */
   const charts = useMemo(

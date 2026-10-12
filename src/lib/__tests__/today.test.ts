@@ -305,3 +305,55 @@ describe('the job board', () => {
     expect(board.some((c) => c.key === UNTRACKED_KEY)).toBe(false);
   });
 });
+
+describe('money earned and not yet invoiced', () => {
+  const ready = (over = {}) => ({
+    termId: 't1',
+    contractId: 'k1',
+    contractNo: 'C-1-SVC',
+    contractTitle: 'Service',
+    clientName: 'Sheger Mall',
+    termName: 'Month 4',
+    amountSantim: 977_500,
+    reason: 'due_date' as const,
+    daysPastDue: 3,
+    maintenance: true,
+    ...over,
+  });
+
+  it('asks for the invoice, with the amount and why it is ready', () => {
+    const [task] = buildToday(input({ readyToInvoice: [ready()] }));
+    expect(task?.kind).toBe('invoice');
+    expect(task?.subject).toBe('C-1-SVC · Sheger Mall');
+    expect(task?.action).toBe('Raise the invoice for Month 4 — it fell due 3 days ago');
+    expect(task?.figure).toBe('ETB 9,775.00');
+    expect(task?.href).toBe('/contracts/k1');
+  });
+
+  it('treats billing that is already late as overdue, and billing that is merely ready as today', () => {
+    expect(buildToday(input({ readyToInvoice: [ready()] }))[0]?.urgency).toBe('overdue');
+    const stageDone = ready({ reason: 'stage_complete', daysPastDue: null, termName: 'Handover', maintenance: false });
+    const [task] = buildToday(input({ readyToInvoice: [stageDone] }));
+    expect(task?.urgency).toBe('today');
+    expect(task?.action).toBe('Raise the invoice for Handover — its stage is complete');
+  });
+
+  it('makes ONE task for a contract with several months unbilled, not one per month', () => {
+    const tasks = buildToday(input({
+      readyToInvoice: [ready({ termId: 'a', termName: 'Month 1', daysPastDue: 70 }), ready({ termId: 'b', termName: 'Month 2', daysPastDue: 40 }), ready({ termId: 'c', termName: 'Month 3', daysPastDue: 10 })],
+    }));
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]?.action).toBe('Raise 3 invoices — Month 1, Month 2, Month 3 are ready');
+    expect(tasks[0]?.figure).toBe('ETB 29,325.00');
+    // sorted by how long the oldest has waited
+    expect(tasks[0]?.daysRemaining).toBe(-70);
+  });
+
+  it('is optional: the list is unchanged until the terms have arrived', () => {
+    expect(buildToday(input())).toEqual([]);
+  });
+
+  it('counts as money in the summary', () => {
+    expect(summariseToday(buildToday(input({ readyToInvoice: [ready()] }))).money).toBe(1);
+  });
+});
