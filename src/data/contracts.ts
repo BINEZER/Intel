@@ -187,6 +187,39 @@ export async function setMilestoneSchedule(
   await updateDoc(doc(db, milestonePath(contractId), milestoneId), update);
 }
 
+/**
+ * Date many payment terms in one go.
+ *
+ * Written in batches of 400, each atomic. A failure part-way leaves the earlier
+ * batches saved, so the error says how many were — and because setting a date is
+ * idempotent, running it again simply finishes the rest.
+ */
+export async function setMilestoneDates(
+  changes: readonly { contractId: string; termId: string; dueDate: DualDate }[],
+  uid: string,
+): Promise<void> {
+  const SIZE = 400;
+  let saved = 0;
+  try {
+    for (let i = 0; i < changes.length; i += SIZE) {
+      const batch = writeBatch(db);
+      for (const change of changes.slice(i, i + SIZE)) {
+        batch.update(doc(db, milestonePath(change.contractId), change.termId), {
+          dueDate: change.dueDate,
+          ...stampUpdate(uid),
+        });
+      }
+      await batch.commit();
+      saved += Math.min(SIZE, changes.length - i);
+    }
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : 'unknown error';
+    throw new Error(
+      `${saved} of ${changes.length} dates were saved before it stopped (${reason}). Run it again to finish the rest.`,
+    );
+  }
+}
+
 export async function createContract(
   input: ContractInput,
   shares: readonly MilestoneShare[],
