@@ -187,3 +187,42 @@ export function equalShares(count: number, names?: readonly string[]): Milestone
     shareBps,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Scheduling a term after the contract exists
+// ---------------------------------------------------------------------------
+
+export interface TermScheduleRights {
+  /** The date it falls due may be set or cleared. */
+  date: boolean;
+  /** The stage whose completion releases it may be chosen. */
+  stage: boolean;
+  /** Why not, in a sentence, where neither may be changed. */
+  reason: string | null;
+}
+
+/**
+ * What may still be changed about a payment term.
+ *
+ * A term somebody has not yet billed can be scheduled freely: a date and a stage
+ * are what make it show up as ready to invoice, and are the whole point of being
+ * able to set them. A term already billed keeps its date editable (a client may
+ * agree a later date) but a stage means nothing to it any more — the work was
+ * done, the invoice is out. A settled term is history and is not touched.
+ */
+export function termScheduleRights(status: string): TermScheduleRights {
+  switch (status) {
+    case 'pending':
+    case 'ready_to_invoice':
+      return { date: true, stage: true, reason: null };
+    case 'invoiced':
+    case 'part_paid':
+      return { date: true, stage: false, reason: null };
+    default:
+      return {
+        date: false,
+        stage: false,
+        reason: status === 'waived' ? 'This term was waived.' : 'This term has been paid.',
+      };
+  }
+}

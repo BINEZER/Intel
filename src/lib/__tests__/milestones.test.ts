@@ -170,3 +170,22 @@ describe('equalShares', () => {
     expect(() => equalShares(0)).toThrow(/positive integer/);
   });
 });
+
+import { termScheduleRights } from '../milestones.js';
+
+describe('termScheduleRights', () => {
+  it('lets an unbilled term take both a date and a stage', () => {
+    for (const status of ['pending', 'ready_to_invoice']) {
+      expect(termScheduleRights(status)).toEqual({ date: true, stage: true, reason: null });
+    }
+  });
+  it('lets a billed term be re-dated but not re-tied to a stage', () => {
+    for (const status of ['invoiced', 'part_paid']) {
+      expect(termScheduleRights(status)).toMatchObject({ date: true, stage: false });
+    }
+  });
+  it('leaves a settled term alone, and says why', () => {
+    expect(termScheduleRights('paid')).toEqual({ date: false, stage: false, reason: 'This term has been paid.' });
+    expect(termScheduleRights('waived').reason).toBe('This term was waived.');
+  });
+});

@@ -168,6 +168,25 @@ export async function setMilestoneStage(
   });
 }
 
+/**
+ * Set when a payment term falls due and which stage releases it.
+ *
+ * Either may be left out to be left as it is; `null` clears it. These are the two
+ * facts that make a term show up as ready to invoice, so they are changed here on
+ * their own, without re-saving the contract and the risk of touching its money.
+ */
+export async function setMilestoneSchedule(
+  contractId: string,
+  milestoneId: string,
+  change: { dueDate?: DualDate | null; phaseId?: string | null },
+  uid: string,
+): Promise<void> {
+  const update: Record<string, unknown> = { ...stampUpdate(uid) };
+  if (change.dueDate !== undefined) update['dueDate'] = change.dueDate;
+  if (change.phaseId !== undefined) update['phaseId'] = change.phaseId === null ? deleteField() : change.phaseId;
+  await updateDoc(doc(db, milestonePath(contractId), milestoneId), update);
+}
+
 export async function createContract(
   input: ContractInput,
   shares: readonly MilestoneShare[],
