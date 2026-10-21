@@ -2,7 +2,7 @@
  * Project list and creation.
  */
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   PROJECT_TYPES,
   isElevatorWork,
@@ -267,18 +267,7 @@ export function Projects() {
 
               {editable && user !== null && (
                 <div className="card-actions">
-                  <div className="field inline">
-                    <label htmlFor={`p-status-${project.id}`}>Status</label>
-                    <StatusSelect
-                      compact
-                      kind="project"
-                      id={`p-status-${project.id}`}
-                      value={project.status}
-                      onChange={(value) => {
-                        void updateProjectStatus(project.id, value as Project['status'], user.uid);
-                      }}
-                    />
-                  </div>
+                  <ProjectStatusControl project={project} uid={user.uid} />
                   <button type="button" onClick={() => setEditing(project)}>Edit</button>
                   <DeleteButton
                     target={{ kind: 'project', id: project.id, name: project.projectNo }}
@@ -290,6 +279,52 @@ export function Projects() {
         })}
       </div>
     </>
+  );
+}
+
+
+/**
+ * A status change is a small, frequent action, so it should save in place
+ * without opening the full project form and clearly report failure.
+ */
+function ProjectStatusControl({ project, uid }: { project: WithId<Project>; uid: string }) {
+  const [selected, setSelected] = useState<Project['status']>(project.status);
+  const [saved, setSaved] = useState(false);
+  const { busy, error, run } = useAsyncAction('update project status');
+
+  // Keep the picker aligned with the live Firestore record, including changes
+  // made by another manager.
+  useEffect(() => {
+    setSelected(project.status);
+    setSaved(false);
+  }, [project.status]);
+
+  async function saveStatus(value: string) {
+    const next = value as Project['status'];
+    setSelected(next);
+    setSaved(false);
+    const result = await run(async () => {
+      await updateProjectStatus(project.id, next, uid);
+      return true;
+    });
+    if (result !== null) setSaved(true);
+  }
+
+  return (
+    <div className="field inline project-status-control">
+      <label htmlFor={`p-status-${project.id}`}>Status</label>
+      <StatusSelect
+        compact
+        kind="project"
+        id={`p-status-${project.id}`}
+        value={selected}
+        disabled={busy}
+        onChange={(value) => void saveStatus(value)}
+      />
+      {busy && <span className="muted" role="status">Saving…</span>}
+      {!busy && saved && <span className="success-text" role="status">Saved</span>}
+      {error && <span className="error" role="alert">{error}</span>}
+    </div>
   );
 }
 

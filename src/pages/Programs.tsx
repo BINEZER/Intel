@@ -98,7 +98,10 @@ export function Programs() {
   const [editing, setEditing] = useState<WithId<Program> | 'new' | null>(null);
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
   const [sort, setSort] = useState<SortState>({ key: null, direction: 'asc' });
-  const { rows, loading, error } = usePrograms();
+  const { rows, unassigned, loading, error } = usePrograms();
+  const [targetByProject, setTargetByProject] = useState<Record<string, string>>({});
+  const { busy: assigning, error: assignError, run: runAssign } = useAsyncAction('assign project to program');
+  const activePrograms = rows.filter((row) => row.program.status === 'active');
 
   const columns: ColumnSpec<(typeof ranked)[number]>[] = useMemo(
     () => [
@@ -167,10 +170,69 @@ export function Programs() {
         />
       )}
 
+      {unassigned.length > 0 && (
+        <section className="card">
+          <h2>Projects not grouped yet <span className="muted">({unassigned.length})</span></h2>
+          <p className="muted">
+            Programs are optional. Use them when several projects are one customer commitment
+            (for example, multiple lifts in one building). Assign them here without opening each
+            project.
+          </p>
+          {assignError && <p className="error" role="alert">{assignError}</p>}
+          {activePrograms.length === 0 ? (
+            <p className="muted">Create an active program first, then you can group projects here.</p>
+          ) : (
+            <ul className="pick-list">
+              {unassigned.map((project) => (
+                <li key={project.id}>
+                  <span>
+                    <Link to={`/projects/${project.id}`}>{project.projectNo} · {project.title}</Link>
+                    <span className="muted"> · {project.clientName}</span>
+                  </span>
+                  <div className="field inline-field">
+                    <label className="sr-only" htmlFor={`assign-program-${project.id}`}>Program for {project.title}</label>
+                    <select
+                      id={`assign-program-${project.id}`}
+                      value={targetByProject[project.id] ?? ''}
+                      disabled={assigning}
+                      onChange={(event) => setTargetByProject((old) => ({ ...old, [project.id]: event.target.value }))}
+                    >
+                      <option value="">Choose program…</option>
+                      {activePrograms.map(({ program }) => (
+                        <option key={program.id} value={program.id}>{program.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={assigning || !targetByProject[project.id]}
+                      onClick={() => {
+                        const target = targetByProject[project.id];
+                        if (!target || !user) return;
+                        void runAssign(async () => {
+                          await setProjectProgram(project.id, target, user.uid);
+                          setTargetByProject((old) => {
+                            const next = { ...old };
+                            delete next[project.id];
+                            return next;
+                          });
+                          return true;
+                        });
+                      }}
+                    >
+                      {assigning ? 'Saving…' : 'Add'}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {sorted.length === 0 && !loading ? (
         <p className="muted">
-          No programs yet. Create one, then set a project's program on the project form to group
-          them.
+          No programs yet. Create one only if you need to group related projects into one customer
+          commitment; otherwise, manage each job directly from Projects.
         </p>
       ) : (
         <ul className="program-list">
