@@ -486,7 +486,15 @@ export function ProjectForm({
         <div className="form-grid">
           <div className="field">
             <label htmlFor="p-client">Client <span className="req" aria-hidden="true">*</span></label>
-            <select id="p-client" required value={clientId} onChange={(e) => setClientId(e.target.value)}>
+            <select id="p-client" required value={clientId} onChange={(e) => {
+              const nextClientId = e.target.value;
+              setClientId(nextClientId);
+              if (contractId !== '' && !contractRows.some((item) => item.id === contractId && item.clientId === nextClientId)) {
+                setContractId('');
+                if (!startDateEdited) setPlannedStart(null);
+                if (!endDateEdited) setPlannedEnd(null);
+              }
+            }}>
               <option value="">Select a client…</option>
               {clientChoices(clients, currentClient).map((c) => (
                 <option key={c.id} value={c.id}>{clientOptionLabel(c)}</option>
