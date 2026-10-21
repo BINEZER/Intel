@@ -341,7 +341,7 @@ describe('buildImportPlan', () => {
   it('summarises what will be written', () => {
     const summary = planSummary(buildImportPlan(workbook(), OPTS));
     expect(summary).toMatchObject({
-      clients: 2, programs: 1, contracts: 2, projects: 3, units: 2, contractsWithPayments: 1,
+      clients: 2, projectGroups: 1, contracts: 2, projects: 3, units: 2, contractsWithPayments: 1,
     });
     expect(summary.contractValueSantim).toBe(600_237_366); // 4,642,074.42 + 1,360,299.24
     expect(summary.skipped).toBeGreaterThan(0);
