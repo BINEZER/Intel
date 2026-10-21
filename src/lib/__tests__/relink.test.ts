@@ -62,12 +62,12 @@ describe('which links may be emptied', () => {
     expect(canClear('contract.client')).toBe(false);
   });
 
-  it('lets the optional ones go', () => {
-    // Variations and warranty work genuinely have no contract; we service
-    // plenty of lifts we did not install.
+  it('lets optional links go, but keeps every lift linked to a project', () => {
+    // Variations and warranty work genuinely have no contract; every lift
+    // must nevertheless remain associated with a project.
     expect(canClear('project.contract')).toBe(true);
     expect(canClear('project.program')).toBe(true);
-    expect(canClear('unit.project')).toBe(true);
+    expect(canClear('unit.project')).toBe(false);
     expect(canClear('unit.contract')).toBe(true);
   });
 

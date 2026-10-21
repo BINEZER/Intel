@@ -87,8 +87,10 @@ export function Archive() {
         <div>
           <h1>Archive</h1>
           <p className="muted">
-            Take a finished installation out of the app once it has been saved to your own files. Nothing
-            here is automatic: you choose the job, save the backup, then confirm.
+            Projects are archived together with their installation contract as one backup package. First mark
+            every project under that contract Completed, then mark the contract Completed and resolve the
+            warranty/service decision. When it becomes eligible below, open it, save the backup to your own
+            files, and confirm removal. Nothing is deleted automatically.
           </p>
         </div>
       </div>

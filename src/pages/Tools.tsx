@@ -37,6 +37,7 @@ export function Tools() {
             <Link className="tool-link" to={item.to} key={item.to}>
               <strong>{item.label}</strong>
               <span className="muted">{item.description}</span>
+              <span aria-hidden="true">Open →</span>
             </Link>
           ))}
         </div>

@@ -702,7 +702,7 @@ export function UnitForm({
   const [status, setStatus] = useState<ElevatorUnit['status']>(initial?.status ?? 'in_service');
   const { busy, error, run } = useAsyncAction(initial === null ? 'add this lift' : 'save this lift');
 
-  const ready = tag.trim() !== '' && siteName.trim() !== '' && clientId !== '';
+  const ready = tag.trim() !== '' && siteName.trim() !== '' && clientId !== '' && installedBy !== '';
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -803,13 +803,14 @@ export function UnitForm({
               onChange={(e) => setSpeedMps(e.target.value)} />
           </div>
           <div className="field">
-            <label htmlFor="u-project">Installed by project</label>
+            <label htmlFor="u-project">Linked project <span className="req" aria-hidden="true">*</span></label>
             <select
               id="u-project"
+              required
               value={installedBy}
               onChange={(e) => setInstalledBy(e.target.value)}
             >
-              <option value="">Not recorded</option>
+              <option value="">Select a project…</option>
               {/* This client's projects first — a picker of all 163 invites
                   attaching a lift to the wrong building. */}
               {projects
@@ -821,7 +822,7 @@ export function UnitForm({
                 ))}
             </select>
             <p className="field-hint">
-              The job that put this lift in. It is how a contract reaches its machines.
+              Every lift must belong to a project. Choose the project this lift is associated with.
             </p>
           </div>
           <div className="field">

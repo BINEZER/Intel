@@ -2490,3 +2490,36 @@ fieldset { min-width: 0; }
 /* Why a form would not submit. Sticky, so it is still on screen when the browser
    scrolls the offending field into view. */
 .form-blocked { position: sticky; top: .5rem; z-index: 6; margin: .5rem 0; padding: .6rem .8rem; border-radius: var(--radius-sm); background: #fdeceb; border-left: 4px solid #b42318; }
+
+
+/* Supporting tools are a visual directory, not a paragraph of inline links. */
+.tool-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 0.85rem;
+}
+.tool-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-height: 118px;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 12px);
+  background: var(--surface);
+  text-decoration: none;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.tool-link:hover,
+.tool-link:focus-visible {
+  border-color: var(--brand-blue, #4263eb);
+  background: var(--brand-blue-soft, #f4f7ff);
+}
+.tool-link strong { font-size: 1rem; }
+.tool-link > span:last-child {
+  margin-top: auto;
+  color: var(--brand-blue, #4263eb);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
