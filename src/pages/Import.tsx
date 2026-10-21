@@ -669,9 +669,9 @@ export function Import() {
               <KpiTile label="Clients" value={summary.clients} />
               <KpiTile label="Contracts" value={summary.contracts} />
               <KpiTile
-                label="Programs"
-                value={summary.programs}
-                detail={<span className="muted">agreements with several lifts</span>}
+                label="Project groups"
+                value={summary.projectGroups}
+                detail={<span className="muted">converted to parent/sub-projects</span>}
               />
               <KpiTile label="Projects" value={summary.projects} />
               <KpiTile
@@ -908,7 +908,6 @@ function DatesCorrected({
 
 /** Collection names as the app says them. */
 const LABEL: Record<string, string> = {
-  programs: 'Programs',
   contracts: 'Contracts',
   projects: 'Projects',
 };

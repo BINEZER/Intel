@@ -724,7 +724,6 @@ export function planIsEmpty(plan: ImportPlan): boolean {
   return (
     plan.clients.length === 0 &&
     plan.contracts.length === 0 &&
-    plan.programs.length === 0 &&
     plan.projects.length === 0 &&
     plan.units.length === 0 &&
     plan.technicians.length === 0 &&
@@ -1131,7 +1130,7 @@ export function planSummary(plan: ImportPlan) {
   const collected = plan.contracts.reduce((a, c) => a + (c.collectedSantim ?? 0), 0);
   return {
     clients: plan.clients.length,
-    programs: plan.programs.length,
+    projectGroups: plan.programs.length,
     contracts: plan.contracts.length,
     projects: plan.projects.length,
     units: plan.units.length,

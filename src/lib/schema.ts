@@ -371,19 +371,12 @@ export interface Project extends AuditFields {
    */
   contractId: string | null;
   /**
-   * The program this project belongs to, where it is part of something larger.
-   * A tower with four lifts is four projects and one commitment.
-   */
-  programId?: string | null;
-  /**
    * The project this one sits under.
    *
    * A tower is one job commercially and several jobs operationally — per block,
    * per lift, per phase — each with its own crew, stages and dates. A parent
    * holds the commitment; the children hold the work. A project may not be its
-   * own parent, and the tree is deliberately ONE level deep: a sub-project with
-   * sub-projects of its own is a program, and there is already a Programs page
-   * for that.
+   * own parent. Nested projects are the only project-grouping mechanism.
    */
   parentProjectId?: string | null;
   /** Which stage template it was created from. Stages are editable afterwards. */
@@ -853,32 +846,6 @@ export interface Technician extends AuditFields {
   /** Working minutes available per week, for the utilisation KPI. */
   contractedMinutesPerWeek: number;
   status: 'active' | 'on_leave' | 'inactive';
-}
-
-// ===========================================================================
-// programs/{programId} — projects that belong together
-// ===========================================================================
-
-/**
- * A program owns no money of its own. Every figure reported against it is the
- * sum of its projects, so it can never disagree with what is inside it.
- *
- * A tower with four lifts is usually four projects — separate contracts, crews
- * and invoices — and ONE commitment to one client. Reported separately they look
- * like four modest jobs; together they are the largest thing the company carries.
- */
-export interface Program extends AuditFields {
-  programNo: string;
-  name: string;
-  description: string;
-  /** A program may span clients (a developer with several buildings). */
-  clientId: string | null;
-  clientName: string | null;
-  kind: 'program' | 'portfolio' | 'framework';
-  status: 'active' | 'on_hold' | 'closed';
-  plannedStart: DualDate;
-  plannedEnd: DualDate;
-  ownerUid: string | null;
 }
 
 // ===========================================================================

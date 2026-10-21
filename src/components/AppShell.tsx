@@ -23,65 +23,35 @@ interface NavGroup {
 }
 
 /**
- * Seventeen destinations in one flat column is a list to be searched, not a menu
- * to be used. Grouped by the question being asked — what needs me today, what
- * are we building, where is the money, who is doing it — so finding a page is
- * recall rather than reading.
+ * Keep the sidebar to the few workflows used every day. Supporting tools live
+ * under More tools so users do not have to scan a long list to find core work.
  *
  * A group whose every item is hidden by role disappears with it, so a viewer
  * does not get an empty "Money" heading.
  */
 const NAV: NavGroup[] = [
   {
-    label: 'Today',
+    label: 'Work',
     items: [
       { to: '/', label: 'Dashboard', capability: 'read' },
-      { to: '/alerts', label: 'Alerts', capability: 'read' },
-      { to: '/follow-ups', label: 'Follow-ups', capability: 'read' },
       { to: '/priority', label: 'Priority', capability: 'read' },
-      { to: '/finish-next', label: 'Finish next', capability: 'read' },
-    ],
-  },
-  {
-    label: 'Delivery',
-    items: [
       { to: '/projects', label: 'Projects', capability: 'read' },
-      { to: '/programs', label: 'Programs', capability: 'read' },
       { to: '/units', label: 'Lifts', capability: 'read' },
-      { to: '/service', label: 'Service', capability: 'read' },
-      { to: '/boards', label: 'Boards', capability: 'useBoards' },
     ],
   },
   {
-    label: 'Money',
+    label: 'Commercial',
     items: [
-      { to: '/finance', label: 'Finance', capability: 'viewFinancials' },
-      { to: '/cash', label: 'Cash forecast', capability: 'viewFinancials' },
-      { to: '/payment-dates', label: 'Payment dates', capability: 'manageContracts' },
-      { to: '/collections', label: 'Collections', capability: 'viewFinancials' },
-      { to: '/payouts', label: 'Payouts', capability: 'viewFinancials' },
-      { to: '/reports', label: 'Reports', capability: 'viewFinancials' },
+      { to: '/collections', label: 'Receivables', capability: 'viewFinancials' },
     ],
   },
   {
-    label: 'People & partners',
+    label: 'Administration',
     items: [
-      { to: '/clients', label: 'Clients', capability: 'read' },
-      { to: '/people', label: 'People', capability: 'read' },
-      { to: '/contracts', label: 'Contracts', capability: 'read' },
-      { to: '/performance', label: 'Performance', capability: 'read' },
-      { to: '/incentives', label: 'Incentives', capability: 'read' },
+      { to: '/tools', label: 'More tools', capability: 'read' },
     ],
   },
-  {
-    label: 'Setup',
-    items: [
-      { to: '/import', label: 'Import data', capability: 'manageConfig' },
-      { to: '/archive', label: 'Archive', capability: 'archiveJobs' },
-      { to: '/settings', label: 'Settings', capability: 'manageConfig' },
-    ],
-  },
-];
+ ];
 
 /** Today in both calendars, for the header. */
 export function TodayBadge() {

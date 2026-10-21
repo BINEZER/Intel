@@ -68,17 +68,17 @@ describe('recognising the format', () => {
 describe('one row is one lift is one project', () => {
   it('makes a client, a contract, a project and a lift from one row', () => {
     const s = planSummary(buildElevatorPlan(book([lift()]), VAT));
-    expect(s).toMatchObject({ clients: 1, contracts: 1, projects: 1, units: 1, programs: 0 });
+    expect(s).toMatchObject({ clients: 1, contracts: 1, projects: 1, units: 1, projectGroups: 0 });
   });
 
-  it('makes a programme only once an agreement carries two lifts', () => {
+  it('groups projects when an agreement carries two lifts', () => {
     const one = planSummary(buildElevatorPlan(book([lift()]), VAT));
-    expect(one.programs).toBe(0);
+    expect(one.projectGroups).toBe(0);
 
     const two = planSummary(
       buildElevatorPlan(book([lift(), lift({ Elevator_ID: 'AGR-2024-001-L02', Lift_No: 2 })]), VAT),
     );
-    expect(two).toMatchObject({ programs: 1, projects: 2, contracts: 1 });
+    expect(two).toMatchObject({ projectGroups: 1, projects: 2, contracts: 1 });
   });
 
   it('pads the lift tag so LIFT-2 does not sort between LIFT-19 and LIFT-20', () => {

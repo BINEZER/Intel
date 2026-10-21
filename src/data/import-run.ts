@@ -38,7 +38,6 @@ import type {
   Contract,
   DualDate,
   ElevatorUnit,
-  Program,
   Project,
   Subcontractor,
   Technician,
@@ -61,7 +60,6 @@ const ID = {
   client: (key: string) => `im-c-${key}`,
   technician: (key: string) => `im-${key}`,
   subcontractor: (key: string) => `im-${key}`,
-  program: (key: string) => `im-g-${key}`,
   contract: (key: string) => `im-k-${key}`,
   project: (key: string) => `im-p-${key}`,
   unit: (key: string) => `im-u-${key}`,
@@ -197,10 +195,9 @@ export async function runImport(
     map[key] = (map[key] ?? 0) + 1;
   };
 
-  const [haveClients, havePrograms, haveContracts, haveProjects, haveUnits, haveTechnicians, haveSubcontractors] =
+  const [haveClients, haveContracts, haveProjects, haveUnits, haveTechnicians, haveSubcontractors] =
     await Promise.all([
       existingIds('clients'),
-      existingIds('programs'),
       existingIds('contracts'),
       existingIds('projects'),
       existingIds('units'),
@@ -210,7 +207,6 @@ export async function runImport(
 
   const total =
     plan.clients.length +
-    plan.programs.length +
     plan.contracts.length +
     plan.contracts.reduce(
       (a, c) => (haveContracts.has(ID.contract(c.key)) ? a : a + c.milestones.length),
@@ -224,6 +220,13 @@ export async function runImport(
   const queue = new BatchQueue(total, onProgress);
   const clientNameByKey = new Map(plan.clients.map((c) => [c.key, c.name]));
   const nameFor = (key: string, fallback: string) => clientNameByKey.get(key) ?? fallback;
+  // Legacy workbook groups become a project hierarchy, not a separate entity.
+  const projectRootByGroup = new Map<string, string>();
+  for (const project of plan.projects) {
+    if (project.programKey !== null && !projectRootByGroup.has(project.programKey)) {
+      projectRootByGroup.set(project.programKey, ID.project(project.key));
+    }
+  }
 
   // --- clients -------------------------------------------------------------
 
@@ -247,35 +250,6 @@ export async function runImport(
     await queue.add((batch) =>
       batch.set(
         doc(db, 'clients', id),
-        { ...payload, ...(exists ? stampUpdate(uid) : stampCreate(uid)) },
-        { merge: exists },
-      ),
-    );
-  }
-
-  // --- programs ------------------------------------------------------------
-
-  queue.setStage('Programs');
-  for (const program of plan.programs) {
-    const id = ID.program(program.key);
-    const exists = havePrograms.has(id);
-    bump(exists ? updated : created, 'programs');
-
-    const payload: Payload<Program> = {
-      programNo: program.programNo,
-      name: program.name,
-      description: 'Lifts supplied under one agreement.',
-      clientId: ID.client(program.clientKey),
-      clientName: nameFor(program.clientKey, program.name),
-      kind: 'program',
-      status: 'active',
-      plannedStart: toDualOr(program.plannedStart, today),
-      plannedEnd: toDualOr(program.plannedEnd, program.plannedStart ?? today),
-      ownerUid: null,
-    };
-    await queue.add((batch) =>
-      batch.set(
-        doc(db, 'programs', id),
         { ...payload, ...(exists ? stampUpdate(uid) : stampCreate(uid)) },
         { merge: exists },
       ),
@@ -388,8 +362,10 @@ export async function runImport(
       clientId: ID.client(project.clientKey),
       clientName: nameFor(project.clientKey, project.title),
       contractId: ID.contract(project.contractKey),
-      programId: project.programKey === null ? null : ID.program(project.programKey),
-      parentProjectId: null,
+      parentProjectId: (() => {
+        const rootId = project.programKey === null ? null : projectRootByGroup.get(project.programKey) ?? null;
+        return rootId === ID.project(project.key) ? null : rootId;
+      })(),
       reminders: [],
       site: { name: project.title, city: project.siteCity },
       // The tag and how far this shaft has got. The capacity and the stop

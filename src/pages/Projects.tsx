@@ -29,8 +29,6 @@ import { formatBps } from '../lib/kpi.js';
 import { formatETB } from '../lib/money.js';
 import { DualDateInput, DualDateText } from '../components/DualDateInput.js';
 import { DEFAULT_TEMPLATE_KEY, PROJECT_TEMPLATES, projectTemplate } from '../lib/project-templates.js';
-import { subscribePrograms } from '../data/programs.js';
-import type { Program } from '../lib/schema.js';
 import { ProgressBar } from '../components/KpiTile.js';
 import { expectedProgressBps } from '../lib/kpi.js';
 import { FormPanel } from '../components/FormPanel.js';
@@ -197,7 +195,7 @@ export function Projects() {
                 <div>
                   <h2><Link to={`/projects/${project.id}`}>{project.title}</Link></h2>
                   <p className="muted">
-                    {project.clientName} · {project.site?.name ?? '—'} ·{' '}
+                    {project.clientName} ·{' '}
                     {projectTypeShort(project.type)}
                     {/* A lift count belongs on lift work. "0 units" on an
                         office renovation is not a fact about the job, it is
@@ -225,7 +223,7 @@ export function Projects() {
                     )}
                   </p>
                 </div>
-                <StatusChip kind="project" value={project.status} />
+                {editable && user !== null ? <ProjectStatusControl project={project} uid={user.uid} /> : <StatusChip kind="project" value={project.status} />}
               </div>
 
               <ProgressBar progressBps={project.progressBps} expectedBps={expected} />
@@ -342,7 +340,6 @@ export function ProjectForm({
   const [title, setTitle] = useState(initial?.title ?? '');
   const [clientId, setClientId] = useState(initial?.clientId ?? '');
   const currentClient = initial === null ? null : { id: initial.clientId, name: initial.clientName };
-  const [siteName, setSiteName] = useState(initial?.site?.name ?? '');
   const [city, setCity] = useState(initial?.site?.city ?? 'Addis Ababa');
   const [units, setUnits] = useState(initial?.units?.length ?? 1);
   const [templateKey, setTemplateKey] = useState(initial?.templateKey ?? DEFAULT_TEMPLATE_KEY);
@@ -359,19 +356,16 @@ export function ProjectForm({
   );
   /** Once the kind has been set by hand, a template must not overwrite it. */
   const [typeIsProposed, setTypeIsProposed] = useState(initial === null);
-  const [programId, setProgramId] = useState(initial?.programId ?? '');
   const [parentProjectId, setParentProjectId] = useState(initial?.parentProjectId ?? '');
-  const [subCity, setSubCity] = useState(initial?.site?.subCity ?? '');
   const [address, setAddress] = useState(initial?.site?.address ?? '');
-  const [landmark, setLandmark] = useState(initial?.site?.landmark ?? '');
   const [reminders, setReminders] = useState<Reminder[]>(initial?.reminders ?? []);
   const [plannedStart, setPlannedStart] = useState<DualDate | null>(initial?.plannedStart ?? null);
   const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(initial?.plannedEnd ?? null);
+  const [status, setStatus] = useState<Project['status']>(initial?.status ?? 'planned');
   const { busy, error, run } = useAsyncAction(
     initial === null ? 'create this project' : 'save this project',
   );
 
-  const programs = useCollection<Program>((d, e) => subscribePrograms(d, e, { status: 'active' }), [], 'load programs').rows;
   const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
   const template = projectTemplate(templateKey);
 
@@ -386,15 +380,23 @@ export function ProjectForm({
   }
 
   /**
-   * Only top-level projects may be a parent. Sub-projects do not nest — a
-   * second level is a program, and there is a Programs page for that.
+   * Projects can nest under other projects. Exclude the current project and
+   * its descendants so selecting a parent cannot create a cycle.
    */
-  const parentCandidates = allProjects.filter(
-    (p) =>
-      (p.parentProjectId === null || p.parentProjectId === undefined) &&
-      // A project cannot be its own parent.
-      p.id !== initial?.id,
-  );
+  const parentCandidates = allProjects.filter((candidate) => {
+    if (candidate.id === initial?.id) return false;
+    let ancestor = candidate;
+    const visited = new Set<string>();
+    while (ancestor.parentProjectId) {
+      if (ancestor.parentProjectId === initial?.id) return false;
+      if (visited.has(ancestor.parentProjectId)) return false;
+      visited.add(ancestor.parentProjectId);
+      const next = allProjects.find((project) => project.id === ancestor.parentProjectId);
+      if (next === undefined) break;
+      ancestor = next;
+    }
+    return true;
+  });
 
   const ready = title.trim() !== '' && clientId !== '' && plannedStart !== null && plannedEnd !== null;
 
@@ -411,13 +413,10 @@ export function ProjectForm({
       clientName: client.name,
       contractId: initial?.contractId ?? null,
       site: {
-        name: siteName.trim() || title.trim(),
+        name: title.trim(),
         city,
-        ...(subCity.trim() === '' ? {} : { subCity: subCity.trim() }),
         ...(address.trim() === '' ? {} : { address: address.trim() }),
-        ...(landmark.trim() === '' ? {} : { landmark: landmark.trim() }),
       },
-      programId: programId === '' ? null : programId,
       parentProjectId: parentProjectId === '' ? null : parentProjectId,
       reminders,
       // On an edit the existing lifts are kept: they carry per-unit progress,
@@ -433,7 +432,7 @@ export function ProjectForm({
       actualStart: initial?.actualStart ?? null,
       actualEnd: initial?.actualEnd ?? null,
       // An edit must not reset a project somebody paused or completed.
-      status: initial?.status ?? ('planned' as Project['status']),
+      status,
     };
 
     const result = await run(async () => {
@@ -483,19 +482,8 @@ export function ProjectForm({
           </div>
 
           <div className="field">
-            <label htmlFor="p-site">Site</label>
-            <input id="p-site" value={siteName} onChange={(e) => setSiteName(e.target.value)} />
-          </div>
-
-          <div className="field">
             <label htmlFor="p-city">City</label>
             <input id="p-city" value={city} onChange={(e) => setCity(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="p-subcity">Sub-city</label>
-            <input id="p-subcity" value={subCity} placeholder="Bole"
-              onChange={(e) => setSubCity(e.target.value)} />
           </div>
 
           <div className="field">
@@ -503,15 +491,6 @@ export function ProjectForm({
             <input id="p-address" value={address}
               placeholder="Africa Avenue, Getu Commercial Centre"
               onChange={(e) => setAddress(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label htmlFor="p-landmark">Landmark</label>
-            <input id="p-landmark" value={landmark} placeholder="Opposite Edna Mall"
-              onChange={(e) => setLandmark(e.target.value)} />
-            <p className="hint">
-              What you would actually tell a driver. A crew sent to the wrong Bole tower loses a day.
-            </p>
           </div>
 
           <div className="field">
@@ -559,15 +538,13 @@ export function ProjectForm({
           </div>
 
           <div className="field">
-            <label htmlFor="p-program">Part of a program</label>
-            <select id="p-program" value={programId} onChange={(e) => setProgramId(e.target.value)}>
-              <option value="">Stand-alone project</option>
-              {programs.map((p) => <option key={p.id} value={p.id}>{p.programNo} · {p.name}</option>)}
-            </select>
-            <p className="hint">
-              Group the lifts of one building, or the phases of one client's development,
-              so they report as a single commitment.
-            </p>
+            <label htmlFor="p-status">Project status</label>
+            <StatusSelect
+              kind="project"
+              id="p-status"
+              value={status}
+              onChange={(value) => setStatus(value as Project['status'])}
+            />
           </div>
 
           {/* Asked only where there are lifts to count. On a renovation the

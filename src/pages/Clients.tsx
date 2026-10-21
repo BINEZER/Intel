@@ -173,7 +173,10 @@ export function ClientForm({
           tin: initial.tin,
           vatRegistered: initial.vatRegistered,
           ...(initial.vatRegNo === undefined ? {} : { vatRegNo: initial.vatRegNo }),
-          address: initial.address,
+          address: {
+            city: initial.address?.city ?? '',
+            ...(initial.address?.street ? { street: initial.address.street } : {}),
+          },
           contacts: initial.contacts?.length > 0 ? initial.contacts : EMPTY.contacts,
           status: initial.status,
           ...(initial.notes === undefined ? {} : { notes: initial.notes }),
@@ -228,53 +231,12 @@ export function ClientForm({
         </div>
 
         <div className="field">
-          <label htmlFor="c-subcity">Sub-city</label>
-          <input
-            id="c-subcity"
-            value={form.address.subCity ?? ''}
-            placeholder="Bole"
-            onChange={(e) => setForm({ ...form, address: { ...form.address, subCity: e.target.value } })}
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="c-woreda">Woreda</label>
-          <input
-            id="c-woreda"
-            value={form.address.woreda ?? ''}
-            onChange={(e) => setForm({ ...form, address: { ...form.address, woreda: e.target.value } })}
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="c-street">Street / building</label>
+          <label htmlFor="c-street">Address</label>
           <input
             id="c-street"
             value={form.address.street ?? ''}
             placeholder="Africa Avenue, Getu Commercial Centre, 4th floor"
-            onChange={(e) => setForm({ ...form, address: { ...form.address, street: e.target.value } })}
-          />
-        </div>
-
-        <div className="field">
-          <label htmlFor="c-landmark">Landmark</label>
-          <input
-            id="c-landmark"
-            value={form.address.landmark ?? ''}
-            placeholder="Opposite Edna Mall"
-            onChange={(e) => setForm({ ...form, address: { ...form.address, landmark: e.target.value } })}
-          />
-          <p className="hint">
-            In Addis a landmark does more work than a street name. This is what goes on the delivery note.
-          </p>
-        </div>
-
-        <div className="field">
-          <label htmlFor="c-pobox">P.O. Box</label>
-          <input
-            id="c-pobox"
-            value={form.address.poBox ?? ''}
-            onChange={(e) => setForm({ ...form, address: { ...form.address, poBox: e.target.value } })}
+            onChange={(e) => setForm({ ...form, address: { city: form.address.city, street: e.target.value } })}
           />
         </div>
 
