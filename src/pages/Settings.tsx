@@ -12,18 +12,14 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthProvider.js';
 import { Maintenance } from '../components/Maintenance.js';
 import {
-  DEFAULT_TAX_CONFIG,
   getKpiTargets,
   getPriorityConfig,
-  getTaxConfig,
   saveKpiTargets,
   savePriorityConfig,
-  saveTaxConfig,
 } from '../data/config.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { DEFAULT_KPI_TARGETS } from '../lib/kpi.js';
 import { DEFAULT_PRIORITY_CONFIG } from '../lib/priority.js';
-import { formatETB, santimToBirr, birrToSantim } from '../lib/money.js';
 import type { KpiTargets, PriorityConfig } from '../lib/schema.js';
 
 /** A percentage stored as basis points, edited as a percentage. */
@@ -55,43 +51,15 @@ function PercentField({
   );
 }
 
-function MoneyField({
-  label,
-  santim,
-  onChange,
-  hint,
-}: {
-  label: string;
-  santim: number;
-  onChange: (santim: number) => void;
-  hint?: string;
-}) {
-  return (
-    <div className="field">
-      <label>{label}</label>
-      <div className="money-input">
-        <span className="prefix">ETB</span>
-        <input
-          type="number"
-          value={santimToBirr(santim)}
-          onChange={(e) => onChange(birrToSantim(Number(e.target.value) || 0))}
-        />
-      </div>
-      {hint && <p className="hint">{hint}</p>}
-    </div>
-  );
-}
 
 export function Settings() {
   const { user } = useAuth();
-  const [tax, setTax] = useState(DEFAULT_TAX_CONFIG);
   const [targets, setTargets] = useState<KpiTargets>({ ...DEFAULT_KPI_TARGETS });
   const [priority, setPriority] = useState<PriorityConfig>({ ...DEFAULT_PRIORITY_CONFIG });
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const taxAction = useAsyncAction('save the tax settings');
   const kpiAction = useAsyncAction('save the KPI targets');
   const priorityAction = useAsyncAction('save the prioritisation settings');
 
@@ -99,10 +67,9 @@ export function Settings() {
     let cancelled = false;
     setLoaded(false);
     setLoadError(null);
-    void Promise.all([getTaxConfig(), getKpiTargets(), getPriorityConfig()])
-      .then(([t, k, p]) => {
+    void Promise.all([getKpiTargets(), getPriorityConfig()])
+      .then(([k, p]) => {
         if (cancelled) return;
-        setTax(t);
         setTargets(k);
         setPriority(p);
         setLoaded(true);
@@ -133,94 +100,10 @@ export function Settings() {
     <>
       <h1>Settings</h1>
       <p className="muted">
-        Rates and targets that must be changeable without a developer. Changes apply
-        to documents created from now on — figures already issued keep the rate they
-        were issued under.
+        Operational KPI targets and the weights used to prioritise receivables. Historical invoices and contract values are not rewritten by these settings.
       </p>
 
-      {/* --- tax --- */}
-      <section className="card">
-        <h2>Tax</h2>
-        <p className="hint">
-          ⚠️ Confirm these against current Ethiopian law with your tax advisor before
-          relying on them. The shipped values reflect the Income Tax Proclamation
-          979/2016 regime and a 15% VAT rate.
-        </p>
-
-        <div className="form-grid">
-          <PercentField
-            label="VAT rate"
-            bps={tax.vatRateBps}
-            onChange={(v) => setTax({ ...tax, vatRateBps: v })}
-            hint="Applied to client contracts and invoices."
-          />
-          <PercentField
-            label="Withholding — goods"
-            bps={tax.whtGoodsBps}
-            onChange={(v) => setTax({ ...tax, whtGoodsBps: v })}
-          />
-          <PercentField
-            label="Withholding — services"
-            bps={tax.whtServicesBps}
-            onChange={(v) => setTax({ ...tax, whtServicesBps: v })}
-          />
-          <PercentField
-            label="Withholding — supplier has no TIN"
-            bps={tax.whtNoTinBps}
-            onChange={(v) => setTax({ ...tax, whtNoTinBps: v })}
-            hint="The penalty rate applied when a supplier cannot produce a TIN."
-          />
-          <MoneyField
-            label="Goods threshold"
-            santim={tax.whtGoodsThresholdSantim}
-            onChange={(v) => setTax({ ...tax, whtGoodsThresholdSantim: v })}
-            hint="Below this per-transaction value, no withholding on goods."
-          />
-          <MoneyField
-            label="Services threshold"
-            santim={tax.whtServicesThresholdSantim}
-            onChange={(v) => setTax({ ...tax, whtServicesThresholdSantim: v })}
-          />
-          <div className="field">
-            <label htmlFor="s-tin">Company TIN</label>
-            <input id="s-tin" value={tax.companyTin}
-              onChange={(e) => setTax({ ...tax, companyTin: e.target.value })} />
-            <p className="hint">Printed on every invoice you issue.</p>
-          </div>
-          <div className="field">
-            <label htmlFor="s-vatreg">VAT registration number</label>
-            <input id="s-vatreg" value={tax.companyVatRegNo}
-              onChange={(e) => setTax({ ...tax, companyVatRegNo: e.target.value })} />
-          </div>
-        </div>
-
-        <div className="vat-summary">
-          <div>
-            <span className="muted">Example: ETB 1,000,000 contract</span>
-            <strong>
-              {formatETB(birrToSantim(1_000_000) + Math.round(birrToSantim(1_000_000) * tax.vatRateBps / 10_000))}
-            </strong>
-          </div>
-          <div>
-            <span className="muted">Services voucher of ETB 100,000 — we pay</span>
-            <strong>
-              {formatETB(
-                birrToSantim(100_000) +
-                  Math.round((birrToSantim(100_000) * tax.vatRateBps) / 10_000) -
-                  Math.round((birrToSantim(100_000) * tax.whtServicesBps) / 10_000),
-              )}
-            </strong>
-          </div>
-        </div>
-
-        {taxAction.error && <p className="error" role="alert">{taxAction.error}</p>}
-        <div className="form-actions">
-          <button type="button" className="primary" disabled={taxAction.busy || user === null}
-            onClick={() => { if (user) void taxAction.run(() => saveTaxConfig(tax, user.uid)); }}>
-            {taxAction.busy ? 'Saving…' : 'Save tax settings'}
-          </button>
-        </div>
-      </section>
+      <p className="hint">VAT is applied automatically to sales. Tax rates used for calculations are maintained in the application logic; this page is for operational KPI and receivables-priority settings.</p>
 
       {/* --- KPI targets --- */}
       <section className="card">
