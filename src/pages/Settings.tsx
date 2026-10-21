@@ -135,10 +135,17 @@ export function Settings() {
                   <label htmlFor={`kpi-scope-${item.key}`}>Applies to</label>
                   <select id={`kpi-scope-${item.key}`} value={item.scope}
                     onChange={(e) => setDefinitions(definitions.map((row) => row.key === item.key ? { ...row, scope: e.target.value as KpiScope } : row))}>
-                    <option value="project">Project delivery</option>
-                    <option value="service">Service &amp; maintenance</option>
-                    <option value="installation">Installation</option>
-                    <option value="workforce">Workforce</option>
+                    {(['schedule', 'daysToEnd', 'delivered', 'phases', 'grossMargin', 'billed', 'unbilledWork', 'collected', 'collectionTime', 'inspection', 'phaseDuration'].includes(item.key)) ? (
+                      <>
+                        <option value="project">Project delivery</option>
+                        <option value="installation">Installation</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="service">Service &amp; maintenance</option>
+                        <option value="workforce">Workforce</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div className="field checkbox">
