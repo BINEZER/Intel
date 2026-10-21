@@ -13,7 +13,7 @@ export function ProjectKpiPanel({ kpi, targets = DEFAULT_KPI_TARGETS, definition
   targets?: typeof DEFAULT_KPI_TARGETS;
   definitions?: readonly KpiDefinition[];
 }) {
-  const visible = (key: string) => definitions.some((item) => item.key === key && item.enabled && item.scope === 'project');
+  const visible = (key: string) => definitions.some((item) => item.key === key && item.enabled && (item.scope === 'project' || item.scope === 'installation'));
   const labelFor = (key: string, fallback: string) => definitions.find((item) => item.key === key)?.label ?? fallback;
   const scheduleStatus =
     kpi.scheduleVarianceBps >= 0
@@ -117,10 +117,10 @@ export function ProjectKpiPanel({ kpi, targets = DEFAULT_KPI_TARGETS, definition
                 : undefined
             }
           />)}
-          {Object.entries(kpi.phaseDurationDays).map(([key, days]) => (
+          {visible('phaseDuration') && Object.entries(kpi.phaseDurationDays).map(([key, days]) => (
             <KpiTile
               key={key}
-              label={key.replace(/_/g, ' ')}
+              label={`${labelFor('phaseDuration', 'Phase duration')}: ${key.replace(/_/g, ' ')}`}
               value={`${days} days`}
               detail={<span className="muted">actual duration</span>}
             />
