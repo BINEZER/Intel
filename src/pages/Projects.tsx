@@ -340,7 +340,6 @@ export function ProjectForm({
   const [title, setTitle] = useState(initial?.title ?? '');
   const [clientId, setClientId] = useState(initial?.clientId ?? '');
   const currentClient = initial === null ? null : { id: initial.clientId, name: initial.clientName };
-  const [siteName, setSiteName] = useState(initial?.site?.name ?? '');
   const [city, setCity] = useState(initial?.site?.city ?? 'Addis Ababa');
   const [units, setUnits] = useState(initial?.units?.length ?? 1);
   const [templateKey, setTemplateKey] = useState(initial?.templateKey ?? DEFAULT_TEMPLATE_KEY);
@@ -405,7 +404,7 @@ export function ProjectForm({
       clientName: client.name,
       contractId: initial?.contractId ?? null,
       site: {
-        name: siteName.trim() || title.trim(),
+        name: title.trim(),
         city,
         ...(initial?.site?.subCity ? { subCity: initial.site.subCity } : {}),
         ...(address.trim() === '' ? (initial?.site?.address ? { address: initial.site.address } : {}) : { address: address.trim() }),
@@ -473,11 +472,6 @@ export function ProjectForm({
             <label htmlFor="p-title">Title <span className="req" aria-hidden="true">*</span></label>
             <input id="p-title" required value={title} onChange={(e) => setTitle(e.target.value)}
               placeholder="Bole Tower — 3 passenger lifts" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="p-site">Site</label>
-            <input id="p-site" value={siteName} onChange={(e) => setSiteName(e.target.value)} />
           </div>
 
           <div className="field">
