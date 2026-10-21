@@ -7,7 +7,7 @@
  * that wrong is a 630,000 birr mistake.
  */
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { addVat, extractVat, formatETB, VAT_RATE_BPS } from '../lib/money.js';
 
 /** The VAT and gross for a net figure — the two fields a VatBreakdown needs beyond net. */
@@ -37,6 +37,7 @@ import { useAsyncAction } from '../data/useCollection.js';
 import {
   createContract,
   deriveContractFields,
+  getMilestones,
   replaceMilestones,
   updateContract,
 } from '../data/contracts.js';
@@ -124,6 +125,24 @@ export function ContractForm({
   const [resolutionHours, setResolutionHours] = useState(initial?.sla?.resolutionHours ?? 24);
   const [visitsPerYear, setVisitsPerYear] = useState(initial?.sla?.preventiveVisitsPerYear ?? 12);
   const [shares, setShares] = useState<MilestoneShare[]>(DEFAULT_SUPPLY_INSTALL_SHARES);
+
+  // A new schedule gets the current default. Editing an existing contract must
+  // preserve its agreed shares if the contract value or type is later changed.
+  useEffect(() => {
+    if (initial === null || initial.type === 'maintenance') return;
+    let cancelled = false;
+    void getMilestones(initial.id).then((rows) => {
+      if (cancelled || rows.length === 0) return;
+      setShares(rows.map((row) => ({
+        name: row.name,
+        shareBps: row.shareBps,
+        ...(row.phaseId === undefined ? {} : { phaseId: row.phaseId }),
+      })));
+    }).catch(() => {
+      // Existing values remain untouched if the schedule cannot be read.
+    });
+    return () => { cancelled = true; };
+  }, [initial]);
   const [warrantyMonths, setWarrantyMonths] = useState(initial?.warranty?.months ?? DEFAULT_WARRANTY_MONTHS);
   const [warrantyAlertDays, setWarrantyAlertDays] = useState(
     initial?.warranty?.alertDays ?? DEFAULT_WARRANTY_ALERT_DAYS,
