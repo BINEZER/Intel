@@ -17,7 +17,7 @@ import { formatETB } from '../lib/money.js';
 import { ProjectForm } from './Projects.js';
 import { UnitForm } from './Units.js';
 import { getPaymentStagesForProject, subscribeContracts } from '../data/contracts.js';
-import { subscribeUnits } from '../data/units.js';
+import { subscribeUnits, updateUnit } from '../data/units.js';
 import { subscribeClients } from '../data/clients.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -44,6 +44,7 @@ export function ProjectDetail() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects');
   const { busy: statusSaving, error: statusError, run: saveStatus } = useAsyncAction('update project status');
+  const { busy: unitStatusSaving, error: unitStatusError, run: saveUnitStatus } = useAsyncAction('update lift status');
   const [project, setProject] = useState<WithId<Project> | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   /**
@@ -208,6 +209,7 @@ export function ProjectDetail() {
           )}
           {statusSaving && <span className="muted" role="status">Saving status…</span>}
           {statusError && <p className="error no-print" role="alert">{statusError}</p>}
+      {unitStatusError && <p className="error no-print" role="alert">{unitStatusError}</p>}
           {editable && user !== null && (
             <>
               <button type="button" className="no-print" onClick={() => setEditing({ kind: 'project', row: project })}>
@@ -255,8 +257,27 @@ export function ProjectDetail() {
         units={units.rows.filter((u) => u.installedByProjectId === project.id)}
         subProjects={allProjects.rows.filter((p) => p.parentProjectId === project.id)}
         invoices={invoices.rows}
-        editable={editable}
+        editable={editable && user !== null}
+        uid={user?.uid ?? null}
         canInvoices={can(role, 'manageInvoices')}
+        projectStatusSaving={statusSaving}
+        onProjectStatusChange={(projectId, nextStatus) => {
+          if (user === null) return;
+          void saveStatus(async () => {
+            await updateProjectStatus(projectId, nextStatus, user.uid);
+            reload();
+            return true;
+          });
+        }}
+        unitStatusSaving={unitStatusSaving}
+        onUnitStatusChange={(unitId, nextStatus) => {
+          if (user === null) return;
+          void saveUnitStatus(async () => {
+            await updateUnit(unitId, { status: nextStatus }, user.uid);
+            reload();
+            return true;
+          });
+        }}
         loading={{ units: units.loading, children: allProjects.loading, invoices: invoices.loading }}
         onEditUnit={(row) => setEditing({ kind: 'unit', row })}
         onEditProject={(row) => setEditing({ kind: 'project', row })}
@@ -386,7 +407,12 @@ function ProjectRelated({
   subProjects,
   invoices,
   editable,
+  uid,
   canInvoices,
+  projectStatusSaving,
+  onProjectStatusChange,
+  unitStatusSaving,
+  onUnitStatusChange,
   loading,
   onEditUnit,
   onEditProject,
@@ -396,7 +422,12 @@ function ProjectRelated({
   subProjects: readonly WithId<Project>[];
   invoices: readonly WithId<Invoice>[];
   editable: boolean;
+  uid: string | null;
   canInvoices: boolean;
+  projectStatusSaving: boolean;
+  onProjectStatusChange: (projectId: string, status: Project['status']) => void;
+  unitStatusSaving: boolean;
+  onUnitStatusChange: (unitId: string, status: ElevatorUnit['status']) => void;
   loading: { units: boolean; children: boolean; invoices: boolean };
   onEditUnit: (row: WithId<ElevatorUnit>) => void;
   onEditProject: (row: WithId<Project>) => void;
@@ -412,7 +443,18 @@ function ProjectRelated({
       describeMake(unit),
       describeSpec(unit),
     ].filter((part): part is string => part !== null && part !== '').join(' · '),
-    meta: <span className="chip no-caps">{unit.status.replace(/_/g, ' ')}</span>,
+    meta: editable && uid !== null ? (
+      <select
+        aria-label={`Status for ${unit.tag}`}
+        value={unit.status}
+        disabled={unitStatusSaving}
+        onChange={(event) => onUnitStatusChange(unit.id, event.target.value as ElevatorUnit['status'])}
+      >
+        {(['under_installation', 'in_service', 'out_of_service', 'decommissioned'] as ElevatorUnit['status'][]).map((value) => (
+          <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>
+        ))}
+      </select>
+    ) : <span className="chip no-caps">{unit.status.replace(/_/g, ' ')}</span>,
     ...(editable ? { onEdit: () => onEditUnit(unit) } : {}),
     ...(editable
       ? { deleteTarget: { kind: 'unit' as const, id: unit.id, name: unit.tag, unit: { tag: unit.tag, clientId: unit.clientId } } }
@@ -424,7 +466,19 @@ function ProjectRelated({
     to: `/projects/${child.id}`,
     title: child.title,
     detail: `${child.projectNo} · ${child.site?.name ?? '—'}`,
-    meta: <StatusChip kind="project" value={child.status} />,
+    meta: editable && uid !== null ? (
+      <div className="field inline">
+        <label className="sr-only" htmlFor={`child-status-${child.id}`}>Status for {child.title}</label>
+        <StatusSelect
+          kind="project"
+          id={`child-status-${child.id}`}
+          value={child.status}
+          disabled={projectStatusSaving}
+          compact
+          onChange={(value) => onProjectStatusChange(child.id, value as Project['status'])}
+        />
+      </div>
+    ) : <StatusChip kind="project" value={child.status} />,
     ...(editable ? { onEdit: () => onEditProject(child) } : {}),
     ...(editable ? { deleteTarget: { kind: 'project' as const, id: child.id, name: child.projectNo } } : {}),
   }));

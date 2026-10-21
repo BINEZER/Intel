@@ -438,6 +438,27 @@ export function UnitDetail() {
             {' · '}{unit.clientName}
           </p>
         </div>
+        <div className="field inline">
+          <label htmlFor="unit-detail-status">Status</label>
+          {editable ? (
+            <select
+              id="unit-detail-status"
+              value={unit.status}
+              disabled={busy}
+              onChange={(event) => {
+                const nextStatus = event.target.value as ElevatorUnit['status'];
+                void run(async () => {
+                  await updateUnit(unit.id, { status: nextStatus }, user!.uid);
+                  return true;
+                });
+              }}
+            >
+              {(Object.keys(STATUS_LABEL) as ElevatorUnit['status'][]).map((value) => (
+                <option key={value} value={value}>{STATUS_LABEL[value]}</option>
+              ))}
+            </select>
+          ) : <span className="chip">{STATUS_LABEL[unit.status]}</span>}
+        </div>
         <span className={`chip verdict-${health.verdict}`}>{VERDICT_LABEL[health.verdict]}</span>
       </div>
 
