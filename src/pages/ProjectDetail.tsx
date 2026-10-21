@@ -36,7 +36,7 @@ import { ProjectKpiPanel } from './ProjectKpis.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { isElevatorWork, projectTypeLabel, projectTypeShort } from '../lib/project-kind.js';
 import { describeFleet, describeMake, describeSpec } from '../lib/lift-spec.js';
-import type { Client, Contract, ElevatorUnit, Invoice, Program, Project, ProjectPhase, Technician } from '../lib/schema.js';
+import type { Client, Contract, ElevatorUnit, Invoice, Project, ProjectPhase, Technician } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ProjectDetail() {
