@@ -9,6 +9,7 @@
 import { DEFAULT_KPI_TARGETS, formatMinutes, type TechnicianKpiResult } from '../lib/kpi.js';
 import { DurationTile, KpiTile, RateTile } from '../components/KpiTile.js';
 import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition } from '../lib/kpi-definitions.js';
+import type { KpiTargets } from '../lib/schema.js';
 
 export function TechnicianKpiPanel({
   name,
@@ -18,7 +19,7 @@ export function TechnicianKpiPanel({
 }: {
   name: string;
   kpi: TechnicianKpiResult;
-  targets?: typeof DEFAULT_KPI_TARGETS;
+  targets?: KpiTargets;
   definitions?: readonly KpiDefinition[];
 }) {
   const visible = (key: string) => definitions.some((item) => item.key === key && item.enabled && (item.scope === 'service' || item.scope === 'workforce'));
