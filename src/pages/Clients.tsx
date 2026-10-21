@@ -181,7 +181,8 @@ export function ClientForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const payload: ClientInput = { ...form, tin: '', vatRegistered: true, vatRegNo: undefined };
+    const { vatRegNo: _ignoredVatRegNo, ...clientFields } = form;
+    const payload: ClientInput = { ...clientFields, tin: '', vatRegistered: true };
     const result = await run(async () =>
       initial === null ? createClient(payload, uid) : updateClient(initial.id, payload, uid),
     );
