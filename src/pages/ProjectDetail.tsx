@@ -39,7 +39,7 @@ import { DEFAULT_KPI_TARGETS } from '../lib/kpi.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { isElevatorWork, projectTypeLabel, projectTypeShort } from '../lib/project-kind.js';
 import { describeFleet, describeMake, describeSpec } from '../lib/lift-spec.js';
-import type { Client, Contract, ElevatorUnit, Invoice, Project, ProjectPhase, Technician } from '../lib/schema.js';
+import type { Client, Contract, ElevatorUnit, Invoice, KpiTargets, Project, ProjectPhase, Technician } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ProjectDetail() {
@@ -49,7 +49,7 @@ export function ProjectDetail() {
   const { busy: statusSaving, error: statusError, run: saveStatus } = useAsyncAction('update project status');
   const { busy: unitStatusSaving, error: unitStatusError, run: saveUnitStatus } = useAsyncAction('update lift status');
   const [project, setProject] = useState<WithId<Project> | null>(null);
-  const [kpiTargets, setKpiTargets] = useState({ ...DEFAULT_KPI_TARGETS });
+  const [kpiTargets, setKpiTargets] = useState<KpiTargets>({ ...DEFAULT_KPI_TARGETS });
   const [kpiDefinitions, setKpiDefinitions] = useState<KpiDefinition[]>(DEFAULT_KPI_DEFINITIONS);
   const [loadError, setLoadError] = useState<string | null>(null);
   /**
