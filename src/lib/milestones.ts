@@ -169,9 +169,9 @@ export function milestoneTotals(milestones: readonly AllocatedMilestone[]) {
 
 /** The standard supply-and-install schedule, as a starting point in the form. */
 export const DEFAULT_SUPPLY_INSTALL_SHARES: MilestoneShare[] = [
-  { name: 'Advance on signing', shareBps: 3000 },
+  { name: 'Advance on signing', shareBps: 5000 },
   { name: 'On delivery to site', shareBps: 3000 },
-  { name: 'On completion of installation', shareBps: 3000 },
+  { name: 'On completion of installation', shareBps: 1000 },
   { name: 'On handover and certification', shareBps: 1000 },
 ];
 
