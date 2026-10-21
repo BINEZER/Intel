@@ -187,7 +187,7 @@ export function ClientDetail() {
           <div>
             <dt>Address</dt>
             <dd>
-              {[client.address?.street, client.address?.kebele, client.address?.woreda, client.address?.subCity, client.address?.city]
+              {[client.address?.street, client.address?.city]
                 .filter((part) => part !== undefined && part !== '')
                 .join(', ') || '—'}
             </dd>
