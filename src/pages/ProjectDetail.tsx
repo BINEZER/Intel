@@ -259,6 +259,14 @@ export function ProjectDetail() {
         invoices={invoices.rows}
         editable={editable}
         canInvoices={can(role, 'manageInvoices')}
+        unitStatusSaving={unitStatusSaving}
+        onUnitStatusChange={(unitId, nextStatus) => {
+          if (user === null) return;
+          void saveUnitStatus(async () => {
+            await updateUnit(unitId, { status: nextStatus }, user.uid);
+            reload();
+          });
+        }}
         loading={{ units: units.loading, children: allProjects.loading, invoices: invoices.loading }}
         onEditUnit={(row) => setEditing({ kind: 'unit', row })}
         onEditProject={(row) => setEditing({ kind: 'project', row })}
@@ -389,6 +397,8 @@ function ProjectRelated({
   invoices,
   editable,
   canInvoices,
+  unitStatusSaving,
+  onUnitStatusChange,
   loading,
   onEditUnit,
   onEditProject,
@@ -399,6 +409,8 @@ function ProjectRelated({
   invoices: readonly WithId<Invoice>[];
   editable: boolean;
   canInvoices: boolean;
+  unitStatusSaving: boolean;
+  onUnitStatusChange: (unitId: string, status: ElevatorUnit['status']) => void;
   loading: { units: boolean; children: boolean; invoices: boolean };
   onEditUnit: (row: WithId<ElevatorUnit>) => void;
   onEditProject: (row: WithId<Project>) => void;
@@ -419,13 +431,7 @@ function ProjectRelated({
         aria-label={`Status for ${unit.tag}`}
         value={unit.status}
         disabled={unitStatusSaving}
-        onChange={(event) => {
-          const nextStatus = event.target.value as ElevatorUnit['status'];
-          void saveUnitStatus(async () => {
-            await updateUnit(unit.id, { status: nextStatus }, user.uid);
-            reload();
-          });
-        }}
+        onChange={(event) => onUnitStatusChange(unit.id, event.target.value as ElevatorUnit['status'])}
       >
         {(['under_installation', 'in_service', 'out_of_service', 'decommissioned'] as ElevatorUnit['status'][]).map((value) => (
           <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>
