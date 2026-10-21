@@ -195,7 +195,7 @@ export function Projects() {
                 <div>
                   <h2><Link to={`/projects/${project.id}`}>{project.title}</Link></h2>
                   <p className="muted">
-                    {project.clientName} · {project.site?.name ?? '—'} ·{' '}
+                    {project.clientName} ·{' '}
                     {projectTypeShort(project.type)}
                     {/* A lift count belongs on lift work. "0 units" on an
                         office renovation is not a fact about the job, it is
