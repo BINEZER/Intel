@@ -32,6 +32,7 @@ import { UnitForm } from './Units.js';
 
 type Editing =
   | { kind: 'client' }
+  | { kind: 'new-contract' }
   | { kind: 'contract'; row: WithId<Contract> }
   | { kind: 'project'; row: WithId<Project> }
   | { kind: 'unit'; row: WithId<ElevatorUnit> };
@@ -121,12 +122,14 @@ export function ClientDetail() {
           <p className="muted"><Link to="/clients">Clients</Link></p>
           <h1>{client.name}</h1>
           <p className="muted">
-            {client.address?.city ?? '—'}
-            {client.tin === '' ? '' : ` · TIN ${client.tin}`}
+            {[client.address?.street, client.address?.city].filter((part) => part !== undefined && part !== '').join(', ') || '—'}
           </p>
         </div>
         <div className="chip-row">
           <StatusChip kind="client" value={client.status} />
+          {canEditContracts && user !== null && (
+            <button type="button" className="primary" onClick={() => setEditing({ kind: 'new-contract' })}>Add contract</button>
+          )}
           {canEditClient && user !== null && (
             <>
               <button type="button" onClick={() => setEditing({ kind: 'client' })}>Edit client</button>
@@ -142,6 +145,7 @@ export function ClientDetail() {
       {editing !== null && user !== null && (
         <>
           {editing.kind === 'client' && <ClientForm initial={client} uid={user.uid} onDone={() => setEditing(null)} />}
+          {editing.kind === 'new-contract' && <ContractForm initial={null} clients={clients.rows} uid={user.uid} onDone={() => setEditing(null)} />}
           {editing.kind === 'contract' && (
             <ContractForm initial={editing.row} clients={clients.rows} uid={user.uid} onDone={() => setEditing(null)} />
           )}
@@ -179,11 +183,6 @@ export function ClientDetail() {
         <h2>Details</h2>
         <dl className="detail-grid">
           <div><dt>Name in Amharic</dt><dd>{client.nameAm ?? '—'}</dd></div>
-          <div><dt>TIN</dt><dd className="mono">{client.tin === '' ? '—' : client.tin}</dd></div>
-          <div>
-            <dt>VAT</dt>
-            <dd>{client.vatRegistered ? `Registered${client.vatRegNo === undefined ? '' : ` · ${client.vatRegNo}`}` : 'Not registered'}</dd>
-          </div>
           <div>
             <dt>Address</dt>
             <dd>
