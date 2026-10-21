@@ -48,8 +48,11 @@ export function getTaxConfig() {
   return readWithDefault('tax', DEFAULT_TAX_CONFIG);
 }
 
-export function getKpiDefinitions() {
-  return readWithDefault<KpiDefinition[]>('kpiDefinitions', DEFAULT_KPI_DEFINITIONS);
+export async function getKpiDefinitions(): Promise<KpiDefinition[]> {
+  const snapshot = await getDoc(doc(db, PATH, 'kpiDefinitions'));
+  if (!snapshot.exists()) return DEFAULT_KPI_DEFINITIONS.map((item) => ({ ...item }));
+  const saved = snapshot.data().definitions as KpiDefinition[] | undefined;
+  return Array.isArray(saved) ? saved : DEFAULT_KPI_DEFINITIONS.map((item) => ({ ...item }));
 }
 
 export async function saveKpiDefinitions(definitions: KpiDefinition[], uid: string): Promise<void> {
