@@ -7,10 +7,11 @@ import { DEFAULT_KPI_TARGETS, formatBps, formatVarianceDays, type ProjectKpiResu
 import { formatETB } from '../lib/money.js';
 import { KpiTile, ProgressBar, RateTile } from '../components/KpiTile.js';
 import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition } from '../lib/kpi-definitions.js';
+import type { KpiTargets } from '../lib/schema.js';
 
 export function ProjectKpiPanel({ kpi, targets = DEFAULT_KPI_TARGETS, definitions = DEFAULT_KPI_DEFINITIONS }: {
   kpi: ProjectKpiResult;
-  targets?: typeof DEFAULT_KPI_TARGETS;
+  targets?: KpiTargets;
   definitions?: readonly KpiDefinition[];
 }) {
   const visible = (key: string) => definitions.some((item) => item.key === key && item.enabled && (item.scope === 'project' || item.scope === 'installation'));
