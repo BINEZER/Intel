@@ -5,6 +5,7 @@ const GROUPS = [
   {
     title: 'Planning and reporting',
     items: [
+      { to: '/service', label: 'Service', description: 'Review maintenance, callouts, and service work.' },
       { to: '/priority', label: 'Project priority', description: 'Decide which projects need attention first.' },
       { to: '/alerts', label: 'Alerts', description: 'Review risks and items needing action.' },
       { to: '/follow-ups', label: 'Follow-ups', description: 'Track commitments and next actions.' },
@@ -17,6 +18,8 @@ const GROUPS = [
   {
     title: 'Money and agreements',
     items: [
+      { to: '/clients', label: 'Clients', description: 'Manage customer records and contact details.' },
+      { to: '/contracts', label: 'Contracts', description: 'Manage commercial and maintenance agreements.' },
       { to: '/collections', label: 'Receivables', description: 'See money owed and collection follow-ups.' },
       { to: '/cash', label: 'Cash forecast', description: 'Review expected cash movements.' },
       { to: '/payment-dates', label: 'Payment dates', description: 'Track contract payment milestones.' },
