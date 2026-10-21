@@ -80,6 +80,18 @@ export function ClientDetail() {
       <>
         {k.contractNo} · {k.type.replace(/_/g, ' ')} · {formatETB(k.valueNetSantim)} net · ends{' '}
         <DualDateText value={k.endDate} />
+        {mine.projects.filter((p) => p.contractId === k.id).length > 0 && (
+          <>
+            <br />
+            <span className="muted">Projects: </span>
+            {mine.projects.filter((p) => p.contractId === k.id).map((p, index) => (
+              <span key={p.id}>
+                {index > 0 ? ', ' : ''}
+                <Link to={`/projects/${p.id}`}>{p.title}</Link>
+              </span>
+            ))}
+          </>
+        )}
       </>
     ),
     meta: <StatusChip kind="contract" value={k.status} />,
