@@ -6,7 +6,7 @@
  * columns change with the discipline; a blank is a blank, never a zero.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { subscribeTechnicians } from '../data/technicians.js';
 import { subscribeSubcontractors } from '../data/subcontractors.js';
 import { useCollection } from '../data/useCollection.js';
@@ -21,11 +21,25 @@ import { TechnicianKpiPanel } from './TechnicianKpis.js';
 import { Link } from 'react-router-dom';
 import type { Callout, MaintenanceVisit, Subcontractor, Technician } from '../lib/schema.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
+import { getKpiDefinitions, getKpiTargets } from '../data/config.js';
+import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition } from '../lib/kpi-definitions.js';
 
 type Filter = 'all' | 'installation' | 'service' | 'subcontractors';
 
 export function Performance() {
   const [filter, setFilter] = useState<Filter>('all');
+  const [kpiTargets, setKpiTargets] = useState({ ...DEFAULT_KPI_TARGETS });
+  const [kpiDefinitions, setKpiDefinitions] = useState<KpiDefinition[]>(DEFAULT_KPI_DEFINITIONS);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([getKpiTargets(), getKpiDefinitions()]).then(([targets, definitions]) => {
+      if (cancelled) return;
+      setKpiTargets(targets);
+      setKpiDefinitions(definitions);
+    }).catch(() => { /* use shipped defaults if KPI settings cannot be read */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const technicians = useCollection<Technician>(
     (d, e) => subscribeTechnicians(d, e),
@@ -221,6 +235,8 @@ export function Performance() {
                 key={t.id}
                 name={t.name}
                 kpi={serviceKpis.get(t.id) as NonNullable<ReturnType<typeof serviceKpis.get>>}
+                targets={kpiTargets}
+                definitions={kpiDefinitions}
               />
             ))}
         </>
