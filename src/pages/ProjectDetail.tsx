@@ -8,11 +8,11 @@
 
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getProject, subscribePhases, subscribeProjects } from '../data/projects.js';
+import { getProject, subscribePhases, subscribeProjects, updateProjectStatus } from '../data/projects.js';
 import { subscribeInvoices } from '../data/invoices.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { RelatedList, type RelatedItem } from '../components/RelatedList.js';
-import { StatusChip } from '../components/StatusSelect.js';
+import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 import { formatETB } from '../lib/money.js';
 import { ProjectForm } from './Projects.js';
 import { UnitForm } from './Units.js';
@@ -24,7 +24,7 @@ import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { LinkPicker } from '../components/LinkPicker.js';
 import { subscribeTechnicians } from '../data/technicians.js';
-import { useCollection } from '../data/useCollection.js';
+import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { computeProjectKpis } from '../lib/kpi.js';
 import { assessProjectRisk } from '../lib/risk.js';
 import { rollUpProgress } from '../lib/phases.js';
@@ -44,6 +44,7 @@ export function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects');
+  const { busy: statusSaving, error: statusError, run: saveStatus } = useAsyncAction('update project status');
   const [project, setProject] = useState<WithId<Project> | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   /**
@@ -188,7 +189,29 @@ export function ProjectDetail() {
               installation looked identical here, which is how one gets read as
               the other in a meeting. */}
           <span className="chip">{projectTypeShort(project.type)}</span>
-          <span className="chip">{project.status.replace(/_/g, ' ')}</span>
+          {editable && user !== null ? (
+            <div className="field inline-field no-print">
+              <label htmlFor="project-detail-status">Status</label>
+              <StatusSelect
+                compact
+                kind="project"
+                id="project-detail-status"
+                value={project.status}
+                disabled={statusSaving}
+                onChange={(value) => {
+                  void saveStatus(async () => {
+                    await updateProjectStatus(project.id, value as Project['status'], user.uid);
+                    reload();
+                    return true;
+                  });
+                }}
+              />
+            </div>
+          ) : (
+            <span className="chip">{project.status.replace(/_/g, ' ')}</span>
+          )}
+          {statusSaving && <span className="muted" role="status">Saving status…</span>}
+          {statusError && <p className="error no-print" role="alert">{statusError}</p>}
           {editable && user !== null && (
             <>
               <button type="button" className="no-print" onClick={() => setEditing({ kind: 'project', row: project })}>
