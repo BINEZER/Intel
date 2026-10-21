@@ -19,7 +19,7 @@ import { subscribeCalloutsInPeriod, subscribeVisitsInPeriod } from '../data/serv
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { TechnicianKpiPanel } from './TechnicianKpis.js';
 import { Link } from 'react-router-dom';
-import type { Callout, MaintenanceVisit, Subcontractor, Technician } from '../lib/schema.js';
+import type { Callout, KpiTargets, MaintenanceVisit, Subcontractor, Technician } from '../lib/schema.js';
 import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { getKpiDefinitions, getKpiTargets } from '../data/config.js';
 import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition } from '../lib/kpi-definitions.js';
@@ -28,7 +28,7 @@ type Filter = 'all' | 'installation' | 'service' | 'subcontractors';
 
 export function Performance() {
   const [filter, setFilter] = useState<Filter>('all');
-  const [kpiTargets, setKpiTargets] = useState({ ...DEFAULT_KPI_TARGETS });
+  const [kpiTargets, setKpiTargets] = useState<KpiTargets>({ ...DEFAULT_KPI_TARGETS });
   const [kpiDefinitions, setKpiDefinitions] = useState<KpiDefinition[]>(DEFAULT_KPI_DEFINITIONS);
 
   useEffect(() => {
