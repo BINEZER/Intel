@@ -380,14 +380,23 @@ export function ProjectForm({
   }
 
   /**
-   * Projects use one hierarchy: a project can belong to another project.
+   * Projects can nest under other projects. Exclude the current project and
+   * its descendants so selecting a parent cannot create a cycle.
    */
-  const parentCandidates = allProjects.filter(
-    (p) =>
-      (p.parentProjectId === null || p.parentProjectId === undefined) &&
-      // A project cannot be its own parent.
-      p.id !== initial?.id,
-  );
+  const parentCandidates = allProjects.filter((candidate) => {
+    if (candidate.id === initial?.id) return false;
+    let ancestor = candidate;
+    const visited = new Set<string>();
+    while (ancestor.parentProjectId) {
+      if (ancestor.parentProjectId === initial?.id) return false;
+      if (visited.has(ancestor.parentProjectId)) return false;
+      visited.add(ancestor.parentProjectId);
+      const next = allProjects.find((project) => project.id === ancestor.parentProjectId);
+      if (next === undefined) break;
+      ancestor = next;
+    }
+    return true;
+  });
 
   const ready = title.trim() !== '' && clientId !== '' && plannedStart !== null && plannedEnd !== null;
 
