@@ -88,6 +88,8 @@ export function Settings() {
   const [targets, setTargets] = useState<KpiTargets>({ ...DEFAULT_KPI_TARGETS });
   const [priority, setPriority] = useState<PriorityConfig>({ ...DEFAULT_PRIORITY_CONFIG });
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const taxAction = useAsyncAction('save the tax settings');
   const kpiAction = useAsyncAction('save the KPI targets');
@@ -95,6 +97,8 @@ export function Settings() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoaded(false);
+    setLoadError(null);
     void Promise.all([getTaxConfig(), getKpiTargets(), getPriorityConfig()])
       .then(([t, k, p]) => {
         if (cancelled) return;
@@ -103,11 +107,27 @@ export function Settings() {
         setPriority(p);
         setLoaded(true);
       })
-      .catch(() => setLoaded(true));
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : 'Could not load settings from the database.');
+        setLoaded(true);
+      });
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadKey]);
 
   if (!loaded) return <p className="muted">Loading settings…</p>;
+  if (loadError !== null) {
+    return (
+      <section className="card">
+        <h1>Settings could not be loaded</h1>
+        <p className="error" role="alert">{loadError}</p>
+        <p className="muted">Your changes have not been saved. Retry after checking your connection and admin access.</p>
+        <button type="button" className="primary" onClick={() => setReloadKey((key) => key + 1)}>
+          Retry loading settings
+        </button>
+      </section>
+    );
+  }
 
   return (
     <>
