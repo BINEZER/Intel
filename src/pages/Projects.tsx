@@ -223,7 +223,7 @@ export function Projects() {
                     )}
                   </p>
                 </div>
-                <StatusChip kind="project" value={project.status} />
+                {editable && user !== null ? <ProjectStatusControl project={project} uid={user.uid} /> : <StatusChip kind="project" value={project.status} />}
               </div>
 
               <ProgressBar progressBps={project.progressBps} expectedBps={expected} />
