@@ -18,7 +18,6 @@ import { ProjectForm } from './Projects.js';
 import { UnitForm } from './Units.js';
 import { getPaymentStagesForProject, subscribeContracts } from '../data/contracts.js';
 import { subscribeUnits } from '../data/units.js';
-import { subscribePrograms } from '../data/programs.js';
 import { subscribeClients } from '../data/clients.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -69,9 +68,6 @@ export function ProjectDetail() {
   // that pays for it, and the lifts it puts in. See lib/scope.ts.
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
-  // The commitment this job is one part of. A tower is one programme and four
-  // projects, and from a project you have to be able to get back up to it.
-  const programs = useCollection<Program>((d, e) => subscribePrograms(d, e), [], 'load programmes');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients');
   const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const invoices = useCollection<Invoice>(
@@ -245,11 +241,10 @@ export function ProjectDetail() {
 
       <ProjectLinks
         project={project}
+        parentProject={allProjects.rows.find((p) => p.id === project.parentProjectId) ?? null}
         contract={contracts.rows.find((k) => k.id === project.contractId) ?? null}
-        program={programs.rows.find((g) => g.id === project.programId) ?? null}
         clients={clients.rows}
         allContracts={contracts.rows}
-        allPrograms={programs.rows}
         uid={user?.uid ?? null}
         editable={editable}
         onChanged={reload}
@@ -300,21 +295,19 @@ export function ProjectDetail() {
  */
 function ProjectLinks({
   project,
+  parentProject,
   contract,
-  program,
   clients,
   allContracts,
-  allPrograms,
   uid,
   editable,
   onChanged,
 }: {
   project: WithId<Project>;
+  parentProject: WithId<Project> | null;
   contract: WithId<Contract> | null;
-  program: WithId<Program> | null;
   clients: readonly WithId<Client>[];
   allContracts: readonly WithId<Contract>[];
-  allPrograms: readonly WithId<Program>[];
   uid: string | null;
   editable: boolean;
   onChanged: () => void;
@@ -322,61 +315,28 @@ function ProjectLinks({
   return (
     <section className="card link-panel">
       <div className="link-half">
-        <h2>Client &amp; programme</h2>
+        <h2>Client &amp; project hierarchy</h2>
         <p className="link-title">
           <Link to={`/clients/${project.clientId}`}>{project.clientName}</Link>
-          {/* Changed here rather than by finding the project in its own list
-              and re-saving twenty other fields to correct one. */}
           <LinkPicker
             kind="project.client"
             recordId={project.id}
             currentId={project.clientId}
             currentLabel={project.clientName}
-            options={clients.map((c) => ({ id: c.id, label: c.name }))}
+            options={clients.map((client) => ({ id: client.id, label: client.name }))}
             uid={uid}
             editable={editable}
             onDone={onChanged}
           />
         </p>
-        {program === null ? (
-          <p className="muted">
-            {project.programId === null || project.programId === undefined
-              ? 'Stand-alone project — not part of a programme. A site with several lifts is usually one programme and one project per lift.'
-              : 'The programme this project names could not be found. It may have been deleted.'}{' '}
-            <LinkPicker
-              kind="project.program"
-              recordId={project.id}
-              currentId={project.programId ?? null}
-              currentLabel={null}
-              options={allPrograms.map((g) => ({ id: g.id, label: g.name, hint: g.programNo }))}
-              uid={uid}
-              editable={editable}
-              onDone={onChanged}
-            />
-          </p>
-        ) : (
-          <>
-            <p className="muted">
-              <Link to={`/programs/${program.id}`}>{program.name}</Link>
-              <LinkPicker
-                kind="project.program"
-                recordId={project.id}
-                currentId={project.programId ?? null}
-                currentLabel={program.name}
-                options={allPrograms.map((g) => ({ id: g.id, label: g.name, hint: g.programNo }))}
-                uid={uid}
-                editable={editable}
-                onDone={onChanged}
-              />
-            </p>
-            <p className="muted mono">{program.programNo}</p>
-            <p className="muted">
-              The programme's progress is the average across its projects — weighted by contract
-              value where they are on separate agreements, and a plain average where they share
-              one, as the lifts of a single building do.
-            </p>
-          </>
-        )}
+        <p className="muted">
+          {parentProject === null ? (
+            'Top-level project'
+          ) : (
+            <>Sub-project of <Link to={`/projects/${parentProject.id}`}>{parentProject.title}</Link></>
+          )}
+          {editable && ' · Change the parent in Edit project.'}
+        </p>
       </div>
 
       <div className="link-half">
@@ -386,15 +346,12 @@ function ProjectLinks({
             {project.contractId === null
               ? 'This project is not under a contract. Variations and warranty work often are not.'
               : 'The contract this project names could not be found. It may have been deleted.'}{' '}
-            {/* Until now this link could not be changed ANYWHERE: the project
-                form preserved whatever was there and offered no control, so a
-                job filed against the wrong agreement stayed there. */}
             <LinkPicker
               kind="project.contract"
               recordId={project.id}
               currentId={project.contractId}
               currentLabel={null}
-              options={allContracts.map((k) => ({ id: k.id, label: k.contractNo, hint: k.title }))}
+              options={allContracts.map((item) => ({ id: item.id, label: item.contractNo, hint: item.title }))}
               uid={uid}
               editable={editable}
               onDone={onChanged}
@@ -403,38 +360,26 @@ function ProjectLinks({
         ) : (
           <>
             <p className="link-title">
-              <Link to={`/contracts/${contract.id}`}>{contract.title}</Link>
+              <Link to={`/contracts/${contract.id}`}>{contract.contractNo}</Link>
               <LinkPicker
                 kind="project.contract"
                 recordId={project.id}
                 currentId={project.contractId}
                 currentLabel={contract.contractNo}
-                options={allContracts.map((k) => ({ id: k.id, label: k.contractNo, hint: k.title }))}
+                options={allContracts.map((item) => ({ id: item.id, label: item.contractNo, hint: item.title }))}
                 uid={uid}
                 editable={editable}
                 onDone={onChanged}
               />
             </p>
-            <p className="muted mono">{contract.contractNo}</p>
-            <p className="muted">
-              A contract can cover several projects across several sites; this is one of them.
-            </p>
+            <p className="muted">{contract.title}</p>
           </>
         )}
       </div>
-
     </section>
   );
 }
 
-/**
- * What is tied to this project: its lifts, its sub-projects, its invoices.
- *
- * Plain lists, each with the two things you do to a row. They sit above the
- * stages and the KPIs because they answer the first question about a job —
- * "what does it consist of" — and let a wrong row be corrected or removed from
- * where it was noticed.
- */
 function ProjectRelated({
   project,
   units,
