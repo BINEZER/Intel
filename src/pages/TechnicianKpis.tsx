@@ -8,16 +8,22 @@
 
 import { DEFAULT_KPI_TARGETS, formatMinutes, type TechnicianKpiResult } from '../lib/kpi.js';
 import { DurationTile, KpiTile, RateTile } from '../components/KpiTile.js';
+import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition } from '../lib/kpi-definitions.js';
+import type { KpiTargets } from '../lib/schema.js';
 
 export function TechnicianKpiPanel({
   name,
   kpi,
   targets = DEFAULT_KPI_TARGETS,
+  definitions = DEFAULT_KPI_DEFINITIONS,
 }: {
   name: string;
   kpi: TechnicianKpiResult;
-  targets?: typeof DEFAULT_KPI_TARGETS;
+  targets?: KpiTargets;
+  definitions?: readonly KpiDefinition[];
 }) {
+  const visible = (key: string) => definitions.some((item) => item.key === key && item.enabled && (item.scope === 'service' || item.scope === 'workforce'));
+  const labelFor = (key: string, fallback: string) => definitions.find((item) => item.key === key)?.label ?? fallback;
   const noWork = kpi.calloutsHandled === 0 && kpi.pmVisitsScheduled === 0;
 
   return (
@@ -28,14 +34,14 @@ export function TechnicianKpiPanel({
       )}
 
       <div className="kpis">
-        <RateTile
-          label="First-time fix"
+        {visible('firstTimeFix') && (<RateTile
+          label={labelFor('firstTimeFix', 'First-time fix')}
           value={kpi.firstTimeFixBps}
           target={targets.firstTimeFixBps}
           title="Callouts closed on the first visit with no follow-up. The clearest signal that a repair held."
-        />
-        <RateTile
-          label="Repeat callouts"
+        />)}
+        {visible('repeatCallouts') && (<RateTile
+          label={labelFor('repeatCallouts', 'Repeat callouts')}
           value={kpi.repeatCalloutBps}
           target={targets.repeatCalloutBps}
           direction="lower"
@@ -45,46 +51,46 @@ export function TechnicianKpiPanel({
             </span>
           }
           title="A callout on a unit this technician had recently attended. High repeats mean first fixes are not holding."
-        />
-        <RateTile
-          label="Response SLA"
+        />)}
+        {visible('responseSla') && (<RateTile
+          label={labelFor('responseSla', 'Response SLA')}
           value={kpi.slaResponseComplianceBps}
           target={targets.slaResponseComplianceBps}
           title="Share of callouts attended inside the contract response window."
-        />
-        <RateTile
-          label="Resolution SLA"
+        />)}
+        {visible('resolutionSla') && (<RateTile
+          label={labelFor('resolutionSla', 'Resolution SLA')}
           value={kpi.slaResolutionComplianceBps}
           target={targets.slaResolutionComplianceBps}
           title="Measured from the report, not from arrival — that is what the client experiences."
-        />
+        />)}
 
-        <DurationTile
-          label="Median response"
+        {visible('medianResponse') && (<DurationTile
+          label={labelFor('medianResponse', 'Median response')}
           minutes={kpi.medianResponseMinutes}
           detail={
             <span className="muted">mean {formatMinutes(kpi.avgResponseMinutes)}</span>
           }
           title="Median rather than mean: one bad night should not define a technician's record."
-        />
-        <DurationTile
-          label="Mean repair"
+        />)}
+        {visible('meanRepair') && (<DurationTile
+          label={labelFor('meanRepair', 'Mean repair')}
           minutes={kpi.avgRepairMinutes}
           detail={<span className="muted">on site to back in service</span>}
-        />
+        />)}
 
-        <KpiTile
-          label="Callouts"
+        {visible('callouts') && (<KpiTile
+          label={labelFor('callouts', 'Callouts')}
           value={kpi.calloutsHandled}
           detail={
             kpi.entrapments > 0
               ? <span className="muted">{kpi.entrapments} entrapment{kpi.entrapments === 1 ? '' : 's'}</span>
               : <span className="muted">no entrapments</span>
           }
-        />
+        />)}
 
-        <RateTile
-          label="PM compliance"
+        {visible('pmCompliance') && (<RateTile
+          label={labelFor('pmCompliance', 'PM compliance')}
           value={kpi.pmComplianceBps}
           target={targets.pmComplianceBps}
           detail={
@@ -93,22 +99,22 @@ export function TechnicianKpiPanel({
             </span>
           }
           title="Preventive maintenance visits completed against those the contract promised."
-        />
-        <RateTile
-          label="PM on time"
+        />)}
+        {visible('pmOnTime') && (<RateTile
+          label={labelFor('pmOnTime', 'PM on time')}
           value={kpi.pmOnTimeBps}
           target={targets.pmOnTimeBps}
           direction="higher"
-        />
-        <RateTile
-          label="Utilisation"
+        />)}
+        {visible('utilisation') && (<RateTile
+          label={labelFor('utilisation', 'Utilisation')}
           value={kpi.utilisationBps}
           target={targets.utilisationBps}
           detail={<span className="muted">{formatMinutes(kpi.loggedMinutes)} logged</span>}
-        />
+        />)}
 
-        <KpiTile
-          label="Certifications"
+        {visible('certifications') && (<KpiTile
+          label={labelFor('certifications', 'Certifications')}
           value={
             kpi.certificationsExpired > 0
               ? `${kpi.certificationsExpired} expired`
@@ -123,7 +129,7 @@ export function TechnicianKpiPanel({
             <span className="muted">within {targets.certificationWarningDays} days</span>
           }
           title="Elevator work is certified work — an expired card is a compliance problem, not a reminder."
-        />
+        />)}
       </div>
     </section>
   );

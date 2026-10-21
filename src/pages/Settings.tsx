@@ -13,9 +13,11 @@ import { useAuth } from '../auth/AuthProvider.js';
 import { Maintenance } from '../components/Maintenance.js';
 import {
   getKpiTargets,
+  getKpiDefinitions,
   getKpiWeights,
   getPriorityConfig,
   saveKpiTargets,
+  saveKpiDefinitions,
   saveKpiWeights,
   savePriorityConfig,
 } from '../data/config.js';
@@ -24,6 +26,7 @@ import { DEFAULT_KPI_TARGETS } from '../lib/kpi.js';
 import { DEFAULT_PRIORITY_CONFIG } from '../lib/priority.js';
 import type { KpiTargets, PriorityConfig, ProjectKpiWeights, TechnicianKpiWeights } from '../lib/schema.js';
 import { DEFAULT_PROJECT_WEIGHTS, DEFAULT_TECHNICIAN_WEIGHTS } from '../lib/scorecard.js';
+import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition, type KpiScope } from '../lib/kpi-definitions.js';
 
 /** A percentage stored as basis points, edited as a percentage. */
 function PercentField({
@@ -58,6 +61,7 @@ function PercentField({
 export function Settings() {
   const { user } = useAuth();
   const [targets, setTargets] = useState<KpiTargets>({ ...DEFAULT_KPI_TARGETS });
+  const [definitions, setDefinitions] = useState<KpiDefinition[]>(DEFAULT_KPI_DEFINITIONS.map((item) => ({ ...item })));
   const [priority, setPriority] = useState<PriorityConfig>({ ...DEFAULT_PRIORITY_CONFIG });
   const [weights, setWeights] = useState<{ project: ProjectKpiWeights; technician: TechnicianKpiWeights }>({
     project: { ...DEFAULT_PROJECT_WEIGHTS }, technician: { ...DEFAULT_TECHNICIAN_WEIGHTS },
@@ -69,17 +73,19 @@ export function Settings() {
   const kpiAction = useAsyncAction('save the KPI targets');
   const priorityAction = useAsyncAction('save the prioritisation settings');
   const weightsAction = useAsyncAction('save the KPI weights');
+  const definitionsAction = useAsyncAction('save KPI definitions');
 
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
     setLoadError(null);
-    void Promise.all([getKpiTargets(), getPriorityConfig(), getKpiWeights()])
-      .then(([k, p, w]) => {
+    void Promise.all([getKpiTargets(), getPriorityConfig(), getKpiWeights(), getKpiDefinitions()])
+      .then(([k, p, w, d]) => {
         if (cancelled) return;
         setTargets(k);
         setPriority(p);
         setWeights(w);
+        setDefinitions(d);
         setLoaded(true);
       })
       .catch((error: unknown) => {
@@ -112,6 +118,67 @@ export function Settings() {
       </p>
 
       <p className="hint">VAT is applied automatically to sales. Tax rates used for calculations are maintained in the application logic; this page is for operational KPI and receivables-priority settings.</p>
+
+      <section className="card">
+        <h2>KPI definitions</h2>
+        <p className="hint">Choose which built-in measurements to show, rename them for your teams, and remove metrics you do not use. Target numbers are edited below; weights are edited in the scorecard section. Removing a KPI from this list hides it from the KPI panels but does not delete historical records.</p>
+        <div className="stack-list">
+          {definitions.map((item) => (
+            <div className="card" key={item.key}>
+              <div className="form-grid">
+                <div className="field">
+                  <label htmlFor={`kpi-name-${item.key}`}>KPI name</label>
+                  <input id={`kpi-name-${item.key}`} value={item.label}
+                    onChange={(e) => setDefinitions(definitions.map((row) => row.key === item.key ? { ...row, label: e.target.value } : row))} />
+                </div>
+                <div className="field">
+                  <label htmlFor={`kpi-scope-${item.key}`}>Applies to</label>
+                  <select id={`kpi-scope-${item.key}`} value={item.scope}
+                    onChange={(e) => setDefinitions(definitions.map((row) => row.key === item.key ? { ...row, scope: e.target.value as KpiScope } : row))}>
+                    {(['schedule', 'daysToEnd', 'delivered', 'phases', 'grossMargin', 'billed', 'unbilledWork', 'collected', 'collectionTime', 'inspection', 'phaseDuration'].includes(item.key)) ? (
+                      <>
+                        <option value="project">Project delivery</option>
+                        <option value="installation">Installation</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="service">Service &amp; maintenance</option>
+                        <option value="workforce">Workforce</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div className="field checkbox">
+                  <label><input type="checkbox" checked={item.enabled}
+                    onChange={(e) => setDefinitions(definitions.map((row) => row.key === item.key ? { ...row, enabled: e.target.checked } : row))} />
+                    Show this KPI</label>
+                </div>
+                <div className="field">
+                  <button type="button" onClick={() => setDefinitions(definitions.filter((row) => row.key !== item.key))}>Remove KPI</button>
+                </div>
+              </div>
+              <p className="hint">Measurement: {item.key}. This metric is calculated from existing project/service records.</p>
+            </div>
+          ))}
+        </div>
+        <div className="form-actions">
+          <label className="field" htmlFor="kpi-restore">Restore removed KPI</label>
+          <select id="kpi-restore" value="" onChange={(e) => {
+            const item = DEFAULT_KPI_DEFINITIONS.find((row) => row.key === e.target.value);
+            if (item && !definitions.some((row) => row.key === item.key)) setDefinitions([...definitions, { ...item }]);
+          }}>
+            <option value="">Choose a built-in KPI…</option>
+            {DEFAULT_KPI_DEFINITIONS.filter((item) => !definitions.some((row) => row.key === item.key)).map((item) => (
+              <option key={item.key} value={item.key}>{item.label}</option>
+            ))}
+          </select>
+          {definitionsAction.error && <p className="error" role="alert">{definitionsAction.error}</p>}
+          <button type="button" className="primary" disabled={definitionsAction.busy || user === null}
+            onClick={() => { if (user) void definitionsAction.run(() => saveKpiDefinitions(definitions, user.uid)); }}>
+            {definitionsAction.busy ? 'Saving…' : 'Save KPI definitions'}
+          </button>
+        </div>
+      </section>
 
       {/* --- KPI targets --- */}
       <section className="card">
