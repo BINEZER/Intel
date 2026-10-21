@@ -2,7 +2,7 @@
  * Project list and creation.
  */
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   PROJECT_TYPES,
   isElevatorWork,
@@ -294,7 +294,7 @@ function ProjectStatusControl({ project, uid }: { project: WithId<Project>; uid:
 
   // Keep the picker aligned with the live Firestore record, including changes
   // made by another manager.
-  useMemo(() => {
+  useEffect(() => {
     setSelected(project.status);
     setSaved(false);
   }, [project.status]);
