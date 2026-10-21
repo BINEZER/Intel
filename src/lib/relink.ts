@@ -13,7 +13,7 @@
  *     Project.contractId                which agreement pays for it
  *     Project.programId                 which commitment it is part of
  *     ElevatorUnit.clientId             whose building the machine is in
- *     ElevatorUnit.installedByProjectId which job put it in
+ *     ElevatorUnit.installedByProjectId which project it is linked to
  *     ElevatorUnit.maintenanceContractId which agreement services it
  *
  *   There is deliberately no array on the other side. Two fields naming one
@@ -73,8 +73,8 @@ export const LINK_REQUIRED: Record<LinkKind, boolean> = {
   'project.program': false,
   // A machine stands in somebody's building.
   'unit.client': true,
-  // A lift we did not install is a real case — we service plenty.
-  'unit.project': false,
+  // Every lift must be associated with a project, whether we installed it or only service it.
+  'unit.project': true,
   'unit.contract': false,
   'contract.client': true,
 };
@@ -85,7 +85,7 @@ export const LINK_NOUN: Record<LinkKind, string> = {
   'project.contract': 'contract',
   'project.program': 'programme',
   'unit.client': 'client',
-  'unit.project': 'project that installed it',
+  'unit.project': 'linked project',
   'unit.contract': 'maintenance contract',
   'contract.client': 'client',
 };
