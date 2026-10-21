@@ -85,7 +85,7 @@ export const LINK_NOUN: Record<LinkKind, string> = {
   'project.contract': 'contract',
   'project.program': 'programme',
   'unit.client': 'client',
-  'unit.project': 'linked project',
+  'unit.project': 'project',
   'unit.contract': 'maintenance contract',
   'contract.client': 'client',
 };
