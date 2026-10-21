@@ -383,7 +383,7 @@ export function Units() {
 export function UnitDetail() {
   const { unitId } = useParams<{ unitId: string }>();
   const { user, role } = useAuth();
-  const editable = can(role, 'updatePhaseProgress') && user !== null;
+  const editable = can(role, 'manageProjects') && user !== null;
 
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
   // The three records a lift points at, for the pickers below. Subscribed, so
