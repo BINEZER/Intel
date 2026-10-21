@@ -33,55 +33,29 @@ interface NavGroup {
  */
 const NAV: NavGroup[] = [
   {
-    label: 'Today',
+    label: 'Work',
     items: [
       { to: '/', label: 'Dashboard', capability: 'read' },
-      { to: '/alerts', label: 'Alerts', capability: 'read' },
-      { to: '/follow-ups', label: 'Follow-ups', capability: 'read' },
-      { to: '/priority', label: 'Priority', capability: 'read' },
-      { to: '/finish-next', label: 'Finish next', capability: 'read' },
-    ],
-  },
-  {
-    label: 'Delivery',
-    items: [
       { to: '/projects', label: 'Projects', capability: 'read' },
-      { to: '/programs', label: 'Programs', capability: 'read' },
       { to: '/units', label: 'Lifts', capability: 'read' },
       { to: '/service', label: 'Service', capability: 'read' },
-      { to: '/boards', label: 'Boards', capability: 'useBoards' },
     ],
   },
   {
-    label: 'Money',
-    items: [
-      { to: '/finance', label: 'Finance', capability: 'viewFinancials' },
-      { to: '/cash', label: 'Cash forecast', capability: 'viewFinancials' },
-      { to: '/payment-dates', label: 'Payment dates', capability: 'manageContracts' },
-      { to: '/collections', label: 'Collections', capability: 'viewFinancials' },
-      { to: '/payouts', label: 'Payouts', capability: 'viewFinancials' },
-      { to: '/reports', label: 'Reports', capability: 'viewFinancials' },
-    ],
-  },
-  {
-    label: 'People & partners',
+    label: 'Commercial',
     items: [
       { to: '/clients', label: 'Clients', capability: 'read' },
-      { to: '/people', label: 'People', capability: 'read' },
       { to: '/contracts', label: 'Contracts', capability: 'read' },
-      { to: '/performance', label: 'Performance', capability: 'read' },
-      { to: '/incentives', label: 'Incentives', capability: 'read' },
+      { to: '/collections', label: 'Receivables', capability: 'viewFinancials' },
     ],
   },
   {
-    label: 'Setup',
+    label: 'Administration',
     items: [
-      { to: '/import', label: 'Import data', capability: 'manageConfig' },
-      { to: '/archive', label: 'Archive', capability: 'archiveJobs' },
-      { to: '/settings', label: 'Settings', capability: 'manageConfig' },
+      { to: '/tools', label: 'More tools', capability: 'read' },
     ],
   },
-];
+];;
 
 /** Today in both calendars, for the header. */
 export function TodayBadge() {
