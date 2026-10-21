@@ -17,7 +17,7 @@ import { formatETB } from '../lib/money.js';
 import { ProjectForm } from './Projects.js';
 import { UnitForm } from './Units.js';
 import { getPaymentStagesForProject, subscribeContracts } from '../data/contracts.js';
-import { subscribeUnits } from '../data/units.js';
+import { subscribeUnits, updateUnit } from '../data/units.js';
 import { subscribeClients } from '../data/clients.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -44,6 +44,7 @@ export function ProjectDetail() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects');
   const { busy: statusSaving, error: statusError, run: saveStatus } = useAsyncAction('update project status');
+  const { busy: unitStatusSaving, error: unitStatusError, run: saveUnitStatus } = useAsyncAction('update lift status');
   const [project, setProject] = useState<WithId<Project> | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   /**
@@ -208,6 +209,7 @@ export function ProjectDetail() {
           )}
           {statusSaving && <span className="muted" role="status">Saving status…</span>}
           {statusError && <p className="error no-print" role="alert">{statusError}</p>}
+      {unitStatusError && <p className="error no-print" role="alert">{unitStatusError}</p>}
           {editable && user !== null && (
             <>
               <button type="button" className="no-print" onClick={() => setEditing({ kind: 'project', row: project })}>
@@ -412,7 +414,24 @@ function ProjectRelated({
       describeMake(unit),
       describeSpec(unit),
     ].filter((part): part is string => part !== null && part !== '').join(' · '),
-    meta: <span className="chip no-caps">{unit.status.replace(/_/g, ' ')}</span>,
+    meta: editable && user !== null ? (
+      <select
+        aria-label={`Status for ${unit.tag}`}
+        value={unit.status}
+        disabled={unitStatusSaving}
+        onChange={(event) => {
+          const nextStatus = event.target.value as ElevatorUnit['status'];
+          void saveUnitStatus(async () => {
+            await updateUnit(unit.id, { status: nextStatus }, user.uid);
+            reload();
+          });
+        }}
+      >
+        {(['under_installation', 'in_service', 'out_of_service', 'decommissioned'] as ElevatorUnit['status'][]).map((value) => (
+          <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>
+        ))}
+      </select>
+    ) : <span className="chip no-caps">{unit.status.replace(/_/g, ' ')}</span>,
     ...(editable ? { onEdit: () => onEditUnit(unit) } : {}),
     ...(editable
       ? { deleteTarget: { kind: 'unit' as const, id: unit.id, name: unit.tag, unit: { tag: unit.tag, clientId: unit.clientId } } }
