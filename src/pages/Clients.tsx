@@ -35,6 +35,7 @@ export function Clients() {
     'load clients',
   );
   const [editing, setEditing] = useState<WithId<Client> | 'new' | null>(null);
+  const statusAction = useAsyncAction('update client status');
 
   return (
     <>
@@ -61,6 +62,7 @@ export function Clients() {
       )}
 
       {error && <p className="error" role="alert">{error}</p>}
+      {statusAction.error && <p className="error" role="alert">{statusAction.error}</p>}
       {loading && <p className="muted">Loading clients…</p>}
       {!loading && rows.length === 0 && !error && (
         <p className="muted">No clients yet.{editable && ' Add the first one to start writing contracts.'}</p>
@@ -81,21 +83,6 @@ export function Clients() {
                   <strong>{client.name}</strong>
                 </Link>
               ),
-            },
-            {
-              key: 'tin',
-              label: 'TIN',
-              value: (client) => client.tin,
-              render: (client) =>
-                client.tin === '' ? <span className="muted">—</span> : <span className="mono">{client.tin}</span>,
-            },
-            {
-              key: 'vat',
-              label: 'VAT',
-              value: (client) => (client.vatRegistered ? 'Registered' : 'Not registered'),
-              filterable: true,
-              render: (client) =>
-                client.vatRegistered ? 'Registered' : <span className="muted">Not registered</span>,
             },
             {
               key: 'city',
@@ -126,7 +113,16 @@ export function Clients() {
               value: (client) => client.status,
               filterable: true,
               text: (client) => statusLabel('client', client.status),
-              render: (client) => <StatusChip kind="client" value={client.status} />,
+              render: (client) => editable && user !== null ? (
+                <StatusSelect
+                  compact
+                  kind="client"
+                  id={`client-status-${client.id}`}
+                  value={client.status}
+                  disabled={statusAction.busy}
+                  onChange={(value) => void statusAction.run(() => updateClient(client.id, { status: value as Client['status'] }, user.uid))}
+                />
+              ) : <StatusChip kind="client" value={client.status} />,
             },
             ...(editable
               ? [
@@ -170,9 +166,8 @@ export function ClientForm({
           // requirement, not just a TypeScript one.
           name: initial.name,
           ...(initial.nameAm === undefined ? {} : { nameAm: initial.nameAm }),
-          tin: initial.tin,
-          vatRegistered: initial.vatRegistered,
-          ...(initial.vatRegNo === undefined ? {} : { vatRegNo: initial.vatRegNo }),
+          tin: '',
+          vatRegistered: true,
           address: {
             city: initial.address?.city ?? '',
             ...(initial.address?.street ? { street: initial.address.street } : {}),
@@ -186,8 +181,9 @@ export function ClientForm({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const payload: ClientInput = { ...form, tin: '', vatRegistered: true, vatRegNo: undefined };
     const result = await run(async () =>
-      initial === null ? createClient(form, uid) : updateClient(initial.id, form, uid),
+      initial === null ? createClient(payload, uid) : updateClient(initial.id, payload, uid),
     );
     if (result !== null) onDone();
   }
@@ -209,16 +205,6 @@ export function ClientForm({
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
-        </div>
-
-        <div className="field">
-          <label htmlFor="c-tin">TIN</label>
-          <input
-            id="c-tin"
-            value={form.tin}
-            onChange={(e) => setForm({ ...form, tin: e.target.value })}
-          />
-          <p className="hint">Required on every VAT invoice issued to this client.</p>
         </div>
 
         <div className="field">
@@ -267,17 +253,6 @@ export function ClientForm({
             value={form.status}
             onChange={(value) => setForm({ ...form, status: value as Client['status'] })}
           />
-        </div>
-
-        <div className="field checkbox">
-          <label>
-            <input
-              type="checkbox"
-              checked={form.vatRegistered}
-              onChange={(e) => setForm({ ...form, vatRegistered: e.target.checked })}
-            />
-            VAT registered
-          </label>
         </div>
 
         {error && <p className="error form-wide" role="alert">{error}</p>}
