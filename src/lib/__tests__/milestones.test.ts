@@ -69,6 +69,7 @@ describe('allocateByShares never loses a santim', () => {
 describe('share validation', () => {
   it('accepts the default supply-and-install schedule', () => {
     expect(() => assertSharesValid(DEFAULT_SUPPLY_INSTALL_SHARES)).not.toThrow();
+    expect(DEFAULT_SUPPLY_INSTALL_SHARES.map((milestone) => milestone.shareBps)).toEqual([5000, 3000, 1000, 1000]);
   });
 
   it('rejects a schedule that does not cover the contract', () => {
