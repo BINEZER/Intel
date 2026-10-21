@@ -415,7 +415,7 @@ export function ProjectForm({
       site: {
         name: title.trim(),
         city,
-        ...(address.trim() === '' ? (initial?.site?.address ? { address: initial.site.address } : {}) : { address: address.trim() }),
+        ...(address.trim() === '' ? {} : { address: address.trim() }),
       },
       parentProjectId: parentProjectId === '' ? null : parentProjectId,
       reminders,
