@@ -172,6 +172,7 @@ export function Units() {
    */
   const [servicedOnly, setServicedOnly] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<WithId<ElevatorUnit> | 'new' | null>(null);
+  const { busy: statusSaving, error: statusError, run: saveUnitStatus } = useAsyncAction('update lift status');
 
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
   const records = useSiteRecords(units.rows.map((u) => u.siteName));
@@ -222,6 +223,7 @@ export function Units() {
       </div>
 
       {units.error !== null && <p className="error" role="alert">{units.error}</p>}
+      {statusError && <p className="error" role="alert">{statusError}</p>}
       {(units.loading || records.loading) && <p className="muted">Loading…</p>}
 
       {editing !== null && user !== null && (
@@ -290,7 +292,21 @@ export function Units() {
               label: 'Status',
               value: ({ unit }) => STATUS_LABEL[unit.status],
               filterable: true,
-              render: ({ unit }) => <span className="chip">{STATUS_LABEL[unit.status]}</span>,
+              render: ({ unit }) => editable ? (
+                <select
+                  aria-label={`Status for ${unit.tag}`}
+                  value={unit.status}
+                  disabled={statusSaving}
+                  onChange={(event) => {
+                    const next = event.target.value as ElevatorUnit['status'];
+                    void saveUnitStatus(() => updateUnit(unit.id, { status: next }, user?.uid ?? ''));
+                  }}
+                >
+                  {(Object.keys(STATUS_LABEL) as ElevatorUnit['status'][]).map((status) => (
+                    <option key={status} value={status}>{STATUS_LABEL[status]}</option>
+                  ))}
+                </select>
+              ) : <span className="chip">{STATUS_LABEL[unit.status]}</span>,
             },
             {
               key: 'condition',
@@ -662,6 +678,7 @@ export function UnitForm({
   const [capacityKg, setCapacityKg] = useState(String(initial?.capacityKg ?? ''));
   const [stops, setStops] = useState(String(initial?.stops ?? ''));
   const [speedMps, setSpeedMps] = useState(String(initial?.speedMps ?? ''));
+  const [status, setStatus] = useState<ElevatorUnit['status']>(initial?.status ?? 'in_service');
   const { busy, error, run } = useAsyncAction(initial === null ? 'add this lift' : 'save this lift');
 
   const ready = tag.trim() !== '' && siteName.trim() !== '' && clientId !== '';
@@ -698,7 +715,7 @@ export function UnitForm({
       maintenanceContractId: contractId === '' ? null : contractId,
       maintenanceContractNo: contract?.contractNo ?? null,
       commissionedOn: initial?.commissionedOn ?? null,
-      status: initial?.status ?? ('in_service' as ElevatorUnit['status']),
+      status,
       certificate: initial?.certificate ?? null,
       remarks: initial?.remarks ?? '',
     };
@@ -727,6 +744,14 @@ export function UnitForm({
             <label htmlFor="u-site">Site <span className="req" aria-hidden="true">*</span></label>
             <input id="u-site" required value={siteName} onChange={(e) => setSiteName(e.target.value)}
               placeholder="Sheger Mall" />
+          </div>
+          <div className="field">
+            <label htmlFor="u-status">Status</label>
+            <select id="u-status" value={status} onChange={(e) => setStatus(e.target.value as ElevatorUnit['status'])}>
+              {(Object.keys(STATUS_LABEL) as ElevatorUnit['status'][]).map((value) => (
+                <option key={value} value={value}>{STATUS_LABEL[value]}</option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label htmlFor="u-city">City</label>
