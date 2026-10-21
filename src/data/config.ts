@@ -15,6 +15,7 @@ import { DEFAULT_PROJECT_WEIGHTS, DEFAULT_TECHNICIAN_WEIGHTS, assertWeightsValid
 import { assertSchemeValid, defaultScheme, type IncentiveScheme } from '../lib/incentive.js';
 import { DEFAULT_CADENCE, type ChaseCadence } from '../lib/collection-chase.js';
 import { stampUpdate } from './audit.js';
+import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition } from '../lib/kpi-definitions.js';
 import { db } from '../firebase.js';
 
 const PATH = 'config';
@@ -45,6 +46,22 @@ async function readWithDefault<T>(docId: string, fallback: T): Promise<T> {
 
 export function getTaxConfig() {
   return readWithDefault('tax', DEFAULT_TAX_CONFIG);
+}
+
+export function getKpiDefinitions() {
+  return readWithDefault<KpiDefinition[]>('kpiDefinitions', DEFAULT_KPI_DEFINITIONS);
+}
+
+export async function saveKpiDefinitions(definitions: KpiDefinition[], uid: string): Promise<void> {
+  const keys = definitions.map((item) => item.key);
+  if (new Set(keys).size !== keys.length) throw new Error('Each KPI must have a unique key.');
+  for (const item of definitions) {
+    if (item.label.trim() === '') throw new Error('Every enabled KPI needs a name.');
+    if (!['project', 'service', 'installation', 'workforce'].includes(item.scope)) {
+      throw new Error(`Invalid KPI scope: ${item.scope}`);
+    }
+  }
+  await setDoc(doc(db, PATH, 'kpiDefinitions'), { definitions, ...stampUpdate(uid) });
 }
 
 export function getKpiTargets() {
