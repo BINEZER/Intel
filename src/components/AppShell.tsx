@@ -39,14 +39,11 @@ const NAV: NavGroup[] = [
       { to: '/priority', label: 'Priority', capability: 'read' },
       { to: '/projects', label: 'Projects', capability: 'read' },
       { to: '/units', label: 'Lifts', capability: 'read' },
-      { to: '/service', label: 'Service', capability: 'read' },
     ],
   },
   {
     label: 'Commercial',
     items: [
-      { to: '/clients', label: 'Clients', capability: 'read' },
-      { to: '/contracts', label: 'Contracts', capability: 'read' },
       { to: '/collections', label: 'Receivables', capability: 'viewFinancials' },
     ],
   },
