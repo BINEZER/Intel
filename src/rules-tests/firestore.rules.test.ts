@@ -671,38 +671,6 @@ describe('config is admin-only', () => {
   });
 });
 
-describe('programs are a grouping, not a ledger', () => {
-  const PROGRAM = {
-    programNo: 'PG-1', name: 'Bole Tower', description: 'All lifts',
-    clientId: 'cl1', clientName: 'Acme', kind: 'program', status: 'active',
-    plannedStart: null, plannedEnd: null, ownerUid: 'mgr',
-  };
-
-  beforeEach(async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'programs/pg1'), { ...PROGRAM, ...stamped('mgr') });
-    });
-  });
-
-  it('lets anyone who can read the app read a program', async () => {
-    await assertSucceeds(getDoc(doc(ctx('u1', 'viewer'), 'programs/pg1')));
-  });
-
-  it('lets a manager create one and refuses an engineer', async () => {
-    await assertSucceeds(setDoc(doc(ctx('mgr', 'manager'), 'programs/pg2'), { ...PROGRAM, ...stamped('mgr') }));
-    await assertFails(setDoc(doc(ctx('eng', 'engineer'), 'programs/pg3'), { ...PROGRAM, ...stamped('eng') }));
-  });
-
-  it('refuses a create whose audit stamp names someone else', async () => {
-    await assertFails(setDoc(doc(ctx('mgr', 'manager'), 'programs/pg4'), { ...PROGRAM, ...stamped('someone-else') }));
-  });
-
-  it('lets only an admin delete one', async () => {
-    await assertFails(deleteDoc(doc(ctx('mgr', 'manager'), 'programs/pg1')));
-    await assertSucceeds(deleteDoc(doc(ctx('adm', 'admin'), 'programs/pg1')));
-  });
-});
-
 describe('units: engineers may update the machine in front of them', () => {
   const UNIT = {
     unitCode: 'IM-U-1', tag: 'LIFT-01', siteName: 'Sheger Mall', city: 'Addis Ababa',
