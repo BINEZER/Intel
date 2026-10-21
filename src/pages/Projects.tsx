@@ -13,6 +13,8 @@ import {
   type SelectableProjectType,
 } from '../lib/project-kind.js';
 import { Link } from 'react-router-dom';
+import { toTimestamp } from '../firebase.js';
+import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { subscribeClients } from '../data/clients.js';
@@ -357,17 +359,34 @@ export function ProjectForm({
   /** Once the kind has been set by hand, a template must not overwrite it. */
   const [typeIsProposed, setTypeIsProposed] = useState(initial === null);
   const [parentProjectId, setParentProjectId] = useState(initial?.parentProjectId ?? '');
+  const [contractId, setContractId] = useState(initial?.contractId ?? '');
   const [address, setAddress] = useState(initial?.site?.address ?? '');
   const [reminders, setReminders] = useState<Reminder[]>(initial?.reminders ?? []);
   const [plannedStart, setPlannedStart] = useState<DualDate | null>(initial?.plannedStart ?? null);
   const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(initial?.plannedEnd ?? null);
+  const [startDateEdited, setStartDateEdited] = useState(initial !== null);
+  const [endDateEdited, setEndDateEdited] = useState(initial !== null);
   const [status, setStatus] = useState<Project['status']>(initial?.status ?? 'planned');
   const { busy, error, run } = useAsyncAction(
     initial === null ? 'create this project' : 'save this project',
   );
 
   const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
+  const contractRows = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts').rows;
   const template = projectTemplate(templateKey);
+
+  function chooseContract(nextId: string) {
+    setContractId(nextId);
+    if (initial !== null || nextId === '') return;
+    const agreement = contractRows.find((item) => item.id === nextId);
+    if (agreement === undefined) return;
+    if (!startDateEdited) setPlannedStart(agreement.signedDate);
+    if (!endDateEdited) {
+      const end = new Date(agreement.signedDate.at.toDate());
+      end.setUTCDate(end.getUTCDate() + 150);
+      setPlannedEnd(dualDateFromGregorian(end, toTimestamp, agreement.signedDate.enteredIn));
+    }
+  }
 
   /**
    * Picking a template proposes the matching kind of work, and stops doing so
@@ -411,7 +430,7 @@ export function ProjectForm({
       title: title.trim(),
       clientId,
       clientName: client.name,
-      contractId: initial?.contractId ?? null,
+      contractId: contractId === '' ? null : contractId,
       site: {
         name: title.trim(),
         city,
@@ -473,6 +492,17 @@ export function ProjectForm({
                 <option key={c.id} value={c.id}>{clientOptionLabel(c)}</option>
               ))}
             </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-contract">Agreement / contract</label>
+            <select id="p-contract" value={contractId} onChange={(e) => chooseContract(e.target.value)}>
+              <option value="">No linked contract</option>
+              {contractRows.filter((k) => k.clientId === clientId).map((k) => (
+                <option key={k.id} value={k.id}>{k.contractNo} · {k.title}</option>
+              ))}
+            </select>
+            <p className="hint">Choose the signed agreement to link this project to the client commitment.</p>
           </div>
 
           <div className="field">
@@ -561,8 +591,8 @@ export function ProjectForm({
         </div>
 
         <div className="form-grid dates">
-          <DualDateInput label="Planned start" value={plannedStart} onChange={setPlannedStart} required />
-          <DualDateInput label="Planned end" value={plannedEnd} onChange={setPlannedEnd} required />
+          <DualDateInput label="Planned start" value={plannedStart} onChange={(value) => { setStartDateEdited(true); setPlannedStart(value); }} required />
+          <DualDateInput label="Planned end" value={plannedEnd} onChange={(value) => { setEndDateEdited(true); setPlannedEnd(value); }} required />
         </div>
 
         <details className="stage-preview">
