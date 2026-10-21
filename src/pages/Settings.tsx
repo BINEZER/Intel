@@ -13,14 +13,17 @@ import { useAuth } from '../auth/AuthProvider.js';
 import { Maintenance } from '../components/Maintenance.js';
 import {
   getKpiTargets,
+  getKpiWeights,
   getPriorityConfig,
   saveKpiTargets,
+  saveKpiWeights,
   savePriorityConfig,
 } from '../data/config.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { DEFAULT_KPI_TARGETS } from '../lib/kpi.js';
 import { DEFAULT_PRIORITY_CONFIG } from '../lib/priority.js';
-import type { KpiTargets, PriorityConfig } from '../lib/schema.js';
+import type { KpiTargets, PriorityConfig, ProjectKpiWeights, TechnicianKpiWeights } from '../lib/schema.js';
+import { DEFAULT_PROJECT_WEIGHTS, DEFAULT_TECHNICIAN_WEIGHTS } from '../lib/scorecard.js';
 
 /** A percentage stored as basis points, edited as a percentage. */
 function PercentField({
@@ -56,22 +59,27 @@ export function Settings() {
   const { user } = useAuth();
   const [targets, setTargets] = useState<KpiTargets>({ ...DEFAULT_KPI_TARGETS });
   const [priority, setPriority] = useState<PriorityConfig>({ ...DEFAULT_PRIORITY_CONFIG });
+  const [weights, setWeights] = useState<{ project: ProjectKpiWeights; technician: TechnicianKpiWeights }>({
+    project: { ...DEFAULT_PROJECT_WEIGHTS }, technician: { ...DEFAULT_TECHNICIAN_WEIGHTS },
+  });
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const kpiAction = useAsyncAction('save the KPI targets');
   const priorityAction = useAsyncAction('save the prioritisation settings');
+  const weightsAction = useAsyncAction('save the KPI weights');
 
   useEffect(() => {
     let cancelled = false;
     setLoaded(false);
     setLoadError(null);
-    void Promise.all([getKpiTargets(), getPriorityConfig()])
-      .then(([k, p]) => {
+    void Promise.all([getKpiTargets(), getPriorityConfig(), getKpiWeights()])
+      .then(([k, p, w]) => {
         if (cancelled) return;
         setTargets(k);
         setPriority(p);
+        setWeights(w);
         setLoaded(true);
       })
       .catch((error: unknown) => {
@@ -107,10 +115,9 @@ export function Settings() {
 
       {/* --- KPI targets --- */}
       <section className="card">
-        <h2>KPI targets</h2>
+        <h2>Service &amp; maintenance KPI targets</h2>
         <p className="hint">
-          Agree these with the people being measured before publishing a scorecard.
-          The shipped values are industry-typical starting points, not commitments.
+          These targets apply to service and maintenance measures such as callouts, response times and preventive visits. They are not installation-team targets.
         </p>
 
         <div className="form-grid">
@@ -149,6 +156,37 @@ export function Settings() {
           <button type="button" className="primary" disabled={kpiAction.busy || user === null}
             onClick={() => { if (user) void kpiAction.run(() => saveKpiTargets(targets, user.uid)); }}>
             {kpiAction.busy ? 'Saving…' : 'Save KPI targets'}
+          </button>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>Project and team KPI weights</h2>
+        <p className="hint">Choose what matters most when combining evidence into a score. Project delivery weights are separate from technician/service weights. Each group must total 100%.</p>
+        <h3>Project delivery</h3>
+        <div className="form-grid">
+          <PercentField label="Schedule" bps={weights.project.schedule} onChange={(v) => setWeights({ ...weights, project: { ...weights.project, schedule: v } })} />
+          <PercentField label="Margin" bps={weights.project.margin} onChange={(v) => setWeights({ ...weights, project: { ...weights.project, margin: v } })} />
+          <PercentField label="Billing" bps={weights.project.billing} onChange={(v) => setWeights({ ...weights, project: { ...weights.project, billing: v } })} />
+          <PercentField label="Collection" bps={weights.project.collection} onChange={(v) => setWeights({ ...weights, project: { ...weights.project, collection: v } })} />
+          <PercentField label="Quality" bps={weights.project.quality} onChange={(v) => setWeights({ ...weights, project: { ...weights.project, quality: v } })} />
+          <PercentField label="Team" bps={weights.project.team} onChange={(v) => setWeights({ ...weights, project: { ...weights.project, team: v } })} />
+        </div>
+        <h3>Technicians — service measures</h3>
+        <div className="form-grid">
+          <PercentField label="First-time fix" bps={weights.technician.firstTimeFix} onChange={(v) => setWeights({ ...weights, technician: { ...weights.technician, firstTimeFix: v } })} />
+          <PercentField label="Repeat callouts" bps={weights.technician.repeatCallouts} onChange={(v) => setWeights({ ...weights, technician: { ...weights.technician, repeatCallouts: v } })} />
+          <PercentField label="Response SLA" bps={weights.technician.responseSla} onChange={(v) => setWeights({ ...weights, technician: { ...weights.technician, responseSla: v } })} />
+          <PercentField label="Resolution SLA" bps={weights.technician.resolutionSla} onChange={(v) => setWeights({ ...weights, technician: { ...weights.technician, resolutionSla: v } })} />
+          <PercentField label="Preventive maintenance" bps={weights.technician.pmCompliance} onChange={(v) => setWeights({ ...weights, technician: { ...weights.technician, pmCompliance: v } })} />
+          <PercentField label="PM on time" bps={weights.technician.pmOnTime} onChange={(v) => setWeights({ ...weights, technician: { ...weights.technician, pmOnTime: v } })} />
+          <PercentField label="Utilisation" bps={weights.technician.utilisation} onChange={(v) => setWeights({ ...weights, technician: { ...weights.technician, utilisation: v } })} />
+        </div>
+        {weightsAction.error && <p className="error" role="alert">{weightsAction.error}</p>}
+        <div className="form-actions">
+          <button type="button" className="primary" disabled={weightsAction.busy || user === null}
+            onClick={() => { if (user) void weightsAction.run(() => saveKpiWeights(weights, user.uid)); }}>
+            {weightsAction.busy ? 'Saving…' : 'Save KPI weights'}
           </button>
         </div>
       </section>
