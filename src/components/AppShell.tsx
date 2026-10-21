@@ -36,6 +36,7 @@ const NAV: NavGroup[] = [
     label: 'Work',
     items: [
       { to: '/', label: 'Dashboard', capability: 'read' },
+      { to: '/priority', label: 'Priority', capability: 'read' },
       { to: '/projects', label: 'Projects', capability: 'read' },
       { to: '/units', label: 'Lifts', capability: 'read' },
       { to: '/service', label: 'Service', capability: 'read' },
