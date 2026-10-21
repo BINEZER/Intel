@@ -257,14 +257,25 @@ export function ProjectDetail() {
         units={units.rows.filter((u) => u.installedByProjectId === project.id)}
         subProjects={allProjects.rows.filter((p) => p.parentProjectId === project.id)}
         invoices={invoices.rows}
-        editable={editable}
+        editable={editable && user !== null}
+        uid={user?.uid ?? null}
         canInvoices={can(role, 'manageInvoices')}
+        projectStatusSaving={statusSaving}
+        onProjectStatusChange={(projectId, nextStatus) => {
+          if (user === null) return;
+          void saveStatus(async () => {
+            await updateProjectStatus(projectId, nextStatus, user.uid);
+            reload();
+            return true;
+          });
+        }}
         unitStatusSaving={unitStatusSaving}
         onUnitStatusChange={(unitId, nextStatus) => {
           if (user === null) return;
           void saveUnitStatus(async () => {
             await updateUnit(unitId, { status: nextStatus }, user.uid);
             reload();
+            return true;
           });
         }}
         loading={{ units: units.loading, children: allProjects.loading, invoices: invoices.loading }}
@@ -396,7 +407,10 @@ function ProjectRelated({
   subProjects,
   invoices,
   editable,
+  uid,
   canInvoices,
+  projectStatusSaving,
+  onProjectStatusChange,
   unitStatusSaving,
   onUnitStatusChange,
   loading,
@@ -408,7 +422,10 @@ function ProjectRelated({
   subProjects: readonly WithId<Project>[];
   invoices: readonly WithId<Invoice>[];
   editable: boolean;
+  uid: string | null;
   canInvoices: boolean;
+  projectStatusSaving: boolean;
+  onProjectStatusChange: (projectId: string, status: Project['status']) => void;
   unitStatusSaving: boolean;
   onUnitStatusChange: (unitId: string, status: ElevatorUnit['status']) => void;
   loading: { units: boolean; children: boolean; invoices: boolean };
@@ -426,7 +443,7 @@ function ProjectRelated({
       describeMake(unit),
       describeSpec(unit),
     ].filter((part): part is string => part !== null && part !== '').join(' · '),
-    meta: editable && user !== null ? (
+    meta: editable && uid !== null ? (
       <select
         aria-label={`Status for ${unit.tag}`}
         value={unit.status}
@@ -456,14 +473,9 @@ function ProjectRelated({
           kind="project"
           id={`child-status-${child.id}`}
           value={child.status}
-          disabled={statusSaving}
+          disabled={projectStatusSaving}
           compact
-          onChange={(value) => {
-            void saveStatus(async () => {
-              await updateProjectStatus(child.id, value as Project['status'], user.uid);
-              reload();
-            });
-          }}
+          onChange={(value) => onProjectStatusChange(child.id, value as Project['status'])}
         />
       </div>
     ) : <StatusChip kind="project" value={child.status} />,
