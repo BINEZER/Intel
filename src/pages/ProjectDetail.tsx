@@ -424,7 +424,24 @@ function ProjectRelated({
     to: `/projects/${child.id}`,
     title: child.title,
     detail: `${child.projectNo} · ${child.site?.name ?? '—'}`,
-    meta: <StatusChip kind="project" value={child.status} />,
+    meta: editable && user !== null ? (
+      <div className="field inline">
+        <label className="sr-only" htmlFor={`child-status-${child.id}`}>Status for {child.title}</label>
+        <StatusSelect
+          kind="project"
+          id={`child-status-${child.id}`}
+          value={child.status}
+          disabled={statusSaving}
+          compact
+          onChange={(value) => {
+            void saveStatus(async () => {
+              await updateProjectStatus(child.id, value as Project['status'], user.uid);
+              reload();
+            });
+          }}
+        />
+      </div>
+    ) : <StatusChip kind="project" value={child.status} />,
     ...(editable ? { onEdit: () => onEditProject(child) } : {}),
     ...(editable ? { deleteTarget: { kind: 'project' as const, id: child.id, name: child.projectNo } } : {}),
   }));
