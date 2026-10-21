@@ -267,7 +267,6 @@ export function Projects() {
 
               {editable && user !== null && (
                 <div className="card-actions">
-                  <ProjectStatusControl project={project} uid={user.uid} />
                   <button type="button" onClick={() => setEditing(project)}>Edit</button>
                   <DeleteButton
                     target={{ kind: 'project', id: project.id, name: project.projectNo }}
