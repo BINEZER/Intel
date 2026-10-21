@@ -49,6 +49,7 @@ const NAV: NavGroup[] = [
     label: 'Administration',
     items: [
       { to: '/tools', label: 'More tools', capability: 'read' },
+      { to: '/settings', label: 'Settings', capability: 'manageConfig' },
     ],
   },
  ];
