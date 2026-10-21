@@ -33,6 +33,9 @@ import { CertificationPanel } from '../components/CertificationPanel.js';
 import { ProjectTeam } from '../components/ProjectTeam.js';
 import { RiskFlagList } from '../components/RiskAlerts.js';
 import { ProjectKpiPanel } from './ProjectKpis.js';
+import { getKpiDefinitions, getKpiTargets } from '../data/config.js';
+import { DEFAULT_KPI_DEFINITIONS, type KpiDefinition } from '../lib/kpi-definitions.js';
+import { DEFAULT_KPI_TARGETS } from '../lib/kpi.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { isElevatorWork, projectTypeLabel, projectTypeShort } from '../lib/project-kind.js';
 import { describeFleet, describeMake, describeSpec } from '../lib/lift-spec.js';
@@ -46,6 +49,8 @@ export function ProjectDetail() {
   const { busy: statusSaving, error: statusError, run: saveStatus } = useAsyncAction('update project status');
   const { busy: unitStatusSaving, error: unitStatusError, run: saveUnitStatus } = useAsyncAction('update lift status');
   const [project, setProject] = useState<WithId<Project> | null>(null);
+  const [kpiTargets, setKpiTargets] = useState({ ...DEFAULT_KPI_TARGETS });
+  const [kpiDefinitions, setKpiDefinitions] = useState<KpiDefinition[]>(DEFAULT_KPI_DEFINITIONS);
   const [loadError, setLoadError] = useState<string | null>(null);
   /**
    * Bumped after a link is changed. The project is fetched once rather than
@@ -87,6 +92,16 @@ export function ProjectDetail() {
   // when a contract is signed, not while someone is looking at the tracker, and
   // it exists to stop a stage being deleted out from under a payment.
   const [paymentsByPhase, setPaymentsByPhase] = useState<ReadonlyMap<string, string[]>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([getKpiTargets(), getKpiDefinitions()]).then(([targets, definitions]) => {
+      if (cancelled) return;
+      setKpiTargets(targets);
+      setKpiDefinitions(definitions);
+    }).catch(() => { /* use shipped defaults if KPI settings cannot be read */ });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (projectId === undefined) return;
@@ -290,7 +305,7 @@ export function ProjectDetail() {
         </section>
       )}
 
-      <ProjectKpiPanel kpi={kpi} />
+      <ProjectKpiPanel kpi={kpi} targets={kpiTargets} definitions={kpiDefinitions} />
 
       {phases.error && <p className="error" role="alert">{phases.error}</p>}
       {phases.rows.length > 0 && <PhaseTracker projectId={project.id} phases={phases.rows} />}
