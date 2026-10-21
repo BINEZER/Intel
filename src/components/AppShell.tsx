@@ -23,10 +23,8 @@ interface NavGroup {
 }
 
 /**
- * Seventeen destinations in one flat column is a list to be searched, not a menu
- * to be used. Grouped by the question being asked — what needs me today, what
- * are we building, where is the money, who is doing it — so finding a page is
- * recall rather than reading.
+ * Keep the sidebar to the few workflows used every day. Supporting tools live
+ * under More tools so users do not have to scan a long list to find core work.
  *
  * A group whose every item is hidden by role disappears with it, so a viewer
  * does not get an empty "Money" heading.
@@ -53,7 +51,7 @@ const NAV: NavGroup[] = [
       { to: '/tools', label: 'More tools', capability: 'read' },
     ],
   },
-];;
+ ];
 
 /** Today in both calendars, for the header. */
 export function TodayBadge() {
