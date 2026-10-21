@@ -466,7 +466,7 @@ function ProjectRelated({
     to: `/projects/${child.id}`,
     title: child.title,
     detail: `${child.projectNo} · ${child.site?.name ?? '—'}`,
-    meta: editable && user !== null ? (
+    meta: editable && uid !== null ? (
       <div className="field inline">
         <label className="sr-only" htmlFor={`child-status-${child.id}`}>Status for {child.title}</label>
         <StatusSelect
