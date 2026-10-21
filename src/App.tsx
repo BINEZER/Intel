@@ -37,8 +37,7 @@ const Alerts = lazy(() => import('./pages/Alerts.js').then((m) => ({ default: m.
 const Collections = lazy(() => import('./pages/Collections.js').then((m) => ({ default: m.Collections })));
 const Payouts = lazy(() => import('./pages/Payouts.js').then((m) => ({ default: m.Payouts })));
 const Incentives = lazy(() => import('./pages/Incentives.js').then((m) => ({ default: m.Incentives })));
-const Programs = lazy(() => import('./pages/Programs.js').then((m) => ({ default: m.Programs })));
-const ProgramDetail = lazy(() => import('./pages/Programs.js').then((m) => ({ default: m.ProgramDetail })));
+const Tools = lazy(() => import('./pages/Tools.js').then((m) => ({ default: m.Tools })));
 const Units = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.Units })));
 const UnitDetail = lazy(() => import('./pages/Units.js').then((m) => ({ default: m.UnitDetail })));
 const CeoReport = lazy(() => import('./pages/CeoReport.js').then((m) => ({ default: m.CeoReport })));
@@ -92,14 +91,8 @@ export function App() {
               path="incentives"
               element={<RequireCapability capability="read"><Incentives /></RequireCapability>}
             />
-            <Route
-              path="programs"
-              element={<RequireCapability capability="read"><Programs /></RequireCapability>}
-            />
-            <Route
-              path="programs/:programId"
-              element={<RequireCapability capability="read"><ProgramDetail /></RequireCapability>}
-            />
+            <Route path="programs/*" element={<Navigate to="/projects" replace />} />
+            <Route path="tools" element={<Tools />} />
             <Route
               path="units"
               element={<RequireCapability capability="read"><Units /></RequireCapability>}
@@ -184,6 +177,7 @@ export function App() {
                 </RequireCapability>
               }
             />
+            <Route path="finance" element={<Navigate to="/collections" replace />} />
             <Route
               path="finance/*"
               element={
