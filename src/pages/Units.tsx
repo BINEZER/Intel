@@ -676,7 +676,9 @@ export function UnitForm({
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e), [], 'load clients').rows;
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts').rows;
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
+  const allUnits = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'check lift codes').rows;
 
+  const [unitCode, setUnitCode] = useState(initial?.unitCode ?? `IM-U-${String(Date.now()).slice(-8)}`);
   const [tag, setTag] = useState(initial?.tag ?? 'LIFT-01');
   const [siteName, setSiteName] = useState(initial?.siteName ?? '');
   const [city, setCity] = useState(initial?.city ?? 'Addis Ababa');
@@ -708,6 +710,15 @@ export function UnitForm({
     event.preventDefault();
     const client = resolveClient(clients, clientId, currentClient);
     if (!ready || client === null) return;
+    const normalizedUnitCode = unitCode.trim();
+    if (normalizedUnitCode === '') {
+      await run(async () => { throw new Error('Lift code is required.'); });
+      return;
+    }
+    if (allUnits.some((unit) => unit.id !== initial?.id && unit.unitCode.trim().toLocaleLowerCase() === normalizedUnitCode.toLocaleLowerCase())) {
+      await run(async () => { throw new Error('That lift code is already in use. Choose a unique code.'); });
+      return;
+    }
 
     const contract = contracts.find((c) => c.id === contractId);
 
@@ -720,7 +731,7 @@ export function UnitForm({
     const speed = number(speedMps);
 
     const input = {
-      unitCode: initial?.unitCode ?? `IM-U-${String(Date.now()).slice(-8)}`,
+      unitCode: normalizedUnitCode,
       tag: tag.trim(),
       ...(manufacturerUnitId.trim() === '' ? {} : { manufacturerUnitId: manufacturerUnitId.trim() }),
       ...(brand.trim() === '' ? {} : { brand: brand.trim() }),
@@ -752,11 +763,16 @@ export function UnitForm({
   return (
     <FormPanel
       title={initial === null ? 'Add a lift' : `Edit ${initial.tag} · ${initial.siteName}`}
-      description="The tag is what is painted in the building; the code is ours and never changes. Every building has a LIFT-01, which is why the machine needs an identity of its own."
+      description="Edit the internal lift code and the tag used at the site. Codes must be unique; the record identity and service history stay unchanged."
       onClose={onDone}
     >
       <form onSubmit={(e) => void submit(e)}>
         <div className="form-grid">
+          <div className="field">
+            <label htmlFor="u-code">Lift code <span className="req" aria-hidden="true">*</span></label>
+            <input id="u-code" required value={unitCode} onChange={(e) => setUnitCode(e.target.value)}
+              placeholder="IM-U-00000001" />
+          </div>
           <div className="field">
             <label htmlFor="u-tag">Tag on site <span className="req" aria-hidden="true">*</span></label>
             <input id="u-tag" required value={tag} onChange={(e) => setTag(e.target.value)} />

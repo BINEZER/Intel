@@ -8,6 +8,8 @@
  */
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { subscribeContracts } from '../data/contracts.js';
+import { useCollection } from '../data/useCollection.js';
 import { addVat, extractVat, formatETB, VAT_RATE_BPS } from '../lib/money.js';
 
 /** The VAT and gross for a net figure — the two fields a VatBreakdown needs beyond net. */
@@ -78,6 +80,7 @@ export function ContractForm({
   const [clientId, setClientId] = useState(initial?.clientId ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [contractNo, setContractNo] = useState(initial?.contractNo ?? '');
+  const allContracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'check contract numbers').rows;
   const [type, setType] = useState<ContractType>(initial?.type ?? 'supply_install');
   // The value is shown as it was ENTERED, inclusive or not, so an edit that
   // touches nothing else cannot silently re-base it.
@@ -240,9 +243,14 @@ export function ContractForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!ready || client === null) return;
+    const normalizedContractNo = contractNo.trim() || `C-${Date.now()}`;
+    if (allContracts.some((item) => item.id !== initial?.id && item.contractNo.trim().toLocaleLowerCase() === normalizedContractNo.toLocaleLowerCase())) {
+      await run(async () => { throw new Error('That contract number is already in use. Choose a unique number.'); });
+      return;
+    }
 
     const input = {
-      contractNo: contractNo.trim() || `C-${Date.now()}`,
+      contractNo: normalizedContractNo,
       type,
       clientId,
       clientName: client.name,

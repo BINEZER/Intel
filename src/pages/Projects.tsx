@@ -357,6 +357,7 @@ export function ProjectForm({
   );
   /** Once the kind has been set by hand, a template must not overwrite it. */
   const [typeIsProposed, setTypeIsProposed] = useState(initial === null);
+  const [projectNo, setProjectNo] = useState(initial?.projectNo ?? `P-${Date.now()}`);
   const [parentProjectId, setParentProjectId] = useState(initial?.parentProjectId ?? '');
   const [contractId, setContractId] = useState(initial?.contractId ?? '');
   const [address, setAddress] = useState(initial?.site?.address ?? '');
@@ -423,8 +424,14 @@ export function ProjectForm({
     const client = resolveClient(clients, clientId, currentClient);
     if (!ready || client === null) return;
 
+    const normalizedProjectNo = projectNo.trim();
+    if (allProjects.some((project) => project.id !== initial?.id && project.projectNo.trim().toLocaleLowerCase() === normalizedProjectNo.toLocaleLowerCase())) {
+      await run(async () => { throw new Error('That project number is already in use. Choose a unique number.'); });
+      return;
+    }
+
     const input = {
-      projectNo: initial?.projectNo ?? `P-${Date.now()}`,
+      projectNo: normalizedProjectNo,
       type,
       title: title.trim(),
       clientId,
@@ -510,6 +517,12 @@ export function ProjectForm({
               ))}
             </select>
             <p className="hint">Choose the signed agreement to link this project to the client commitment.</p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="p-number">Project number / code <span className="req" aria-hidden="true">*</span></label>
+            <input id="p-number" required value={projectNo} onChange={(e) => setProjectNo(e.target.value)}
+              placeholder="P-2026-001" />
           </div>
 
           <div className="field">
