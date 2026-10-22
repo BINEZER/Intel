@@ -904,6 +904,9 @@ export interface ElevatorUnit extends AuditFields {
     expiresOn: DualDate | null;
   } | null;
 
+  /** Optional independent installation stages for this lift; absent means it follows project-level phases. */
+  installationPhases?: Array<{ id: string; name: string; progressBps: number; plannedStart?: DualDate | null; plannedEnd?: DualDate | null; note?: string }>;
+
   /** Free text a manager keeps about this machine, separate from visit findings. */
   remarks: string;
 }
