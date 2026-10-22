@@ -245,7 +245,8 @@ export function ContractForm({
     if (!ready || client === null) return;
     const normalizedContractNo = contractNo.trim() || `C-${Date.now()}`;
     if (allContracts.some((item) => item.id !== initial?.id && item.contractNo.trim().toLocaleLowerCase() === normalizedContractNo.toLocaleLowerCase())) {
-      throw new Error('That contract number is already in use. Choose a unique number.');
+      await run(async () => { throw new Error('That contract number is already in use. Choose a unique number.'); });
+      return;
     }
 
     const input = {
