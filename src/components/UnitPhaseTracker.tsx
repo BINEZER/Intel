@@ -58,7 +58,7 @@ export function UnitPhaseTracker({ unit }: { unit: WithId<ElevatorUnit> }) {
             <form className="add-stage" onSubmit={(e) => { e.preventDefault(); const name=newName.trim(); if(!name) return; void save([...phases,{id: crypto.randomUUID(),name,progressBps:0}]).then(()=>setNewName('')); }}>
               <label>New phase <input value={newName} onChange={(e)=>setNewName(e.target.value)} placeholder="e.g. Door alignment" /></label>
               <button type="submit" className="primary" disabled={busy || !newName.trim()}>Add phase</button>
-              <button type="button" disabled={busy} onClick={() => void save(undefined as never)}>Reset</button>
+              <button type="button" disabled={busy} onClick={() => void save([])}>Clear phases</button>
             </form>
           )}
         </>
