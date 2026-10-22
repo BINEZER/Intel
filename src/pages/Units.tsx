@@ -48,6 +48,7 @@ import { FormPanel } from '../components/FormPanel.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { DataTable } from '../components/DataTable.js';
 import { DateRangeFilter, EMPTY_DATE_RANGE, inDateRange, type DateRange } from '../components/DateRangeFilter.js';
+import { UnitPhaseTracker } from '../components/UnitPhaseTracker.js';
 
 const VERDICT_LABEL: Record<UnitHealth['verdict'], string> = {
   problem: 'Needs attention',
@@ -573,6 +574,8 @@ export function UnitDetail() {
           <div><dt>Parts spent</dt><dd>{formatETB(health.partsCostSantim)}</dd></div>
         </dl>
       </section>
+
+      <UnitPhaseTracker unit={unit} />
 
       <section className="card">
         <h2>The machine</h2>
