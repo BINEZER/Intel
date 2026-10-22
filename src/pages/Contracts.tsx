@@ -20,6 +20,7 @@ import { DeleteButton } from '../components/DeleteButton.js';
 import { directSupplyOf, formatUSD } from '../lib/direct-supply.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 import { DataTable } from '../components/DataTable.js';
+import { DateRangeFilter, EMPTY_DATE_RANGE, inDateRange, type DateRange } from '../components/DateRangeFilter.js';
 import { statusLabel } from '../lib/status.js';
 import { Link } from 'react-router-dom';
 import { subscribeProjects } from '../data/projects.js';
@@ -54,6 +55,7 @@ export function Contracts() {
   const [editing, setEditing] = useState<WithId<Contract> | 'new' | null>(null);
   const [converting, setConverting] = useState<WithId<Contract> | null>(null);
   const [renewing, setRenewing] = useState<WithId<Contract> | null>(null);
+  const [signedRange, setSignedRange] = useState<DateRange>(EMPTY_DATE_RANGE);
 
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
@@ -148,9 +150,11 @@ export function Contracts() {
         <p className="muted">No contracts yet.</p>
       )}
 
+      <DateRangeFilter range={signedRange} onChange={setSignedRange} label="signed date" />
+
       {contracts.rows.length > 0 && (
         <DataTable
-          rows={contracts.rows}
+          rows={contracts.rows.filter((k) => inDateRange(k.signedDate?.at.toDate(), signedRange))}
           rowKey={(k) => k.id}
           noun="contracts"
           columns={[
