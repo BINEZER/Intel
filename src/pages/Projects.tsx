@@ -42,6 +42,7 @@ import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { StatusChip, StatusSelect } from '../components/StatusSelect.js';
 import { ListControls } from '../components/ListControls.js';
+import { DateRangeFilter, EMPTY_DATE_RANGE, inDateRange, type DateRange } from '../components/DateRangeFilter.js';
 import {
   EMPTY_FILTER,
   filterRows,
@@ -58,6 +59,7 @@ export function Projects() {
   const [editing, setEditing] = useState<WithId<Project> | 'new' | null>(null);
   const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
   const [sort, setSort] = useState<SortState>({ key: null, direction: 'asc' });
+  const [plannedRange, setPlannedRange] = useState<DateRange>(EMPTY_DATE_RANGE);
 
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
@@ -113,8 +115,8 @@ export function Projects() {
     const narrowed = filterRows(projects.rows, columns, filter, (row, column) =>
       column.key === 'status' ? statusLabel('project', row.status) : String(column.value(row) ?? ''),
     );
-    return sortRows(narrowed, columns, sort);
-  }, [projects.rows, columns, filter, sort]);
+    return sortRows(narrowed.filter((p) => inDateRange(p.plannedStart?.at.toDate(), plannedRange)), columns, sort);
+  }, [projects.rows, columns, filter, sort, plannedRange]);
 
   const tree = useMemo(
     () =>
@@ -163,6 +165,8 @@ export function Projects() {
           onDone={() => setEditing(null)}
         />
       )}
+
+      <DateRangeFilter range={plannedRange} onChange={setPlannedRange} label="planned start date" />
 
       {projects.rows.length > 0 && (
         <ListControls
