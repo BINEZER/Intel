@@ -426,7 +426,8 @@ export function ProjectForm({
 
     const normalizedProjectNo = projectNo.trim();
     if (allProjects.some((project) => project.id !== initial?.id && project.projectNo.trim().toLocaleLowerCase() === normalizedProjectNo.toLocaleLowerCase())) {
-      throw new Error('That project number is already in use. Choose a unique number.');
+      await run(async () => { throw new Error('That project number is already in use. Choose a unique number.'); });
+      return;
     }
 
     const input = {
