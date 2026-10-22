@@ -45,9 +45,10 @@ export function UnitPhaseTracker({ unit }: { unit: WithId<ElevatorUnit> }) {
                     onBlur={(e) => { const name=e.target.value.trim(); if(name && name!==phase.name) void save(phases.map(p=>p.id===phase.id?{...p,name}:p)); }} />
                 </div>
                 <div className="phase-progress">
-                  <input type="range" min={0} max={10000} step={500} value={phase.progressBps} disabled={!editable || busy}
-                    aria-label={`${phase.name} progress`}
-                    onChange={(e) => { const progressBps=Number(e.target.value); void save(phases.map(p=>p.id===phase.id?{...p,progressBps}:p)); }} />
+                  <select value={phase.progressBps} disabled={!editable || busy} aria-label={`${phase.name} progress`}
+                    onChange={(e) => { const progressBps=Number(e.target.value); void save(phases.map(p=>p.id===phase.id?{...p,progressBps}:p)); }}>
+                    {[0,1000,2000,3000,4000,5000,6000,7000,8000,9000,10000].map((value) => <option key={value} value={value}>{value / 100}%</option>)}
+                  </select>
                   <span className="phase-pct">{formatBps(phase.progressBps,0)}</span>
                   {editable && <button type="button" disabled={busy} onClick={() => void save(phases.filter(p=>p.id!==phase.id))}>Remove</button>}
                 </div>
