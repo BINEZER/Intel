@@ -711,9 +711,13 @@ export function UnitForm({
     const client = resolveClient(clients, clientId, currentClient);
     if (!ready || client === null) return;
     const normalizedUnitCode = unitCode.trim();
-    if (normalizedUnitCode === '') throw new Error('Lift code is required.');
+    if (normalizedUnitCode === '') {
+      await run(async () => { throw new Error('Lift code is required.'); });
+      return;
+    }
     if (allUnits.some((unit) => unit.id !== initial?.id && unit.unitCode.trim().toLocaleLowerCase() === normalizedUnitCode.toLocaleLowerCase())) {
-      throw new Error('That lift code is already in use. Choose a unique code.');
+      await run(async () => { throw new Error('That lift code is already in use. Choose a unique code.'); });
+      return;
     }
 
     const contract = contracts.find((c) => c.id === contractId);
