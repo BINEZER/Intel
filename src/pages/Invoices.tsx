@@ -44,6 +44,10 @@ export function Invoices() {
 
       {creating && <InvoiceForm onDone={() => setCreating(false)} />}
 
+      {!creating && <p className="muted invoice-workflow-note">
+        Outstanding balances are calculated automatically: create and issue an invoice, then use <strong>Record payment</strong> whenever money is received. The remaining balance and overdue status update from those records. Use Receivables to manage follow-ups and promised payment dates.
+      </p>}
+
       {!loading && rows.length === 0 && !creating && (
         /* Nothing billed yet is not an error, and it is not a blank page: it is
            the one thing standing between this system and every money figure in
