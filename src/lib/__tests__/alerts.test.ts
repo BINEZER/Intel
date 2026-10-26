@@ -139,6 +139,7 @@ describe('projectAlerts', () => {
   it('says nothing about a finished or cancelled project, however bad its history', () => {
     expect(projectAlerts([project({ status: 'completed' })], NOW)).toEqual([]);
     expect(projectAlerts([project({ status: 'cancelled' })], NOW)).toEqual([]);
+    expect(projectAlerts([project({ status: 'completed', plannedEnd: utc(2026, 1, 1) })], NOW)).toEqual([]);
   });
 
   it('survives a project flagged in danger with no flags attached', () => {

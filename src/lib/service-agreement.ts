@@ -152,6 +152,7 @@ export interface RenewableContract {
   type: string;
   status: string;
   renewedIntoContractId?: string | null | undefined;
+  renewalStatus?: string | undefined;
 }
 
 /**
@@ -165,6 +166,7 @@ export function canRenew(contract: RenewableContract): boolean {
   return (
     contract.type === 'maintenance' &&
     (contract.status === 'active' || contract.status === 'expired') &&
+    contract.renewalStatus !== 'renewed' &&
     (contract.renewedIntoContractId === undefined ||
       contract.renewedIntoContractId === null ||
       contract.renewedIntoContractId === '')

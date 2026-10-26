@@ -896,7 +896,7 @@ export interface ElevatorUnit extends AuditFields {
   installedUnderContractNo?: string | null;
 
   commissionedOn: DualDate | null;
-  status: 'under_installation' | 'in_service' | 'out_of_service' | 'decommissioned';
+  status: 'under_installation' | 'in_service' | 'out_of_service' | 'decommissioned' | 'completed';
 
   certificate: {
     no?: string;
