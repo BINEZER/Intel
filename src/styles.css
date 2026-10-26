@@ -242,7 +242,11 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
 }
 .sidebar a:focus-visible { outline: 2px solid var(--rail-active-ink); outline-offset: -2px; }
 
-.content { flex: 1; padding: 1.9rem 1.75rem 4rem; min-width: 0; }
+.content { flex: 1; padding: 1.9rem 1.75rem 4rem; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.content > * { min-width: 0; }
+/* Keep wide forms, boards and tables inside the content rail. Touch users can swipe horizontally where a page genuinely needs more width. */
+.content :where(.table-scroll, .board, .stage-table, .form-grid, .table-controls) { max-width: 100%; }
+.table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .content > * { max-width: 1400px; }
 
 .centered {
@@ -2311,7 +2315,7 @@ input[type="range"] { width: 100%; max-width: 100%; accent-color: var(--brand-te
 @media screen and (max-width: 900px) {
   .table-sort-menu { display: inline-block; }
 
-  .table-scroll { overflow: visible; contain: none; }
+  .table-scroll { overflow-x: auto; overflow-y: visible; contain: none; max-width: 100%; -webkit-overflow-scrolling: touch; }
   :is(.data-table, .milestone-table, .priority-table), :is(.data-table, .milestone-table, .priority-table) tbody { display: block; width: 100%; border: 0; background: none; box-shadow: none; }
 
   /* Hidden, not removed: the `th` cells still exist for the sort menu's sake and
