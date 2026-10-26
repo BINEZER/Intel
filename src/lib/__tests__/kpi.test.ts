@@ -149,6 +149,7 @@ describe('project KPIs', () => {
     const k = computeProjectKpis(finished, utc(2026, 2, 1));
     expect(k.scheduleVarianceDays).toBe(14); // 14 days past 31 Dec
     expect(k.overdue).toBe(false);           // finished, so no longer "overdue"
+    expect(k.scheduleVarianceDays).toBe(14); // retain the historical lateness
   });
 
   it('computes margin excluding VAT', () => {
