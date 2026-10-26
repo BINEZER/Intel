@@ -8,13 +8,10 @@ import { can } from '../auth/roles.js';
 import { issueInvoice, recordReceipt, subscribeInvoices, voidInvoice } from '../data/invoices.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { formatETB } from '../lib/money.js';
-import { AGE_BUCKET_LABELS, ageReceivables } from '../lib/invoicing.js';
-import { formatBps } from '../lib/kpi.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import { MoneyInput } from '../components/MoneyInput.js';
-import { KpiTile } from '../components/KpiTile.js';
 import type { Invoice, Receipt } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { DeleteButton } from '../components/DeleteButton.js';
@@ -31,22 +28,6 @@ export function Invoices() {
   );
   const [receipting, setReceipting] = useState<WithId<Invoice> | null>(null);
   const [creating, setCreating] = useState(false);
-
-  const asOf = new Date();
-  // Receipts live in a subcollection, so this ages on the denormalized balance
-  // the invoice itself carries — refreshed whenever a receipt is recorded.
-  const ageing = ageReceivables(
-    rows.map((i) => ({
-      id: i.id,
-      invoiceNo: i.invoiceNo || '(draft)',
-      clientName: i.clientName,
-      dueDate: i.dueDate.at.toDate(),
-      grossSantim: i.grossSantim,
-      receipts: [{ amountGrossSantim: i.grossSantim - i.balanceGrossSantim, clientWhtSantim: 0 }],
-      status: i.status,
-    })),
-    asOf,
-  );
 
   return (
     <>
@@ -84,40 +65,7 @@ export function Invoices() {
         </section>
       )}
 
-      <section className="kpis">
-        <KpiTile
-          label="Outstanding"
-          value={formatETB(ageing.totalSantim)}
-          detail={<span className="muted">{ageing.rows.length} unpaid invoice{ageing.rows.length === 1 ? '' : 's'}</span>}
-        />
-        <KpiTile
-          label="Overdue"
-          value={formatETB(ageing.overdueSantim)}
-          status={ageing.overdueSantim > 0 ? 'bad' : 'good'}
-        />
-        <KpiTile
-          label="Over 90 days"
-          value={formatETB(ageing.byBucket.over_90)}
-          status={ageing.byBucket.over_90 > 0 ? 'bad' : 'good'}
-          detail={<span className="muted">{formatBps(ageing.over90Bps)} of debt</span>}
-          title="The collectability signal: debt this old rarely arrives without intervention."
-        />
-      </section>
-
-      <section className="card">
-        <h2>Ageing</h2>
-        <div className="kpis">
-          {(Object.keys(AGE_BUCKET_LABELS) as (keyof typeof AGE_BUCKET_LABELS)[]).map((bucket) => (
-            <KpiTile
-              key={bucket}
-              label={AGE_BUCKET_LABELS[bucket]}
-              value={formatETB(ageing.byBucket[bucket], { withSymbol: false })}
-              status={bucket === 'over_90' && ageing.byBucket[bucket] > 0 ? 'bad' : 'unknown'}
-            />
-          ))}
-        </div>
-      </section>
-
+      {/* Receivables totals and ageing live on the Collections page; this page is for invoice records and payment capture. */}
       {rows.length > 0 && (
         <DataTable
           rows={rows}
