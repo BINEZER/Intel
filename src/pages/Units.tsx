@@ -311,7 +311,7 @@ export function Units() {
                   disabled={statusSaving}
                   onChange={(event) => {
                     const next = event.target.value as ElevatorUnit['status'];
-                    void saveUnitStatus(() => updateUnit(unit.id, { status: next }, user?.uid ?? ''));
+                    void saveUnitStatus(() => updateUnit(unit.id, next === 'completed' ? { status: next, maintenanceContractId: null, maintenanceContractNo: null } : { status: next }, user?.uid ?? ''));
                   }}
                 >
                   {(Object.keys(STATUS_LABEL) as ElevatorUnit['status'][]).map((status) => (
@@ -460,7 +460,7 @@ export function UnitDetail() {
               onChange={(event) => {
                 const nextStatus = event.target.value as ElevatorUnit['status'];
                 void run(async () => {
-                  await updateUnit(unit.id, { status: nextStatus }, user!.uid);
+                  await updateUnit(unit.id, nextStatus === 'completed' ? { status: nextStatus, maintenanceContractId: null, maintenanceContractNo: null } : { status: nextStatus }, user!.uid);
                   return true;
                 });
               }}
