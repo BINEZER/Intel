@@ -47,6 +47,8 @@ import { PrintButton, PrintHeader } from '../components/PrintButton.js';
 import { FormPanel } from '../components/FormPanel.js';
 import { DeleteButton } from '../components/DeleteButton.js';
 import { DataTable } from '../components/DataTable.js';
+import { DateRangeFilter, EMPTY_DATE_RANGE, inDateRange, type DateRange } from '../components/DateRangeFilter.js';
+import { UnitPhaseTracker } from '../components/UnitPhaseTracker.js';
 
 const VERDICT_LABEL: Record<UnitHealth['verdict'], string> = {
   problem: 'Needs attention',
@@ -172,13 +174,16 @@ export function Units() {
    */
   const [servicedOnly, setServicedOnly] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<WithId<ElevatorUnit> | 'new' | null>(null);
+  const [plannedRange, setPlannedRange] = useState<DateRange>(EMPTY_DATE_RANGE);
   const { busy: statusSaving, error: statusError, run: saveUnitStatus } = useAsyncAction('update lift status');
 
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lifts');
+  const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const records = useSiteRecords(units.rows.map((u) => u.siteName));
   const asOf = useMemo(() => new Date(), []);
 
   const anyServiced = units.rows.some((u) => u.maintenanceContractId !== null);
+  const projectById = useMemo(() => new Map(projects.rows.map((p) => [p.id, p])), [projects.rows]);
 
   useEffect(() => {
     if (servicedOnly !== null || units.loading) return;
@@ -197,9 +202,13 @@ export function Units() {
     });
 
     return sortByHealth(
-      servicedOnly ? scored.filter((r) => r.unit.maintenanceContractId !== null) : scored,
+      (servicedOnly ? scored.filter((r) => r.unit.maintenanceContractId !== null) : scored)
+        .filter(({ unit }) => inDateRange(
+          projectById.get(unit.installedByProjectId ?? '')?.plannedStart?.at.toDate() ?? unit.commissionedOn?.at.toDate(),
+          plannedRange,
+        )),
     );
-  }, [units.rows, records.callouts, records.visits, servicedOnly, asOf]);
+  }, [units.rows, records.callouts, records.visits, servicedOnly, asOf, projectById, plannedRange]);
 
   return (
     <>
@@ -233,6 +242,8 @@ export function Units() {
           onDone={() => setEditing(null)}
         />
       )}
+
+      <DateRangeFilter range={plannedRange} onChange={setPlannedRange} label="linked project planned start (or commissioned date)" />
 
       <label className="filter-row">
         <input
@@ -563,6 +574,8 @@ export function UnitDetail() {
           <div><dt>Parts spent</dt><dd>{formatETB(health.partsCostSantim)}</dd></div>
         </dl>
       </section>
+
+      <UnitPhaseTracker unit={unit} />
 
       <section className="card">
         <h2>The machine</h2>
