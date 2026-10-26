@@ -62,6 +62,7 @@ const STATUS_LABEL: Record<ElevatorUnit['status'], string> = {
   in_service: 'In service',
   out_of_service: 'Out of service',
   decommissioned: 'Decommissioned',
+  completed: 'Completed — serviced by another company',
 };
 
 // ---------------------------------------------------------------------------
