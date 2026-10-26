@@ -567,6 +567,83 @@ export async function updateProjectStatus(
  * the two figures follow from it in the same batch. That is what stops them
  * disagreeing — there is no path that writes one without the other.
  */
+/**
+ * Complete or reopen one or more project phases in one atomic write.
+ * A phase checkbox toggles every checkpoint in that phase; the project checkbox
+ * toggles every phase and checkpoint. Project progress and current stage are
+ * recalculated from the same resulting phase set.
+ */
+export async function setPhasesCompletion(
+  projectId: string,
+  phaseIds: readonly string[],
+  done: boolean,
+  uid: string,
+): Promise<{ projectProgressBps: number }> {
+  const phases = await getPhases(projectId);
+  const selected = new Set(phaseIds);
+  if (selected.size === 0 || phases.some((p) => selected.has(p.id)) === false) {
+    throw new Error('No valid project phases were selected.');
+  }
+  if (phases.some((p) => selected.has(p.id)) === false) {
+    throw new Error('Those phases no longer exist on this project.');
+  }
+
+  const now = Timestamp.now();
+  const today = dualDateFromGregorian(new Date(), toTimestamp, 'GC');
+  const nextPhases = phases.map((phase) => {
+    if (!selected.has(phase.id)) return phase;
+    const checkpoints = phase.checkpoints?.map((checkpoint) => ({
+      ...checkpoint,
+      doneAt: done ? now : null,
+      ...(done ? { doneBy: uid } : {}),
+    }));
+    const progressBps = checkpoints !== undefined && checkpoints.length > 0
+      ? checkpointProgressBps(checkpoints)
+      : (done ? 10_000 : 0);
+    const status = derivePhaseStatus(progressBps, phase.status);
+    return {
+      ...phase,
+      ...(checkpoints === undefined ? {} : { checkpoints }),
+      progressBps,
+      status,
+      ...(phase.actualStart === null && progressBps > 0 ? { actualStart: today } : {}),
+      ...(status === 'completed' && phase.actualEnd === null ? { actualEnd: today } : {}),
+      ...(status !== 'completed' && phase.actualEnd !== null ? { actualEnd: null } : {}),
+    };
+  });
+
+  const projectProgressBps = rollUpProgress(nextPhases.map((phase) => ({
+    key: phase.key,
+    weightBps: phase.weightBps,
+    progressBps: phaseProgressBps(phase),
+    status: phase.status,
+  })));
+  const next = nextPhases.find((phase) => phaseProgressBps(phase) < 10_000);
+  const pending = next === undefined
+    ? null
+    : (next.checkpoints ?? []).find((checkpoint) => checkpoint.doneAt === null);
+  const currentStage = next === undefined ? null : {
+    key: next.key,
+    name: next.name,
+    plannedEnd: next.plannedEnd,
+    nextCheckpoint: pending?.label ?? null,
+  };
+
+  const batch = writeBatch(db);
+  for (const phase of nextPhases) {
+    if (!selected.has(phase.id)) continue;
+    const { id, ...fields } = phase;
+    batch.update(doc(db, phasePath(projectId), id), { ...fields, ...stampUpdate(uid) });
+  }
+  batch.update(doc(db, PATH, projectId), {
+    progressBps: projectProgressBps,
+    currentStage,
+    ...stampUpdate(uid),
+  });
+  await batch.commit();
+  return { projectProgressBps };
+}
+
 export async function setCheckpoint(
   projectId: string,
   phaseId: string,
