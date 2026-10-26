@@ -2527,3 +2527,35 @@ fieldset { min-width: 0; }
   font-size: 0.875rem;
   font-weight: 600;
 }
+
+
+/* Final responsive guard: some page-specific mobile rules intentionally turn
+   data tables into cards, but wide phase boards, toolbars and forms still need
+   a reachable horizontal scroll surface instead of expanding beyond the screen. */
+.content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.content > * { min-width: 0; }
+.content :where(.table-scroll, .board, .stage-table, .stage-manager, .table-controls, .form-grid) {
+  max-width: 100%;
+}
+.content :where(.table-scroll, .board) {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media screen and (max-width: 900px) {
+  .content { overflow-x: auto !important; }
+  .content :where(.table-scroll, .board, .stage-manager .stage-table) {
+    overflow-x: auto !important;
+    overflow-y: visible;
+    max-width: 100%;
+  }
+  .content :where(.table-controls, .row-actions, .page-actions) {
+    flex-wrap: wrap;
+  }
+}
