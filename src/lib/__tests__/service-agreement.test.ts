@@ -124,5 +124,6 @@ describe('canRenew', () => {
     expect(canRenew({ type: 'maintenance', status: 'terminated' })).toBe(false);
     expect(canRenew({ type: 'maintenance', status: 'draft' })).toBe(false);
     expect(canRenew({ type: 'maintenance', status: 'active', renewedIntoContractId: 'k2' })).toBe(false);
+    expect(canRenew({ type: 'maintenance', status: 'active', renewalStatus: 'renewed' })).toBe(false);
   });
 });
