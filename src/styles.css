@@ -242,7 +242,11 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
 }
 .sidebar a:focus-visible { outline: 2px solid var(--rail-active-ink); outline-offset: -2px; }
 
-.content { flex: 1; padding: 1.9rem 1.75rem 4rem; min-width: 0; }
+.content { flex: 1; padding: 1.9rem 1.75rem 4rem; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.content > * { min-width: 0; }
+/* Keep wide forms, boards and tables inside the content rail. Touch users can swipe horizontally where a page genuinely needs more width. */
+.content :where(.table-scroll, .board, .stage-table, .form-grid, .table-controls) { max-width: 100%; }
+.table-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .content > * { max-width: 1400px; }
 
 .centered {
@@ -2311,7 +2315,7 @@ input[type="range"] { width: 100%; max-width: 100%; accent-color: var(--brand-te
 @media screen and (max-width: 900px) {
   .table-sort-menu { display: inline-block; }
 
-  .table-scroll { overflow: visible; contain: none; }
+  .table-scroll { overflow-x: auto; overflow-y: visible; contain: none; max-width: 100%; -webkit-overflow-scrolling: touch; }
   :is(.data-table, .milestone-table, .priority-table), :is(.data-table, .milestone-table, .priority-table) tbody { display: block; width: 100%; border: 0; background: none; box-shadow: none; }
 
   /* Hidden, not removed: the `th` cells still exist for the sort menu's sake and
@@ -2522,4 +2526,36 @@ fieldset { min-width: 0; }
   color: var(--brand-blue, #4263eb);
   font-size: 0.875rem;
   font-weight: 600;
+}
+
+
+/* Final responsive guard: some page-specific mobile rules intentionally turn
+   data tables into cards, but wide phase boards, toolbars and forms still need
+   a reachable horizontal scroll surface instead of expanding beyond the screen. */
+.content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.content > * { min-width: 0; }
+.content :where(.table-scroll, .board, .stage-table, .stage-manager, .table-controls, .form-grid) {
+  max-width: 100%;
+}
+.content :where(.table-scroll, .board) {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media screen and (max-width: 900px) {
+  .content { overflow-x: auto !important; }
+  .content :where(.table-scroll, .board, .stage-manager .stage-table) {
+    overflow-x: auto !important;
+    overflow-y: visible;
+    max-width: 100%;
+  }
+  .content :where(.table-controls, .row-actions, .page-actions) {
+    flex-wrap: wrap;
+  }
 }
