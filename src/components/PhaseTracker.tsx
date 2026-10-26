@@ -9,8 +9,8 @@
 import { useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
-import { setCheckpoint, setPhaseBlocked, updatePhaseProgress } from '../data/projects.js';
-import { describeCheckpoints, isTracked } from '../lib/checkpoints.js';
+import { setCheckpoint, setPhaseBlocked, setPhasesCompletion, updatePhaseProgress } from '../data/projects.js';
+import { describeCheckpoints, isTracked, phaseProgressBps as getPhaseProgressBps } from '../lib/checkpoints.js';
 import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
@@ -47,10 +47,24 @@ export function PhaseTracker({
   }));
   const warnings = new Map(sequenceWarnings(withDeps).map((w) => [w.key, w]));
   const next = nextActionablePhase(withDeps);
+  const allComplete = phases.length > 0 && phases.every((phase) => getPhaseProgressBps(phase) === 10_000);
 
   return (
     <section className="card">
-      <h2>Phases</h2>
+      <div className="phase-section-head">
+        <h2>Phases</h2>
+        {editable && user !== null && (
+          <label className="collective-phase-check">
+            <input
+              type="checkbox"
+              checked={allComplete}
+              disabled={busy || phases.length === 0}
+              onChange={(event) => void run(() => setPhasesCompletion(projectId, phases.map((phase) => phase.id), event.target.checked, user.uid))}
+            />
+            <span>Complete entire project</span>
+          </label>
+        )}
+      </div>
       {next !== null && (
         <p className="muted">
           Next up: <strong>{phases.find((p) => p.key === next.key)?.name ?? next.key}</strong>
@@ -69,6 +83,7 @@ export function PhaseTracker({
             uid={user?.uid ?? ''}
             busy={busy}
             run={run}
+            onToggleComplete={(done) => setPhasesCompletion(projectId, [phase.id], done, user?.uid ?? '')}
           />
         ))}
       </ul>
@@ -84,6 +99,7 @@ function PhaseRow({
   uid,
   busy,
   run,
+  onToggleComplete,
 }: {
   projectId: string;
   phase: WithId<ProjectPhase>;
@@ -92,6 +108,7 @@ function PhaseRow({
   uid: string;
   busy: boolean;
   run: <T>(fn: () => Promise<T>) => Promise<T | null>;
+  onToggleComplete: (done: boolean) => Promise<unknown>;
 }) {
   // Local draft so dragging the slider does not fire a write per pixel. Only a
   // hand-made stage still has a slider; see below.
@@ -110,7 +127,16 @@ function PhaseRow({
     <li className={`phase-row ${phase.status === 'blocked' ? 'is-blocked' : ''}`}>
       <div className="phase-head">
         <div>
-          <strong>{phase.seq}. {phase.name}</strong>
+          <label className="phase-complete-check">
+            <input
+              type="checkbox"
+              checked={getPhaseProgressBps(phase) === 10_000}
+              disabled={!editable || busy}
+              aria-label={`Mark phase ${phase.seq}, ${phase.name}, complete`}
+              onChange={(event) => void run(() => onToggleComplete(event.target.checked))}
+            />
+            <strong>{phase.seq}. {phase.name}</strong>
+          </label>
           <span className="muted"> · {formatBps(phase.weightBps, 0)} of the project</span>
         </div>
         <span className={statusClass[phase.status]}>{phase.status.replace(/_/g, ' ')}</span>
