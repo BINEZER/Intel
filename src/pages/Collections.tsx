@@ -31,6 +31,7 @@ import {
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
 import { formatETB } from '../lib/money.js';
+import { AGE_BUCKET_LABELS, ageReceivables } from '../lib/invoicing.js';
 import { formatDual } from '../lib/ethiopic.js';
 import type { Invoice } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
@@ -91,6 +92,18 @@ export function Collections() {
   }, [invoices.rows, chase, asOf]);
 
   const summary = summariseChase(rows);
+  const ageing = ageReceivables(
+    invoices.rows.map((invoice) => ({
+      id: invoice.id,
+      invoiceNo: invoice.invoiceNo || '(draft)',
+      clientName: invoice.clientName,
+      dueDate: invoice.dueDate.at.toDate(),
+      grossSantim: invoice.grossSantim,
+      receipts: [{ amountGrossSantim: invoice.grossSantim - invoice.balanceGrossSantim, clientWhtSantim: 0 }],
+      status: invoice.status,
+    })),
+    asOf,
+  );
   const live = rows.filter((r) => r.state.stage !== 'settled' && r.state.stage !== 'written_off');
 
   return (
@@ -141,6 +154,18 @@ export function Collections() {
           <p className="metric-label">Disputed</p>
           <p className="metric-value">{formatETB(summary.disputedSantim)}</p>
           <p className="metric-note muted">chasing will not collect these</p>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>Outstanding by due date</h2>
+        <div className="kpis">
+          {(Object.keys(AGE_BUCKET_LABELS) as (keyof typeof AGE_BUCKET_LABELS)[]).map((bucket) => (
+            <div className="metric-tile" key={bucket}>
+              <p className="metric-label">{AGE_BUCKET_LABELS[bucket]}</p>
+              <p className="metric-value">{formatETB(ageing.byBucket[bucket])}</p>
+            </div>
+          ))}
         </div>
       </section>
 
