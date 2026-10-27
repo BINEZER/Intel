@@ -62,7 +62,7 @@ export function PriorityBoard({
           label="Ready to invoice"
           value={formatETB(readySantim)}
           status={readySantim > 0 ? 'bad' : 'good'}
-          detail={<Link to="/invoices">Create / review invoices</Link>}
+          detail={<Link to="/finance/invoices">Create / review invoices</Link>}
         />
         <KpiTile
           label="Projects at risk"
@@ -113,7 +113,7 @@ function PriorityAction({ row, horizonDays }: { row: PriorityRow; horizonDays: n
   } else if (row.readyToInvoiceSantim > 0) {
     action = 'Issue the invoice';
     reason = `${formatETB(row.readyToInvoiceSantim)} is earned and waiting to be invoiced.`;
-    href = '/invoices';
+    href = '/finance/invoices';
   } else if (row.risk.inDanger) {
     action = 'Resolve the highest project risk';
     reason = row.risk.flags[0]?.message ?? 'This project has an open risk flag.';
