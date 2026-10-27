@@ -1,17 +1,14 @@
 /**
- * Priority board: which project, given attention this week, unlocks the most
- * cash soonest.
- *
- * Every row shows the ETB behind its rank. A ranking a manager cannot audit is
- * a ranking they will override, and an overridden ranking is worthless.
+ * Priority board: the next actions most likely to unlock cash or prevent delay.
+ * Financial detail belongs in Receivables and Cash forecast; this page decides
+ * what to do next.
  */
 
-import { formatBps } from '../lib/kpi.js';
 import { formatETB } from '../lib/money.js';
 import { portfolioTotals } from '../lib/priority.js';
 import type { ProjectPriority } from '../lib/schema.js';
 import { KpiTile } from '../components/KpiTile.js';
-import { DangerBanner, RiskBadge, RiskFlagList } from '../components/RiskAlerts.js';
+import { RiskBadge, RiskFlagList } from '../components/RiskAlerts.js';
 import { Link } from 'react-router-dom';
 import type { MaintenanceRow, ReadyItem } from '../lib/cash-pipeline.js';
 
@@ -31,28 +28,27 @@ export function PriorityBoard({
 }: {
   rows: readonly PriorityRow[];
   horizonDays: number;
-  /** Everything that can be invoiced now, projects and maintenance alike. */
   ready: readonly ReadyItem[];
   maintenance: readonly MaintenanceRow[];
-  /** True while the payment terms are still being read. */
   termsLoading: boolean;
 }) {
   const totals = portfolioTotals(rows);
   const readySantim = ready.reduce((a, r) => a + r.amountSantim, 0);
+  const visibleRows = rows.slice(0, 5);
+  const remainingRows = rows.slice(5);
 
   return (
     <>
-      <h1>Priority</h1>
-      <p className="muted">
-        Ranked by cash reachable within {horizonDays} days. Money already earned but
-        uncollected outranks money still to be built.
-      </p>
+      <header className="page-head">
+        <div>
+          <h1>Priority</h1>
+          <p className="muted">What to act on first to unlock cash or prevent a costly delay. Ranked using cash at stake and project risk over the next {horizonDays} days.</p>
+        </div>
+      </header>
 
-      <DangerBanner projects={rows} />
-
-      <section className="kpis">
+      <section className="kpis" aria-label="Priority summary">
         <KpiTile
-          label="Expected receivable"
+          label="Cash reachable"
           value={formatETB(totals.expectedReceivableSantim)}
           detail={<span className="muted">within {horizonDays} days</span>}
         />
@@ -60,201 +56,147 @@ export function PriorityBoard({
           label="Overdue"
           value={formatETB(totals.overdueReceivableSantim)}
           status={totals.overdueReceivableSantim > 0 ? 'bad' : 'good'}
-          detail={<span className="muted">earned, awaiting collection</span>}
+          detail={<Link to="/collections">Work collections</Link>}
         />
         <KpiTile
           label="Ready to invoice"
           value={formatETB(readySantim)}
           status={readySantim > 0 ? 'bad' : 'good'}
-          detail={<span className="muted">{ready.length} term{ready.length === 1 ? '' : 's'}, earned and unbilled</span>}
+          detail={<Link to="/finance/invoices">Create / review invoices</Link>}
         />
         <KpiTile
-          label="Billable soon"
-          value={formatETB(totals.nearTermBillableSantim)}
-          detail={<span className="muted">milestones within horizon</span>}
-        />
-        <KpiTile
-          label="Left to bill"
-          value={formatETB(totals.unbilledContractSantim)}
-          detail={<span className="muted">across the portfolio</span>}
-        />
-        <KpiTile
-          label="In danger"
-          value={`${totals.inDanger} / ${totals.projects}`}
+          label="Projects at risk"
+          value={String(totals.inDanger)}
           status={totals.inDanger > 0 ? 'bad' : 'good'}
+          detail={<span className="muted">of {totals.projects} projects</span>}
         />
       </section>
 
-      {termsLoading && <p className="muted">Reading the payment terms…</p>}
+      {termsLoading && <p className="muted">Updating invoiceable amounts…</p>}
 
-
-      <h2>Projects</h2>
-      <div className="table-scroll">
-        <div className="table-scroll">
-          <table className="priority-table">
-            <caption className="visually-hidden">
-              Projects ranked by expected receivable within {horizonDays} days
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Project</th>
-                <th scope="col" className="num">Expected</th>
-                <th scope="col" className="num">Overdue</th>
-                <th scope="col" className="num">Ready to invoice</th>
-                <th scope="col" className="num">Billable soon</th>
-                <th scope="col" className="num">Left to bill</th>
-                <th scope="col" className="num">Impact</th>
-                <th scope="col">Risk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.projectId} className={row.risk.inDanger ? 'row-danger' : undefined}>
-                  <td className="num" data-label="#">{row.rank}</td>
-                  <td data-label="Project" data-primary>
-                    <strong>{row.title}</strong>
-                    <br />
-                    <span className="muted">{row.clientName}</span>
-                  </td>
-                  <td className="num strong" data-label="Expected">{formatETB(row.expectedReceivableSantim)}</td>
-                  <td className="num" data-label="Overdue">
-                    {row.overdueReceivableSantim > 0 ? (
-                      <span className="danger-text">{formatETB(row.overdueReceivableSantim)}</span>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td className="num" data-label="Ready to invoice">
-                    {row.readyToInvoiceSantim > 0 ? (
-                      <span className="danger-text">{formatETB(row.readyToInvoiceSantim)}</span>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td className="num" data-label="Billable soon">{formatETB(row.nearTermBillableSantim)}</td>
-                  <td className="num muted" data-label="Left to bill">{formatETB(row.unbilledContractSantim)}</td>
-                  <td className="num" data-label="Impact">{formatBps(row.impactScoreBps, 0)}</td>
-                  <td data-label="Risk"><RiskBadge risk={row.risk} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <section aria-labelledby="priority-actions-heading">
+        <div className="section-heading">
+          <h2 id="priority-actions-heading">Act on these first</h2>
+          <span className="muted">Top {Math.min(5, rows.length)} of {rows.length} projects</span>
         </div>
-      </div>
+        {rows.length === 0 ? (
+          <div className="card"><p className="muted">No active projects to prioritize.</p></div>
+        ) : (
+          <div className="priority-actions">
+            {visibleRows.map((row) => <PriorityAction key={row.projectId} row={row} horizonDays={horizonDays} />)}
+          </div>
+        )}
+        {remainingRows.length > 0 && (
+          <details className="card priority-more">
+            <summary>Show the other {remainingRows.length} projects</summary>
+            <div className="priority-actions">
+              {remainingRows.map((row) => <PriorityAction key={row.projectId} row={row} horizonDays={horizonDays} />)}
+            </div>
+          </details>
+        )}
+      </section>
 
       <MaintenanceSection rows={maintenance} loading={termsLoading} />
-
-      <h2>Why each project ranks where it does</h2>
-      {rows.map((row) => (
-        <section key={row.projectId} className="card">
-          <h2>
-            {row.rank}. {row.title} <RiskBadge risk={row.risk} />
-          </h2>
-          <p className="muted">
-            {formatETB(row.expectedReceivableSantim)} reachable within {horizonDays} days
-          </p>
-
-          <h3>Why it ranks here</h3>
-          <ul className="driver-list">
-            {row.drivers.map((driver) => (
-              <li key={driver.label}>
-                <span className="driver-label">{driver.label}</span>
-                {driver.amountSantim > 0 && (
-                  <span className="driver-amount">{formatETB(driver.amountSantim)}</span>
-                )}
-                <span className="muted"> — {driver.note}</span>
-              </li>
-            ))}
-          </ul>
-
-          {row.risk.flags.length > 0 && (
-            <>
-              <h3>Risk flags</h3>
-              <RiskFlagList flags={row.risk.flags} />
-            </>
-          )}
-        </section>
-      ))}
     </>
   );
 }
 
-/**
- * Maintenance agreements with money waiting on them.
- *
- * Separate from the projects above because an agreement has no project to rank,
- * and ranked by ETB rather than by share of the agreement — see `rankMaintenance`.
- */
-function MaintenanceSection({ rows, loading }: { rows: readonly MaintenanceRow[]; loading: boolean }) {
+function PriorityAction({ row, horizonDays }: { row: PriorityRow; horizonDays: number }) {
+  let action: string;
+  let reason: string;
+  let href: string;
+
+  if (row.overdueReceivableSantim > 0) {
+    action = 'Follow up overdue payment';
+    reason = `${formatETB(row.overdueReceivableSantim)} is already invoiced and overdue.`;
+    href = '/collections';
+  } else if (row.readyToInvoiceSantim > 0) {
+    action = 'Issue the invoice';
+    reason = `${formatETB(row.readyToInvoiceSantim)} is earned and waiting to be invoiced.`;
+    href = '/finance/invoices';
+  } else if (row.risk.inDanger) {
+    action = 'Resolve the highest project risk';
+    reason = row.risk.flags[0]?.message ?? 'This project has an open risk flag.';
+    href = `/projects/${row.projectId}`;
+  } else if (row.nearTermBillableSantim > 0) {
+    action = 'Advance the next billable milestone';
+    reason = `${formatETB(row.nearTermBillableSantim)} may become billable within ${horizonDays} days.`;
+    href = `/projects/${row.projectId}`;
+  } else {
+    action = 'Review project progress';
+    reason = 'No immediate collection or invoicing action was identified; check progress and blockers.';
+    href = `/projects/${row.projectId}`;
+  }
+
   return (
-    <section className="card" aria-label="Maintenance agreements">
-      <h2>
-        Maintenance agreements <span className="muted related-count">{loading ? '…' : rows.length}</span>
-      </h2>
-      <p className="muted">
-        Monthly fees owed or falling due. Ranked by the money waiting, weighted the same way as the
-        projects: billed and overdue and earned-but-unbilled count in full, billed and not yet due at
-        60%, and months coming up less the further off they are.
-      </p>
-      {rows.length === 0 ? (
-        <p className="muted">{loading ? 'Reading…' : 'No maintenance agreement has money waiting.'}</p>
-      ) : (
+    <article className={`card priority-action${row.risk.inDanger ? ' priority-action-risk' : ''}`}>
+      <div className="priority-action-rank">{row.rank}</div>
+      <div className="priority-action-main">
+        <div className="priority-action-title">
+          <h3><Link to={`/projects/${row.projectId}`}>{row.title}</Link></h3>
+          <RiskBadge risk={row.risk} />
+        </div>
+        <p className="muted priority-client">{row.clientName}</p>
+        <p className="priority-reason">{reason}</p>
+        <Link className="button-link" to={href}>{action} →</Link>
+        <details className="priority-explanation">
+          <summary>Why ranked #{row.rank}</summary>
+          <ul className="driver-list">
+            {row.drivers.map((driver) => (
+              <li key={driver.label}>
+                <strong>{driver.label}</strong>
+                {driver.amountSantim > 0 && <> · {formatETB(driver.amountSantim)}</>}
+                <span className="muted"> — {driver.note}</span>
+              </li>
+            ))}
+          </ul>
+          {row.risk.flags.length > 0 && <RiskFlagList flags={row.risk.flags} />}
+        </details>
+      </div>
+      <div className="priority-action-cash">
+        <span className="muted">Cash in horizon</span>
+        <strong>{formatETB(row.expectedReceivableSantim)}</strong>
+      </div>
+    </article>
+  );
+}
+
+function MaintenanceSection({ rows, loading }: { rows: readonly MaintenanceRow[]; loading: boolean }) {
+  if (!loading && rows.length === 0) return null;
+
+  return (
+    <details className="card priority-maintenance">
+      <summary>Maintenance agreements with money waiting <span className="muted">({loading ? '…' : rows.length})</span></summary>
+      <p className="muted">Kept separate from project ranking. Use the agreement to follow up collection or billing.</p>
+      {rows.length > 0 && (
         <div className="table-scroll">
           <table className="priority-table">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Agreement</th>
-                <th scope="col" className="num">Overdue</th>
-                <th scope="col" className="num">Ready to invoice</th>
-                <th scope="col" className="num">Billed, not yet due</th>
-                <th scope="col" className="num">Coming up</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th scope="col">Agreement</th>
+              <th scope="col" className="num">Overdue</th>
+              <th scope="col" className="num">Ready to invoice</th>
+              <th scope="col" className="num">Not yet due</th>
+              <th scope="col" className="num">Coming up</th>
+            </tr></thead>
             <tbody>
-              {rows.map((row, index) => (
+              {rows.map((row) => (
                 <tr key={row.contractId}>
-                  <td className="num" data-label="#">{index + 1}</td>
                   <td data-label="Agreement" data-primary>
-                    <Link to={`/contracts/${row.contractId}`}>
-                      <strong>{row.contractNo}</strong>
-                    </Link>
-                    <br />
-                    <span className="muted">{row.clientName}</span>
+                    <Link to={`/contracts/${row.contractId}`}><strong>{row.contractNo}</strong></Link>
+                    <br /><span className="muted">{row.clientName}</span>
                   </td>
                   <td className="num" data-label="Overdue">
-                    {row.overdueSantim > 0 ? (
-                      <span className="danger-text">
-                        {formatETB(row.overdueSantim)}
-                        {row.oldestOverdueDays !== null && <span className="muted"> · {row.oldestOverdueDays} days</span>}
-                      </span>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
+                    {row.overdueSantim > 0 ? <span className="danger-text">{formatETB(row.overdueSantim)}{row.oldestOverdueDays !== null && <span className="muted"> · {row.oldestOverdueDays}d</span>}</span> : <span className="muted">—</span>}
                   </td>
-                  <td className="num" data-label="Ready to invoice">
-                    {row.readyNowSantim > 0 ? (
-                      <span className="danger-text">
-                        {formatETB(row.readyNowSantim)}
-                        <span className="muted"> · {row.readyCount} month{row.readyCount === 1 ? '' : 's'}</span>
-                      </span>
-                    ) : (
-                      <span className="muted">—</span>
-                    )}
-                  </td>
-                  <td className="num" data-label="Billed, not yet due">
-                    {row.currentSantim > 0 ? formatETB(row.currentSantim) : <span className="muted">—</span>}
-                  </td>
-                  <td className="num" data-label="Coming up">
-                    {row.upcomingSantim > 0 ? formatETB(row.upcomingSantim) : <span className="muted">—</span>}
-                  </td>
+                  <td className="num" data-label="Ready to invoice">{row.readyNowSantim > 0 ? formatETB(row.readyNowSantim) : <span className="muted">—</span>}</td>
+                  <td className="num" data-label="Not yet due">{row.currentSantim > 0 ? formatETB(row.currentSantim) : <span className="muted">—</span>}</td>
+                  <td className="num" data-label="Coming up">{row.upcomingSantim > 0 ? formatETB(row.upcomingSantim) : <span className="muted">—</span>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-    </section>
+    </details>
   );
 }
