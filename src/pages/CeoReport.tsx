@@ -217,7 +217,7 @@ export function CeoReport() {
   return (
     <>
       <div className="report-controls no-print">
-        <h1>Reports</h1>
+        <h1>Executive report</h1>
 
         <div className="report-toolbar">
           <fieldset className="focus-set">
