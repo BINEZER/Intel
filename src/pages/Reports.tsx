@@ -187,7 +187,7 @@ export function Reports() {
     <>
       <div className="page-head">
         <div>
-          <h1>Reports</h1>
+          <h1>Financial reports</h1>
           <p className="muted">{range.label}</p>
         </div>
         <div className="field inline-field">
