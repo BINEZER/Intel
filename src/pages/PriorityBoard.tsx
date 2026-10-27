@@ -12,7 +12,6 @@ import { portfolioTotals } from '../lib/priority.js';
 import type { ProjectPriority } from '../lib/schema.js';
 import { KpiTile } from '../components/KpiTile.js';
 import { DangerBanner, RiskBadge, RiskFlagList } from '../components/RiskAlerts.js';
-import { ReadyToInvoiceList } from '../components/ReadyToInvoiceList.js';
 import { Link } from 'react-router-dom';
 import type { MaintenanceRow, ReadyItem } from '../lib/cash-pipeline.js';
 
@@ -88,7 +87,6 @@ export function PriorityBoard({
 
       {termsLoading && <p className="muted">Reading the payment terms…</p>}
 
-      <ReadyToInvoiceList items={ready} loading={termsLoading} />
 
       <h2>Projects</h2>
       <div className="table-scroll">
