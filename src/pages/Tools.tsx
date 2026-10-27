@@ -12,6 +12,8 @@ const ITEMS = [
   { to: '/contracts', label: 'Contracts', description: 'Commercial and maintenance agreements.', capability: 'read' as const },
   { to: '/service', label: 'Service', description: 'Maintenance visits and callouts.', capability: 'read' as const },
   { to: '/finance/invoices', label: 'Invoices', description: 'Create and review issued invoices.', capability: 'viewFinancials' as const },
+  { to: '/reports', label: 'Executive report', description: 'Portfolio-level management summary.', capability: 'viewFinancials' as const },
+  { to: '/finance/reports', label: 'Financial reports', description: 'Cash-flow outlook and project financial statements.', capability: 'viewFinancials' as const },
   { to: '/finance/disbursements', label: 'Disbursements', description: 'Record supplier and subcontractor payments.', capability: 'viewFinancials' as const },
   { to: '/people', label: 'People', description: 'Staff and subcontractor records.', capability: 'read' as const },
   { to: '/import', label: 'Import data', description: 'Bring existing registers into the app.', capability: 'manageConfig' as const },
