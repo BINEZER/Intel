@@ -11,7 +11,7 @@
  * automatically and says, in plain words, what it did.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import {
@@ -23,10 +23,12 @@ import {
   setProjectStageWeight,
 } from '../data/projects.js';
 import { useAsyncAction } from '../data/useCollection.js';
+import { getMilestones, setMilestoneSchedule } from '../data/contracts.js';
+import { updatePhaseCheckpoints } from '../data/projects.js';
 import { formatBps } from '../lib/kpi.js';
 import { TOTAL_BPS, weightsTotal } from '../lib/stage-edit.js';
 import { stageOwner } from '../lib/stages.js';
-import type { ProjectPhase } from '../lib/schema.js';
+import type { PaymentMilestone, ProjectPhase } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 const OWNER_LABEL: Record<ReturnType<typeof stageOwner>, string> = {
@@ -40,16 +42,28 @@ export function StageManager({
   projectId,
   phases,
   paymentsByPhase,
+  contractId,
 }: {
   projectId: string;
   phases: readonly WithId<ProjectPhase>[];
   paymentsByPhase: ReadonlyMap<string, string[]>;
+  contractId: string | null;
 }) {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects') && user !== null;
   const { busy, error, run } = useAsyncAction('change the stages');
   const [note, setNote] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [milestones, setMilestones] = useState<WithId<PaymentMilestone>[]>([]);
+  const [substepDrafts, setSubstepDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    if (contractId === null) { setMilestones([]); return () => { cancelled = true; }; }
+    void getMilestones(contractId).then((rows) => { if (!cancelled) setMilestones(rows); })
+      .catch(() => { if (!cancelled) setMilestones([]); });
+    return () => { cancelled = true; };
+  }, [contractId]);
   const uid = user?.uid ?? '';
 
   const total = weightsTotal(
@@ -122,6 +136,7 @@ export function StageManager({
             <tbody>
               {phases.map((phase, index) => {
                 const payments = paymentsByPhase.get(phase.id) ?? [];
+                const assignedMilestones = milestones.filter((m) => m.phaseId === phase.id);
                 return (
                   <tr key={phase.id}>
                     <td className="num">{phase.seq}</td>
@@ -142,9 +157,32 @@ export function StageManager({
                     </td>
                     <td><span className="chip">{OWNER_LABEL[stageOwner(phase.key)]}</span></td>
                     <td>
-                      {payments.length === 0
-                        ? <span className="muted">—</span>
-                        : <span className="chip chip-ok" title={payments.join('\n')}>{payments.length} tied</span>}
+                      {contractId === null ? <span className="muted">Link a contract first</span> : (
+                        <div className="stage-payment-links">
+                          {milestones.map((milestone) => (
+                            <label key={milestone.id} className="stage-payment-option">
+                              <input
+                                type="checkbox"
+                                checked={milestone.phaseId === phase.id}
+                                disabled={busy || (milestone.phaseId !== undefined && milestone.phaseId !== phase.id)}
+                                onChange={(event) => {
+                                  const phaseId = event.target.checked ? phase.id : null;
+                                  void run(async () => {
+                                    await setMilestoneSchedule(contractId, milestone.id, { phaseId }, uid);
+                                    setMilestones(await getMilestones(contractId));
+                                    return { note: event.target.checked
+                                      ? "Linked " + milestone.name + " to " + phase.name + "."
+                                      : "Unlinked " + milestone.name + "." };
+                                  });
+                                }}
+                              />
+                              <span>{milestone.name} · {formatBps(milestone.shareBps, 0)}</span>
+                            </label>
+                          ))}
+                          {milestones.length === 0 && <span className="muted">No payment milestones on this contract</span>}
+                        </div>
+                      )}
+                      {assignedMilestones.length > 0 && <span className="muted">{assignedMilestones.length} linked</span>}
                     </td>
                     <td className="stage-actions">
                       <button
@@ -191,6 +229,38 @@ export function StageManager({
               })}
             </tbody>
           </table>
+        </div>
+
+        <div className="stage-substeps">
+          <h3>Stage sub-steps</h3>
+          <p className="muted">Add one sub-step per line. Completed sub-steps are preserved when their names are retained.</p>
+          {phases.map((phase) => {
+            const current = phase.checkpoints ?? [];
+            const draft = substepDrafts[phase.id] ?? current.map((item) => item.label).join('\\n');
+            return (
+              <div className="stage-substep-editor" key={phase.id}>
+                <label>
+                  <strong>{phase.seq}. {phase.name}</strong>
+                  <textarea
+                    rows={Math.max(2, Math.min(6, draft.split('\\n').length))}
+                    value={draft}
+                    disabled={busy}
+                    placeholder="Enter each sub-step on a new line"
+                    onChange={(event) => setSubstepDrafts((old) => ({ ...old, [phase.id]: event.target.value }))}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={busy || draft.split('\\n').map((v) => v.trim()).filter(Boolean).join('\\n') === current.map((item) => item.label).join('\\n')}
+                  onClick={() => apply(async () => {
+                    await updatePhaseCheckpoints(projectId, phase.id, draft.split('\\n'), uid);
+                    setSubstepDrafts((old) => { const next = { ...old }; delete next[phase.id]; return next; });
+                    return { note: "Updated sub-steps for " + phase.name + "." };
+                  })}
+                >Save sub-steps</button>
+              </div>
+            );
+          })}
         </div>
 
         {confirmingId !== null && (
