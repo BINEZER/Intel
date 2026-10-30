@@ -644,6 +644,52 @@ export async function setPhasesCompletion(
   return { projectProgressBps };
 }
 
+export async function updatePhaseCheckpoints(
+  projectId: string,
+  phaseId: string,
+  labels: readonly string[],
+  uid: string,
+): Promise<void> {
+  const clean = labels.map((label) => label.trim()).filter(Boolean);
+  if (clean.length === 0) throw new Error('A stage must have at least one sub-step.');
+  if (new Set(clean.map((label) => label.toLocaleLowerCase())).size !== clean.length) {
+    throw new Error('Sub-step names must be unique within a stage.');
+  }
+  const phases = await getPhases(projectId);
+  const current = phases.find((p) => p.id === phaseId);
+  if (current === undefined) throw new Error('That stage no longer exists on this project.');
+  const existing = current.checkpoints ?? [];
+  const byLabel = new Map(existing.map((c) => [c.label.toLocaleLowerCase(), c]));
+  const checkpoints = clean.map((label, index) => {
+    const previous = byLabel.get(label.toLocaleLowerCase());
+    return previous === undefined
+      ? { key: `custom_${index + 1}_${Date.now().toString(36)}`, label, doneAt: null }
+      : { ...previous, label };
+  });
+  const phaseProgress = checkpointProgressBps(checkpoints);
+  const status = derivePhaseStatus(phaseProgress, current.status);
+  const projectProgressBps = rollUpProgress(phases.map((phase) =>
+    phase.id === phaseId
+      ? { key: phase.key, weightBps: phase.weightBps, progressBps: phaseProgress, status }
+      : { key: phase.key, weightBps: phase.weightBps, progressBps: phaseProgressBps(phase), status: phase.status },
+  ));
+  const today = dualDateFromGregorian(new Date(), toTimestamp, 'GC');
+  const batch = writeBatch(db);
+  batch.update(doc(db, phasePath(projectId), phaseId), {
+    checkpoints, progressBps: phaseProgress, status,
+    ...(current.actualStart === null && phaseProgress > 0 ? { actualStart: today } : {}),
+    ...(status === 'completed' && current.actualEnd === null ? { actualEnd: today } : {}),
+    ...(status !== 'completed' && current.actualEnd !== null ? { actualEnd: null } : {}),
+    ...stampUpdate(uid),
+  });
+  batch.update(doc(db, PATH, projectId), {
+    progressBps: projectProgressBps,
+    currentStage: currentStageOf(phases, { id: phaseId, progressBps: phaseProgress, checkpoints }),
+    ...stampUpdate(uid),
+  });
+  await batch.commit();
+}
+
 export async function setCheckpoint(
   projectId: string,
   phaseId: string,
