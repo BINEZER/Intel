@@ -66,18 +66,27 @@ export function StageManager({
       return result;
     });
 
-  if (!editable) return null;
+  if (!editable) {
+    return (
+      <section className="card stage-manager-panel">
+        <h2>Project stages</h2>
+        <p className="muted">This project has {phases.length} stages. Your account can view them, but only an admin or manager can change the stage list.</p>
+        <ol className="stage-readonly-list">
+          {phases.map((phase) => <li key={phase.id}>{phase.seq}. {phase.name} <span className="muted">· {formatBps(phase.weightBps, 0)}</span></li>)}
+        </ol>
+      </section>
+    );
+  }
 
   return (
-    <section className="card">
-      <details className="stage-manager">
-        <summary>
-          <strong>Edit stages</strong>
-          <span className="muted">
-            {' '}· {phases.length} stages, {formatBps(total, 0)} of the project
-            {drifted ? ' — does not add up to 100%' : ''}
-          </span>
-        </summary>
+    <section className="card stage-manager-panel">
+      <div className="stage-manager-heading">
+        <h2>Manage project stages</h2>
+        <span className="muted">
+          {phases.length} stages · {formatBps(total, 0)} of the project
+          {drifted ? ' — does not add up to 100%' : ''}
+        </span>
+      </div>
 
         <p className="muted">
           Add work this job needs, delete work it does not, and set what each stage is worth.
@@ -192,7 +201,6 @@ export function StageManager({
         )}
 
         <AddStageForm projectId={projectId} phases={phases} busy={busy} uid={uid} onDone={apply} />
-      </details>
     </section>
   );
 }
