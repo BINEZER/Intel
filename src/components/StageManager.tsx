@@ -136,7 +136,7 @@ export function StageManager({
             <tbody>
               {phases.map((phase, index) => {
                 const payments = paymentsByPhase.get(phase.id) ?? [];
-                const assignedMilestone = milestones.find((m) => m.phaseId === phase.id);
+                const assignedMilestones = milestones.filter((m) => m.phaseId === phase.id);
                 return (
                   <tr key={phase.id}>
                     <td className="num">{phase.seq}</td>
@@ -158,31 +158,31 @@ export function StageManager({
                     <td><span className="chip">{OWNER_LABEL[stageOwner(phase.key)]}</span></td>
                     <td>
                       {contractId === null ? <span className="muted">Link a contract first</span> : (
-                        <select
-                          aria-label={"Payment milestone for " + phase.name}
-                          value={assignedMilestone?.id ?? ''}
-                          disabled={busy}
-                          onChange={(event) => {
-                            const nextId = event.target.value;
-                            const previous = assignedMilestone;
-                            const next = milestones.find((m) => m.id === nextId);
-                            void run(async () => {
-                              if (previous !== undefined) await setMilestoneSchedule(contractId, previous.id, { phaseId: null }, uid);
-                              if (next !== undefined) await setMilestoneSchedule(contractId, next.id, { phaseId: phase.id }, uid);
-                              setMilestones(await getMilestones(contractId));
-                              return { note: next === undefined ? "Payment unlinked." : "Payment linked to " + phase.name + "." };
-                            });
-                          }}
-                        >
-                          <option value="">No payment linked</option>
+                        <div className="stage-payment-links">
                           {milestones.map((milestone) => (
-                            <option key={milestone.id} value={milestone.id} disabled={milestone.phaseId !== undefined && milestone.phaseId !== phase.id}>
-                              {milestone.name} · {formatBps(milestone.shareBps, 0)}
-                            </option>
+                            <label key={milestone.id} className="stage-payment-option">
+                              <input
+                                type="checkbox"
+                                checked={milestone.phaseId === phase.id}
+                                disabled={busy || (milestone.phaseId !== undefined && milestone.phaseId !== phase.id)}
+                                onChange={(event) => {
+                                  const phaseId = event.target.checked ? phase.id : null;
+                                  void run(async () => {
+                                    await setMilestoneSchedule(contractId, milestone.id, { phaseId }, uid);
+                                    setMilestones(await getMilestones(contractId));
+                                    return { note: event.target.checked
+                                      ? "Linked " + milestone.name + " to " + phase.name + "."
+                                      : "Unlinked " + milestone.name + "." };
+                                  });
+                                }}
+                              />
+                              <span>{milestone.name} · {formatBps(milestone.shareBps, 0)}</span>
+                            </label>
                           ))}
-                        </select>
+                          {milestones.length === 0 && <span className="muted">No payment milestones on this contract</span>}
+                        </div>
                       )}
-                      {payments.length > 0 && <span className="muted">{payments.length} linked</span>}
+                      {assignedMilestones.length > 0 && <span className="muted">{assignedMilestones.length} linked</span>}
                     </td>
                     <td className="stage-actions">
                       <button
