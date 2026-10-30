@@ -305,13 +305,14 @@ export function ProjectDetail() {
         </section>
       )}
 
-      <ProjectKpiPanel kpi={kpi} targets={kpiTargets} definitions={kpiDefinitions} />
+      <section className="project-performance" aria-label="Project performance indicators">
+        <h2>Project performance</h2>
+        <ProjectKpiPanel kpi={kpi} targets={kpiTargets} definitions={kpiDefinitions} />
+      </section>
 
       {phases.error && <p className="error" role="alert">{phases.error}</p>}
       {phases.rows.length > 0 && <PhaseTracker projectId={project.id} phases={phases.rows} />}
-      {phases.rows.length > 0 && (
-        <StageManager projectId={project.id} phases={phases.rows} paymentsByPhase={paymentsByPhase} />
-      )}
+      <StageManager projectId={project.id} phases={phases.rows} paymentsByPhase={paymentsByPhase} />
 
       {inspectionPhase !== undefined && (
         <CertificationPanel projectId={project.id} phase={inspectionPhase} />
