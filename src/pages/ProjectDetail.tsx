@@ -312,7 +312,7 @@ export function ProjectDetail() {
 
       {phases.error && <p className="error" role="alert">{phases.error}</p>}
       {phases.rows.length > 0 && <PhaseTracker projectId={project.id} phases={phases.rows} />}
-      <StageManager projectId={project.id} phases={phases.rows} paymentsByPhase={paymentsByPhase} />
+      <StageManager projectId={project.id} phases={phases.rows} paymentsByPhase={paymentsByPhase} contractId={project.contractId} />
 
       {inspectionPhase !== undefined && (
         <CertificationPanel projectId={project.id} phase={inspectionPhase} />
