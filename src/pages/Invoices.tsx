@@ -244,6 +244,10 @@ function ReceiptForm({
   onDone: () => void;
 }) {
   const [amountSantim, setAmountSantim] = useState(invoice.balanceGrossSantim);
+  const [receivedOn, setReceivedOn] = useState(() => {
+    const today = new Date();
+    return [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+  });
   const [clientWhtSantim, setClientWhtSantim] = useState(0);
   const [method, setMethod] = useState<Receipt['method']>('bank_transfer');
   const [bankRef, setBankRef] = useState('');
@@ -258,7 +262,10 @@ function ReceiptForm({
         invoice.id,
         { grossSantim: invoice.grossSantim, status: invoice.status, dueDate: invoice.dueDate },
         {
-          receivedDate: dualDateFromGregorian(new Date(), toTimestamp, 'GC'),
+          receivedDate: (() => {
+            const [year, month, day] = receivedOn.split('-').map(Number);
+            return dualDateFromGregorian({ year, month, day }, toTimestamp, 'GC');
+          })(),
           amountGrossSantim: amountSantim,
           method,
           ...(bankRef.trim() === '' ? {} : { bankRef: bankRef.trim() }),
@@ -278,6 +285,11 @@ function ReceiptForm({
       </p>
 
       <div className="form-grid">
+        <div className="field">
+          <label htmlFor="r-received-on">Date received</label>
+          <input id="r-received-on" type="date" value={receivedOn} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setReceivedOn(e.target.value)} required />
+          <p className="muted">Use the actual date the money arrived, not the date you are entering it.</p>
+        </div>
         <MoneyInput label="Cash received" value={amountSantim} onChange={setAmountSantim} required />
         <MoneyInput
           label="Withheld by client"
