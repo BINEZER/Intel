@@ -20,11 +20,11 @@
  *   whether the month was quiet or the wiring is missing.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { subscribeProjects } from '../data/projects.js';
 import { subscribeContracts } from '../data/contracts.js';
-import { subscribeInvoices } from '../data/invoices.js';
+import { getReceipts, subscribeInvoices } from '../data/invoices.js';
 import { subscribeDisbursements } from '../data/disbursements.js';
 import { subscribeClients } from '../data/clients.js';
 import { subscribeSubcontractors } from '../data/subcontractors.js';
@@ -44,7 +44,7 @@ import { formatETB } from '../lib/money.js';
 import { formatBps } from '../lib/kpi.js';
 import type { PayoutVoucher } from '../lib/payout-workflow.js';
 import type {
-  Client, Contract, Disbursement, ElevatorUnit, Invoice, Project, Subcontractor, Technician,
+  Client, Contract, Disbursement, ElevatorUnit, Invoice, Project, Receipt, Subcontractor, Technician,
 } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import {
@@ -61,6 +61,34 @@ export function Dashboard() {
   const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const invoices = useCollection<Invoice>((d, e) => subscribeInvoices(d, e), [], 'load invoices');
+  // Receipts are separate subcollection records. Read them by invoice so the
+  // dashboard can report cash by the date it was actually received, rather than
+  // treating the invoice's latest update as the date of every payment.
+  const [receiptsByInvoice, setReceiptsByInvoice] = useState<Record<string, WithId<Receipt>[]>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadReceipts = async () => {
+      const entries = await Promise.all(
+        invoices.rows.map(async (invoice) => {
+          try {
+            return [invoice.id, await getReceipts(invoice.id)] as const;
+          } catch {
+            // A failed subcollection read must not be mistaken for a payment.
+            return [invoice.id, []] as const;
+          }
+        }),
+      );
+      if (!cancelled) setReceiptsByInvoice(Object.fromEntries(entries));
+    };
+
+    if (invoices.rows.length === 0) {
+      setReceiptsByInvoice({});
+    } else {
+      void loadReceipts();
+    }
+    return () => { cancelled = true; };
+  }, [invoices.rows]);
   const vouchers = useCollection<Disbursement>((d, e) => subscribeDisbursements(d, e), [], 'load payment vouchers');
   const subcontractors = useCollection<Subcontractor>((d, e) => subscribeSubcontractors(d, e), [], 'load subcontractors');
   const technicians = useCollection<Technician>((d, e) => subscribeTechnicians(d, e), [], 'load technicians');
@@ -85,13 +113,14 @@ export function Dashboard() {
       vatSantim: i.vatSantim,
       grossSantim: i.grossSantim,
       status: i.status,
-      // Receipts live in a subcollection. The dashboard deliberately does not
-      // fan out to read them: `paidGrossSantim` on the invoice is what the rest
-      // of the app already trusts, and a landing page should open fast.
-      receipts:
-        i.paidGrossSantim > 0
-          ? [{ receivedAt: i.updatedAt.toDate(), amountGrossSantim: i.paidGrossSantim, clientWhtSantim: 0 }]
-          : [],
+      // Use the actual receipt records and their received dates. A payment
+      // can arrive this month against an older invoice, or several partial
+      // payments can arrive on different dates.
+      receipts: (receiptsByInvoice[i.id] ?? []).map((receipt) => ({
+        receivedAt: receipt.receivedDate.at.toDate(),
+        amountGrossSantim: receipt.amountGrossSantim,
+        clientWhtSantim: receipt.clientWhtSantim,
+      })),
     }));
 
     const chase = dashboardInvoices
@@ -201,7 +230,7 @@ export function Dashboard() {
       unitsNeedingAttention: 0,
     });
   }, [
-    clients.rows, contracts.rows, projects.rows, invoices.rows,
+    clients.rows, contracts.rows, projects.rows, invoices.rows, receiptsByInvoice,
     vouchers.rows, subcontractors.rows, technicians.rows, units.rows, asOf,
   ]);
 
