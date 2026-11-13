@@ -524,6 +524,18 @@ export interface ProjectPhase extends AuditFields {
     doneBy?: string;
   }>;
   assigneeUid?: string;
+  /** Installation planning metadata; absent on non-installation projects. */
+  installation?: {
+    discipline: 'mechanical' | 'electrical' | 'commissioning';
+    estimatedCrewDays: number | null;
+    actualCrewDays: number | null;
+    dependencies: string[];
+    requiresSiteReadiness: boolean;
+    siteReady: boolean;
+    siteReadyApprovedBy?: string;
+    siteReadyApprovedAt?: Timestamp;
+    assignedTeamId: string | null;
+  };
 
   /**
    * Present only on the `authority_inspection` phase. Tracks the Ministry /
