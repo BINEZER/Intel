@@ -263,7 +263,10 @@ function ReceiptForm({
         { grossSantim: invoice.grossSantim, status: invoice.status, dueDate: invoice.dueDate },
         {
           receivedDate: (() => {
-            const [year, month, day] = receivedOn.split('-').map(Number);
+            const [year = NaN, month = NaN, day = NaN] = receivedOn.split('-').map(Number);
+            if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+              throw new Error('Enter a valid received date.');
+            }
             return dualDateFromGregorian({ year, month, day }, toTimestamp, 'GC');
           })(),
           amountGrossSantim: amountSantim,
