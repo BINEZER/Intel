@@ -126,6 +126,7 @@ export function InstallationSchedule() {
       const batch = writeBatch(db);
 
       for (const row of result.phases) {
+        if (row.status === 'completed' || row.status === 'in_progress') continue;
         const phaseRef = doc(db, 'projects', selected.id, 'phases', row.id);
         const current = phases.rows.find((p) => p.id === row.id)!;
         const planMeta = {
