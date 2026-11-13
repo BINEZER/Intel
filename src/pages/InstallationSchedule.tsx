@@ -104,7 +104,7 @@ export function InstallationSchedule() {
     try {
       const ref = doc(collectionRef('installationTeams'));
       const row: InstallationTeam = { id: ref.id, name: teamName.trim(), supervisorId, supervisorName: supervisor.name, memberIds: [...new Set([supervisorId, ...memberIds])], disciplines: [discipline], active: true };
-      await addDoc(collectionRef('installationTeams'), { ...row, ...stampCreate(user.uid) });
+      await setDoc(ref, { ...row, ...stampCreate(user.uid) });
       setTeamName(''); setSupervisorId(''); setMemberIds([]);
       setMessage('Team saved.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save team.'); }
