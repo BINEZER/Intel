@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { addDoc, collection, doc, onSnapshot, query, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from 'react';
+import { doc, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -8,7 +8,7 @@ import { useCollection } from '../data/useCollection.js';
 import { subscribeProjects, subscribePhases } from '../data/projects.js';
 import { subscribeUnits } from '../data/units.js';
 import { subscribeTechnicians } from '../data/technicians.js';
-import { collectionRef, type WithId } from '../data/repository.js';
+import { collectionRef } from '../data/repository.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { stampCreate, stampUpdate } from '../data/audit.js';
 import { estimateInstallationCrewDays, type InstallationDurationStandard } from '../lib/installation-planning.js';
