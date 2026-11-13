@@ -167,7 +167,19 @@ export function scheduleInstallation(
     let madeProgress = false;
     for (const phase of phases) {
       if (!remaining.has(phase.id)) continue;
-      const unmet = phase.dependencies.filter((id) => !scheduled.has(id) || scheduled.get(id)?.scheduleState !== 'scheduled');
+      const missingDependencies = phase.dependencies.filter((id) => !phases.some((candidate) => candidate.id === id));
+      const blockedDependency = phase.dependencies.find((id) => scheduled.get(id)?.scheduleState === 'blocked');
+      if (missingDependencies.length || blockedDependency) {
+        const reason = missingDependencies.length
+          ? `Missing prerequisite phase: ${missingDependencies.join(', ')}.`
+          : `A prerequisite phase (${blockedDependency}) is blocked.`;
+        scheduled.set(phase.id, { ...phase, plannedStart: null, plannedEnd: null, scheduleState: 'blocked', blocker: reason });
+        conflicts.push({ code: 'dependency', message: `${phase.name}: ${reason}`, phaseId: phase.id });
+        remaining.delete(phase.id);
+        madeProgress = true;
+        continue;
+      }
+      const unmet = phase.dependencies.filter((id) => !scheduled.has(id));
       if (unmet.length) continue;
       const dependencyEnd = phase.dependencies.reduce((latest, id) => {
         const end = scheduled.get(id)?.plannedEnd ?? startDate;
