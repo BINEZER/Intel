@@ -190,7 +190,7 @@ export function InstallationSchedule() {
     if (phaseRecord?.status !== 'completed') { setMessage('Record actual crew-days after the phase is marked completed.'); return; }
     if (projectUnits.length !== 1) { setMessage('Historical benchmark capture currently requires exactly one linked lift per project. Multi-lift actuals are not attributed to individual lift specifications.'); return; }
     const lift = projectUnits[0]!;
-    const metadata = { discipline: phase.discipline, estimatedCrewDays: phase.crewDays || null, actualCrewDays: value, dependencies: phase.dependencies, requiresSiteReadiness: phase.requiresSiteReadiness, siteReady: phase.siteReady, assignedTeamId: phase.assignedTeamId };
+    const metadata = { ...(phaseRecord.installation ?? {}), discipline: phase.discipline, estimatedCrewDays: phase.crewDays || null, actualCrewDays: value, dependencies: phase.dependencies, requiresSiteReadiness: phase.requiresSiteReadiness, siteReady: phase.siteReady, assignedTeamId: phase.assignedTeamId };
     setSaving(true);
     try {
       await updateDoc(doc(db, 'projects', selected.id, 'phases', phase.id), { installation: metadata, ...stampUpdate(user.uid) });
