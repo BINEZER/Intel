@@ -120,8 +120,8 @@ export function App() {
                 </RequireCapability>
               }
             />
-            <Route
             <Route path="installation-planner" element={<RequireCapability capability="read"><InstallationPlanner /></RequireCapability>} />
+            <Route
               path="projects"
               element={
                 <RequireCapability capability="read">
