@@ -238,33 +238,6 @@ export function scheduleInstallation(
         generated.push(placed);
         scheduled.set(phase.id, { ...phase, plannedStart: placed.startDate, plannedEnd: placed.endDate, assignedTeamId: placed.resourceId, scheduleState: 'scheduled', blocker: null });
       }
-            remaining.delete(phase.id);
-        madeProgress = true;
-        continue;
-      }
-
-      let candidateStart = dependencyEnd;
-      let placed: InstallationBooking | null = null;
-      for (let attempts = 0; attempts < 730 && !placed; attempts += 1) {
-        while (!isWorkingDay(candidateStart, calendar)) candidateStart = addCalendarDays(candidateStart, 1);
-        const candidateEnd = addWorkingDays(candidateStart, phase.crewDays, calendar);
-        const candidate: InstallationBooking = {
-          id: `auto:${phase.id}`, projectId: 'schedule-preview', phaseId: phase.id,
-          resourceType: 'team', resourceId: team.id, resourceName: team.name,
-          memberIds: team.memberIds, discipline: phase.discipline,
-          startDate: candidateStart, endDate: candidateEnd, allocationBps: 10000, status: 'tentative',
-        };
-        const collisions = detectBookingConflicts(candidate, [...existingBookings, ...generated]);
-        if (!collisions.length) placed = candidate;
-        else candidateStart = addCalendarDays(candidateStart, 1);
-      }
-      if (!placed) {
-        scheduled.set(phase.id, { ...phase, plannedStart: null, plannedEnd: null, scheduleState: 'blocked', blocker: 'No conflict-free team slot found within two years.' });
-        conflicts.push({ code: 'team_overlap', message: `No conflict-free slot found for ${phase.name}.`, phaseId: phase.id });
-      } else {
-        generated.push(placed);
-        scheduled.set(phase.id, { ...phase, plannedStart: placed.startDate, plannedEnd: placed.endDate, assignedTeamId: team.id, scheduleState: 'scheduled', blocker: null });
-      }
       remaining.delete(phase.id);
       madeProgress = true;
     }
