@@ -181,10 +181,12 @@ export function scheduleInstallation(
       }
       const unmet = phase.dependencies.filter((id) => !scheduled.has(id));
       if (unmet.length) continue;
-      const dependencyEnd = phase.dependencies.reduce((latest, id) => {
+      const latestDependencyEnd = phase.dependencies.reduce((latest, id) => {
         const end = scheduled.get(id)?.plannedEnd ?? startDate;
         return end > latest ? end : latest;
       }, startDate);
+      let dependencyEnd = phase.dependencies.length ? addCalendarDays(latestDependencyEnd, 1) : startDate;
+      while (!isWorkingDay(dependencyEnd, calendar)) dependencyEnd = addCalendarDays(dependencyEnd, 1);
       if (phase.requiresSiteReadiness && !phase.siteReady) {
         scheduled.set(phase.id, { ...phase, plannedStart: null, plannedEnd: null, scheduleState: 'blocked', blocker: 'Site readiness has not been approved.' });
         conflicts.push({ code: 'site_not_ready', message: `${phase.name} is waiting for site-readiness approval.`, phaseId: phase.id });
