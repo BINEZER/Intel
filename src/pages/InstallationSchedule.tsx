@@ -168,6 +168,22 @@ export function InstallationSchedule() {
     await updateDoc(doc(db, 'projects', selected.id, 'phases', phase.id), { installation: metadata, ...stampUpdate(user.uid) });
   }
 
+  async function setDependencies(phase: InstallationPhasePlan, dependencies: string[]) {
+    if (!user || !selected || !editable || dependencies.includes(phase.id)) return;
+    const current = phases.rows.find((row) => row.id === phase.id);
+    if (!current) return;
+    const metadata = { ...(current.installation ?? {}), discipline: phase.discipline, estimatedCrewDays: phase.crewDays || null, actualCrewDays: phase.actualCrewDays ?? null, dependencies, requiresSiteReadiness: phase.requiresSiteReadiness, siteReady: phase.siteReady, assignedTeamId: phase.assignedTeamId };
+    await updateDoc(doc(db, 'projects', selected.id, 'phases', phase.id), { installation: metadata, ...stampUpdate(user.uid) });
+  }
+
+  async function setReadinessRequired(phase: InstallationPhasePlan, required: boolean) {
+    if (!user || !selected || !editable) return;
+    const current = phases.rows.find((row) => row.id === phase.id);
+    if (!current) return;
+    const metadata = { ...(current.installation ?? {}), discipline: phase.discipline, estimatedCrewDays: phase.crewDays || null, actualCrewDays: phase.actualCrewDays ?? null, dependencies: phase.dependencies, requiresSiteReadiness: required, siteReady: phase.siteReady, assignedTeamId: phase.assignedTeamId };
+    await updateDoc(doc(db, 'projects', selected.id, 'phases', phase.id), { installation: metadata, ...stampUpdate(user.uid) });
+  }
+
   async function recordActual(phase: InstallationPhasePlan, value: number) {
     if (!user || !selected || !Number.isFinite(value) || value <= 0) return;
     const phaseRecord = phases.rows.find((row) => row.id === phase.id);
@@ -223,8 +239,8 @@ export function InstallationSchedule() {
           <table className="data-table"><thead><tr><th>Phase</th><th>Discipline</th><th>Estimated crew-days</th><th>Site readiness</th><th>Dependencies</th><th>Team</th><th>Planned dates</th><th>Actual crew-days</th></tr></thead>
           <tbody>{phasePlans.map((p) => <tr key={p.id}>
             <td>{p.name}</td><td>{p.discipline}</td><td>{p.crewDays || 'No benchmark'}</td>
-            <td>{p.requiresSiteReadiness ? <label><input type="checkbox" checked={p.siteReady} disabled={!editable} onChange={(e) => void setSiteReady(p, e.target.checked)} /> Ready</label> : 'Not required'}</td>
-            <td>{p.dependencies.length ? p.dependencies.map((id) => phases.rows.find((r) => r.id === id)?.name ?? id).join(', ') : 'None'}</td>
+            <td><label><input type="checkbox" checked={p.requiresSiteReadiness} disabled={!editable} onChange={(e) => void setReadinessRequired(p, e.target.checked)} /> Required</label>{p.requiresSiteReadiness && <label><input type="checkbox" checked={p.siteReady} disabled={!editable} onChange={(e) => void setSiteReady(p, e.target.checked)} /> Approved</label>}</td>
+            <td><select multiple aria-label={`Dependencies for ${p.name}`} value={p.dependencies} disabled={!editable} onChange={(e) => void setDependencies(p, Array.from(e.target.selectedOptions).map((o) => o.value))}>{phases.rows.filter((r) => r.id !== p.id && r.seq < (phases.rows.find((x) => x.id === p.id)?.seq ?? 0)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></td>
             <td>{teams.rows.find((t) => t.id === p.assignedTeamId)?.name ?? 'Auto-select'}</td>
             <td>{p.plannedStart ?? '—'} – {p.plannedEnd ?? '—'}</td>
             <td><input aria-label={`Actual crew-days for ${p.name}`} type="number" min="0.5" step="0.5" defaultValue={p.actualCrewDays ?? ''} disabled={!editable} onBlur={(e) => { const v = Number(e.target.value); if (v > 0 && v !== p.actualCrewDays) void recordActual(p, v); }} /></td>
