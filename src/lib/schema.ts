@@ -532,8 +532,8 @@ export interface ProjectPhase extends AuditFields {
     dependencies: string[];
     requiresSiteReadiness: boolean;
     siteReady: boolean;
-    siteReadyApprovedBy?: string;
-    siteReadyApprovedAt?: Timestamp;
+    siteReadyApprovedBy?: string | null;
+    siteReadyApprovedAt?: Timestamp | null;
     assignedTeamId: string | null;
   };
 
