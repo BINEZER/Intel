@@ -200,6 +200,7 @@ export function scheduleInstallation(
         return end > latest ? end : latest;
       }, startDate);
       let dependencyEnd = phase.dependencies.length ? addCalendarDays(latestDependencyEnd, 1) : startDate;
+      if (dependencyEnd < startDate) dependencyEnd = startDate;
       while (!isWorkingDay(dependencyEnd, calendar)) dependencyEnd = addCalendarDays(dependencyEnd, 1);
       if (phase.requiresSiteReadiness && !phase.siteReady) {
         scheduled.set(phase.id, { ...phase, plannedStart: null, plannedEnd: null, scheduleState: 'blocked', blocker: 'Site readiness has not been approved.' });
