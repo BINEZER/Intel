@@ -195,10 +195,11 @@ export function scheduleInstallation(
       }
       const unmet = phase.dependencies.filter((id) => !scheduled.has(id));
       if (unmet.length) continue;
-      const latestDependencyEnd = phase.dependencies.reduce((latest, id) => {
-        const end = scheduled.get(id)?.plannedEnd ?? startDate;
-        return end > latest ? end : latest;
-      }, startDate);
+      const dependencyEnds = phase.dependencies
+        .map((id) => scheduled.get(id)?.plannedEnd ?? startDate);
+      const latestDependencyEnd = dependencyEnds.length
+        ? dependencyEnds.reduce((latest, end) => end > latest ? end : latest, dependencyEnds[0]!)
+        : startDate;
       let dependencyEnd = phase.dependencies.length ? addCalendarDays(latestDependencyEnd, 1) : startDate;
       if (dependencyEnd < startDate) dependencyEnd = startDate;
       while (!isWorkingDay(dependencyEnd, calendar)) dependencyEnd = addCalendarDays(dependencyEnd, 1);
