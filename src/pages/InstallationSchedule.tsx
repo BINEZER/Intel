@@ -1,5 +1,6 @@
+  const legacyAssignments = useCollection<ProjectAssignment>((d, e) => onSnapshot(query(collectionRef('projectAssignments'), where('active', '==', true)), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as ProjectAssignment) }))), e), [], 'load current project allocations');
 import { useEffect, useMemo, useState } from 'react';
-import { doc, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -17,7 +18,7 @@ import {
   type InstallationBooking, type InstallationDiscipline, type InstallationPhasePlan,
   type InstallationTeam, type WorkCalendar,
 } from '../lib/installation-scheduler.js';
-import type { ElevatorUnit, Project, ProjectPhase, Technician } from '../lib/schema.js';
+import type { ElevatorUnit, Project, ProjectAssignment, ProjectPhase, Technician } from '../lib/schema.js';
 
 type TeamDoc = InstallationTeam & { createdAt?: unknown; updatedAt?: unknown; createdBy?: string; updatedBy?: string };
 type BookingDoc = InstallationBooking & { createdAt?: unknown; updatedAt?: unknown; createdBy?: string; updatedBy?: string };
@@ -50,6 +51,7 @@ export function InstallationSchedule() {
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [discipline, setDiscipline] = useState<InstallationDiscipline>('mechanical');
   const [calendar, setCalendar] = useState<WorkCalendar>(DEFAULT_CALENDAR);
+  const [holidayText, setHolidayText] = useState('');
   const [standards, setStandards] = useState<InstallationDurationStandard[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -116,7 +118,8 @@ export function InstallationSchedule() {
     if (!phases.rows.length) { setMessage('This project has no phases to schedule.'); return; }
     setSaving(true); setMessage('');
     try {
-      const result = scheduleInstallation(phasePlans, teams.rows, bookings.rows.filter((b) => b.projectId !== selected.id), startDate, calendar);
+      const legacyBookings: InstallationBooking[] = legacyAssignments.rows.filter((a) => a.projectId !== selected.id).map((a) => ({ id: `legacy:${a.id}`, projectId: a.projectId, phaseId: 'existing-assignment', resourceType: 'technician', resourceId: a.technicianId, resourceName: a.technicianName, memberIds: [a.technicianId], discipline: 'mechanical', startDate: iso(a.startDate.at.toDate()), endDate: a.endDate ? iso(a.endDate.at.toDate()) : '9999-12-31', allocationBps: a.allocationBps, status: 'confirmed' }));
+      const result = scheduleInstallation(phasePlans, teams.rows, [...bookings.rows.filter((b) => b.projectId !== selected.id), ...legacyBookings], startDate, { ...calendar, holidays: holidayText.split(',').map((x) => x.trim()).filter(Boolean) });
       const batch = writeBatch(db);
       const scheduledIds = new Set(result.bookings.map((b) => b.phaseId));
       for (const row of result.phases) {
@@ -164,6 +167,8 @@ export function InstallationSchedule() {
 
   async function recordActual(phase: InstallationPhasePlan, value: number) {
     if (!user || !selected || !Number.isFinite(value) || value <= 0) return;
+    const phaseRecord = phases.rows.find((row) => row.id === phase.id);
+    if (phaseRecord?.status !== 'completed') { setMessage('Record actual crew-days after the phase is marked completed.'); return; }
     if (projectUnits.length !== 1) { setMessage('Historical benchmark capture currently requires exactly one linked lift per project. Multi-lift actuals are not attributed to individual lift specifications.'); return; }
     const lift = projectUnits[0]!;
     const metadata = { discipline: phase.discipline, estimatedCrewDays: phase.crewDays || null, actualCrewDays: value, dependencies: phase.dependencies, requiresSiteReadiness: phase.requiresSiteReadiness, siteReady: phase.siteReady, assignedTeamId: phase.assignedTeamId };
@@ -171,11 +176,13 @@ export function InstallationSchedule() {
     try {
       await updateDoc(doc(db, 'projects', selected.id, 'phases', phase.id), { installation: metadata, ...stampUpdate(user.uid) });
       const recordId = `${selected.id}_${phase.id}`;
-      await import('firebase/firestore').then(({ setDoc }) => setDoc(doc(db, 'installationPerformance', recordId), {
+      const performanceRef = doc(db, 'installationPerformance', recordId);
+      const existingPerformance = await getDoc(performanceRef);
+      await setDoc(performanceRef, {
         projectId: selected.id, projectNo: selected.projectNo, phaseId: phase.id, phaseName: phase.name,
         discipline: phase.discipline, liftType: lift.type ?? 'Unspecified', stops: lift.stops ?? 0,
-        capacityKg: lift.capacityKg ?? 0, actualCrewDays: value, completed: true, ...stampUpdate(user.uid),
-      }, { merge: true }));
+        capacityKg: lift.capacityKg ?? 0, actualCrewDays: value, completed: true, ...(existingPerformance.exists() ? stampUpdate(user.uid) : stampCreate(user.uid)),
+      }, { merge: true });
       setMessage('Actual crew-days recorded for historical analysis.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not record actual performance.'); }
     finally { setSaving(false); }
@@ -204,7 +211,7 @@ export function InstallationSchedule() {
         <div className="form-grid planner-filters">
           <label>Installation project<select value={selected?.id ?? ''} onChange={(e) => setProjectId(e.target.value)}><option value="">Select project</option>{installationProjects.map((p) => <option key={p.id} value={p.id}>{p.projectNo} · {p.title}</option>)}</select></label>
           <label>Earliest project start<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>
-          <label>Working weekdays<select multiple value={calendar.workingWeekdays.map(String)} onChange={(e) => setCalendar((c) => ({ ...c, workingWeekdays: Array.from(e.target.selectedOptions).map((o) => Number(o.value)) }))}><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="7">Sunday</option></select></label>
+          <label>Working weekdays<select multiple value={calendar.workingWeekdays.map(String)} onChange={(e) => setCalendar((c) => ({ ...c, workingWeekdays: Array.from(e.target.selectedOptions).map((o) => Number(o.value)) }))}><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="7">Sunday</option></select></label>\n          <label>Public holidays (comma-separated dates)<input type="text" placeholder="2026-01-07, 2026-04-10" value={holidayText} onChange={(e) => setHolidayText(e.target.value)} /></label>
         </div>
         {selected && <p className="muted">Site: {selected.site.name}, {selected.site.city} · {projectUnits.length} linked lift(s)</p>}
         {editable && <button type="button" className="primary" disabled={saving || phases.loading || teams.loading || !selected} onClick={() => void generateSchedule()}>{saving ? 'Scheduling…' : 'Generate / reschedule project'}</button>}
