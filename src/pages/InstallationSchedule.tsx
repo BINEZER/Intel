@@ -62,7 +62,7 @@ export function InstallationSchedule() {
   const phases = useCollection<ProjectPhase>((d, e) => selected ? subscribePhases(selected.id, d, e) : (() => undefined), [selected?.id], 'load project phases');
   const projectUnits = useMemo(() => selected ? units.rows.filter((u) => u.installedByProjectId === selected.id) : [], [units.rows, selected?.id]);
 
-  useMemo(() => {
+  useEffect(() => {
     let active = true;
     void import('firebase/firestore').then(({ getDoc }) => getDoc(doc(db, 'config', CONFIG_ID))).then((snap) => {
       if (active && snap.exists()) setStandards(Array.isArray(snap.data().standards) ? snap.data().standards as InstallationDurationStandard[] : []);
@@ -121,7 +121,7 @@ export function InstallationSchedule() {
       const legacyBookings: InstallationBooking[] = legacyAssignments.rows.filter((a) => a.projectId !== selected.id).map((a) => ({ id: `legacy:${a.id}`, projectId: a.projectId, phaseId: 'existing-assignment', resourceType: 'technician', resourceId: a.technicianId, resourceName: a.technicianName, memberIds: [a.technicianId], discipline: 'mechanical', startDate: iso(a.startDate.at.toDate()), endDate: a.endDate ? iso(a.endDate.at.toDate()) : '9999-12-31', allocationBps: a.allocationBps, status: 'confirmed' }));
       const result = scheduleInstallation(phasePlans, teams.rows, [...bookings.rows.filter((b) => b.projectId !== selected.id), ...legacyBookings], startDate, { ...calendar, holidays: holidayText.split(',').map((x) => x.trim()).filter(Boolean) });
       const batch = writeBatch(db);
-      const scheduledIds = new Set(result.bookings.map((b) => b.phaseId));
+
       for (const row of result.phases) {
         const phaseRef = doc(db, 'projects', selected.id, 'phases', row.id);
         const current = phases.rows.find((p) => p.id === row.id)!;
