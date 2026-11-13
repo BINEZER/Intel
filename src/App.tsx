@@ -31,6 +31,7 @@ const Finance = lazy(() => import('./pages/Finance.js').then((m) => ({ default: 
 const ProjectDetail = lazy(() => import('./pages/ProjectDetail.js').then((m) => ({ default: m.ProjectDetail })));
 const ProjectReport = lazy(() => import('./pages/ProjectReport.js').then((m) => ({ default: m.ProjectReport })));
 const Projects = lazy(() => import('./pages/Projects.js').then((m) => ({ default: m.Projects })));
+const InstallationPlanner = lazy(() => import('./pages/InstallationPlanner.js').then((m) => ({ default: m.InstallationPlanner })));
 const Contracts = lazy(() => import('./pages/Contracts.js').then((m) => ({ default: m.Contracts })));
 const Priority = lazy(() => import('./pages/Priority.js').then((m) => ({ default: m.Priority })));
 const Alerts = lazy(() => import('./pages/Alerts.js').then((m) => ({ default: m.Alerts })));
