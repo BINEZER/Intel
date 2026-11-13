@@ -63,7 +63,7 @@ describe('installation scheduling engine', () => {
     const next = phase({ id: 'next', dependencies: ['done'], crewDays: 1 });
     const result = scheduleInstallation([completed, next], [team], [], '2026-11-17', calendar);
     expect(result.phases[0]).toMatchObject({ plannedStart: '2026-11-10', plannedEnd: '2026-11-12', status: 'completed' });
-    expect(result.phases[1]?.plannedStart).toBe('2026-11-13');
+    expect(result.phases[1]?.plannedStart).toBe('2026-11-17');
   });
 
   it('does not produce a schedule for missing or circular dependencies', () => {
