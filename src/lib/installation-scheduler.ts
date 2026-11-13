@@ -258,7 +258,7 @@ export interface HistoricalPerformance {
 
 /** Only completed phases with explicitly recorded actual crew-days qualify. */
 export function analyseInstallationHistory(
-  rows: readonly Array<{
+  rows: ReadonlyArray<{
     discipline: InstallationDiscipline;
     liftType: string;
     stops: number;
