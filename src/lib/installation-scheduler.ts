@@ -161,6 +161,20 @@ export function scheduleInstallation(
   const scheduled = new Map<string, ScheduledPhase>();
   const generated: InstallationBooking[] = [];
   const conflicts: ScheduleConflict[] = [];
+  // Completed and in-progress phases are fixed anchors during rescheduling.
+  // They must not be silently moved or booked a second time.
+  for (const phase of phases) {
+    if (phase.status !== 'completed' && phase.status !== 'in_progress') continue;
+    const start = phase.plannedStart ?? phase.actualStart ?? null;
+    const end = phase.plannedEnd ?? phase.actualEnd ?? null;
+    if (start && end && parseDate(start) && parseDate(end)) {
+      scheduled.set(phase.id, { ...phase, plannedStart: start, plannedEnd: end, scheduleState: 'scheduled', blocker: null });
+    } else {
+      scheduled.set(phase.id, { ...phase, plannedStart: null, plannedEnd: null, scheduleState: 'blocked', blocker: 'An in-progress or completed phase needs its actual or planned dates recorded before downstream scheduling.' });
+      conflicts.push({ code: 'dependency', message: `${phase.name} is active/completed but has no reliable completion date.`, phaseId: phase.id });
+    }
+    remaining.delete(phase.id);
+  }
   let guard = phases.length + 1;
 
   while (remaining.size && guard-- > 0) {
