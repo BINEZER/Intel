@@ -2597,3 +2597,16 @@ fieldset { min-width: 0; }
   .priority-action-cash { grid-column: 2; align-items: flex-start; border-top: 1px solid var(--border); padding-top: .45rem; }
   .priority-action-title { align-items: flex-start; }
 }
+
+/* Installation planner */
+.planner-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.planner-filters { align-items: end; }
+.planner-standard { border-top: 1px solid var(--border); padding: 1rem 0; display: grid; gap: .75rem; }
+.planner-standard > label { display: grid; gap: .3rem; max-width: 36rem; font-weight: 600; }
+.planner-standard .form-grid { align-items: end; }
+.planner-standard input { min-width: 0; }
+.planner-standard > button { justify-self: start; }
+@media (max-width: 640px) {
+  .planner-tabs > button { flex: 1 1 9rem; }
+  .planner-standard .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
