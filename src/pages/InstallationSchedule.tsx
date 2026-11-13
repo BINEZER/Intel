@@ -1,4 +1,3 @@
-  const legacyAssignments = useCollection<ProjectAssignment>((d, e) => onSnapshot(query(collectionRef('projectAssignments'), where('active', '==', true)), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as ProjectAssignment) }))), e), [], 'load current project allocations');
 import { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
@@ -44,6 +43,7 @@ export function InstallationSchedule() {
   const teams = useCollection<TeamDoc>((d, e) => onSnapshot(query(collectionRef('installationTeams'), where('active', '==', true)), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as TeamDoc) }))), e), [], 'load installation teams');
   const bookings = useCollection<BookingDoc>((d, e) => onSnapshot(query(collectionRef('installationBookings'), where('status', 'in', ['tentative', 'confirmed'])), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as BookingDoc) }))), e), [], 'load installation bookings');
   const history = useCollection<PerformanceDoc>((d, e) => onSnapshot(collectionRef('installationPerformance'), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as PerformanceDoc) }))), e), [], 'load installation performance');
+  const legacyAssignments = useCollection<ProjectAssignment>((d, e) => onSnapshot(query(collectionRef('projectAssignments'), where('active', '==', true)), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as ProjectAssignment) }))), e), [], 'load current project allocations');
   const [projectId, setProjectId] = useState('');
   const [startDate, setStartDate] = useState(iso(new Date()));
   const [teamName, setTeamName] = useState('');
