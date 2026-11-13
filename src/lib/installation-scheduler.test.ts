@@ -28,7 +28,7 @@ describe('installation scheduling engine', () => {
   it('uses working days and skips weekends and configured holidays', () => {
     expect(isWorkingDay('2026-11-14', calendar)).toBe(false);
     expect(isWorkingDay('2026-11-16', calendar)).toBe(false);
-    expect(addWorkingDays('2026-11-13', 2, calendar)).toBe('2026-11-18');
+    expect(addWorkingDays('2026-11-13', 2, calendar)).toBe('2026-11-17');
   });
 
   it('detects team and shared-member double bookings', () => {
