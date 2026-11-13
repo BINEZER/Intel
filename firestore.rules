@@ -252,6 +252,23 @@ service cloud.firestore {
       }
     }
 
+    // --- installation planning resources and confirmed bookings ------------
+    // Team definitions and bookings are operational commitments. Managers
+    // control them; engineers can read the calendar but cannot reserve crews.
+    match /installationTeams/{teamId} {
+      allow read: if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if isManager() && stampedUpdate();
+      allow delete: if isManager();
+    }
+
+    match /installationBookings/{bookingId} {
+      allow read: if canRead();
+      allow create: if isManager() && stampedCreate();
+      allow update: if isManager() && stampedUpdate();
+      allow delete: if isManager();
+    }
+
     // --- project assignments -----------------------------------------------
     // Allocation drives how much of a project's team score each technician
     // carries, so only managers may set it.
