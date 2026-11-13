@@ -36,6 +36,7 @@ const NAV: NavGroup[] = [
       { to: '/', label: 'Dashboard', capability: 'read' },
       { to: '/priority', label: 'Priority', capability: 'read' },
       { to: '/projects', label: 'Projects', capability: 'read' },
+      { to: '/installation-planner', label: 'Installation planner', capability: 'read' },
       { to: '/units', label: 'Lifts', capability: 'read' },
     ],
   },

@@ -37,6 +37,9 @@ export function ProjectTeam({
   const [technicianId, setTechnicianId] = useState('');
   const [allocationPercent, setAllocationPercent] = useState(50);
   const [assignmentRole, setAssignmentRole] = useState<ProjectAssignment['role']>('technician');
+  const [assignmentType, setAssignmentType] = useState<NonNullable<ProjectAssignment['assignmentType']>>('shared');
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState('');
 
   const assigned = new Set(rows.map((r) => r.technicianId));
   const available = technicians.filter((t) => !assigned.has(t.id) && t.status === 'active');
@@ -44,6 +47,9 @@ export function ProjectTeam({
   async function add() {
     const technician = technicians.find((t) => t.id === technicianId);
     if (technician === undefined || user === null) return;
+    const start = new Date(startDate + 'T00:00:00');
+    const end = endDate ? new Date(endDate + 'T00:00:00') : null;
+    if (Number.isNaN(start.getTime()) || (end !== null && (Number.isNaN(end.getTime()) || end < start))) return;
     const done = await action.run(() =>
       assignTechnician(
         {
@@ -51,10 +57,11 @@ export function ProjectTeam({
           technicianId,
           technicianName: technician.name,
           role: assignmentRole,
+          assignmentType,
           allocationBps: Math.round(allocationPercent * 100),
           phaseIds: [],
-          startDate: dualDateFromGregorian(new Date(), toTimestamp, 'GC'),
-          endDate: null,
+          startDate: dualDateFromGregorian(start, toTimestamp, 'GC'),
+          endDate: end === null ? null : dualDateFromGregorian(end, toTimestamp, 'GC'),
           active: true,
         },
         user.uid,
@@ -82,8 +89,9 @@ export function ProjectTeam({
           <thead>
             <tr>
               <th scope="col">Technician</th>
-              <th scope="col">Role</th>
+              <th scope="col">Role / assignment</th>
               <th scope="col" className="num">Allocation</th>
+              <th scope="col">Period</th>
               {editable && <th scope="col"><span className="visually-hidden">Actions</span></th>}
             </tr>
           </thead>
@@ -91,8 +99,9 @@ export function ProjectTeam({
             {rows.map((assignment) => (
               <tr key={assignment.id}>
                 <td><strong>{assignment.technicianName}</strong></td>
-                <td>{assignment.role}</td>
+                <td>{assignment.role} · {(assignment.assignmentType ?? 'shared').replace(/_/g, ' ')}</td>
                 <td className="num">{formatBps(assignment.allocationBps, 0)}</td>
+                <td>{assignment.startDate.at.toDate().toLocaleDateString()} – {assignment.endDate?.at.toDate().toLocaleDateString() ?? 'Open-ended'}</td>
                 {editable && (
                   <td>
                     <button
@@ -138,6 +147,25 @@ export function ProjectTeam({
               <option value="helper">Helper</option>
               <option value="supervisor">Supervisor</option>
             </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="assign-type">Assignment model</label>
+            <select id="assign-type" value={assignmentType} onChange={(e) => setAssignmentType(e.target.value as NonNullable<ProjectAssignment['assignmentType']>)}>
+              <option value="dedicated">Dedicated</option>
+              <option value="shared">Shared</option>
+              <option value="temporary">Temporary</option>
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="assign-start">Start date</label>
+            <input id="assign-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="assign-end">End date (optional)</label>
+            <input id="assign-end" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
 
           <div className="field">
