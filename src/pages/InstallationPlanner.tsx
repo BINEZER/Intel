@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -9,8 +9,6 @@ import { subscribeProjects } from '../data/projects.js';
 import { subscribeUnits } from '../data/units.js';
 import { subscribeTechnicians } from '../data/technicians.js';
 import { collectionRef } from '../data/repository.js';
-import { dualDateFromGregorian } from '../lib/dual-date.js';
-import { toTimestamp } from '../firebase.js';
 import { DualDateText } from '../components/DualDateInput.js';
 import {
   estimateInstallationCrewDays,
@@ -94,6 +92,7 @@ export function InstallationPlanner() {
     }
     return map;
   }, [units.rows]);
+  const projectById = useMemo(() => new Map(projects.rows.map((p) => [p.id, p])), [projects.rows]);
   const assignmentByProject = useMemo(() => {
     const map = new Map<string, WithId<ProjectAssignment>[]>();
     for (const assignment of assignments) {
@@ -116,7 +115,8 @@ export function InstallationPlanner() {
   const workload = useMemo(() => {
     const rows = technicians.rows.filter((t) => t.discipline === 'installation' || t.discipline === 'both');
     return rows.map((person) => {
-      const active = assignments.filter((a) => a.technicianId === person.id);
+      const today = new Date();
+      const active = assignments.filter((a) => a.technicianId === person.id && a.startDate.at.toDate() <= today && (a.endDate === null || a.endDate.at.toDate() >= today));
       const allocationBps = active.reduce((sum, a) => sum + a.allocationBps, 0);
       return { person, active, allocationBps, overAllocated: allocationBps > 10_000 };
     }).sort((a, b) => b.allocationBps - a.allocationBps);
