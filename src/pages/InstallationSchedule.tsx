@@ -40,8 +40,8 @@ export function InstallationSchedule() {
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load installation projects');
   const units = useCollection<ElevatorUnit>((d, e) => subscribeUnits(d, e), [], 'load lift specifications');
   const technicians = useCollection<Technician>((d, e) => subscribeTechnicians(d, e, { activeOnly: true }), [], 'load installation staff');
-  const teams = useCollection<TeamDoc>((d, e) => onSnapshot(query(collectionRef('installationTeams'), where('active', '==', true)), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as TeamDoc) }))), e), [], 'load installation teams');
-  const bookings = useCollection<BookingDoc>((d, e) => onSnapshot(query(collectionRef('installationBookings'), where('status', 'in', ['tentative', 'confirmed'])), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as BookingDoc) }))), e), [], 'load installation bookings');
+  const teams = useCollection<TeamDoc>((d, e) => onSnapshot(query(collectionRef('installationTeams'), where('active', '==', true)), (s) => d(s.docs.map((x) => ({ ...(x.data() as TeamDoc), id: x.id }))), e), [], 'load installation teams');
+  const bookings = useCollection<BookingDoc>((d, e) => onSnapshot(query(collectionRef('installationBookings'), where('status', 'in', ['tentative', 'confirmed'])), (s) => d(s.docs.map((x) => ({ ...(x.data() as BookingDoc), id: x.id }))), e), [], 'load installation bookings');
   const history = useCollection<PerformanceDoc>((d, e) => onSnapshot(collectionRef('installationPerformance'), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as PerformanceDoc) }))), e), [], 'load installation performance');
   const legacyAssignments = useCollection<ProjectAssignment>((d, e) => onSnapshot(query(collectionRef('projectAssignments'), where('active', '==', true)), (s) => d(s.docs.map((x) => ({ id: x.id, ...(x.data() as ProjectAssignment) }))), e), [], 'load current project allocations');
   const [projectId, setProjectId] = useState('');
