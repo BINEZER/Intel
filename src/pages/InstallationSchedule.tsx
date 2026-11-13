@@ -129,6 +129,7 @@ export function InstallationSchedule() {
         const phaseRef = doc(db, 'projects', selected.id, 'phases', row.id);
         const current = phases.rows.find((p) => p.id === row.id)!;
         const planMeta = {
+          ...(current.installation ?? {}),
           discipline: row.discipline,
           estimatedCrewDays: row.crewDays || null,
           actualCrewDays: row.actualCrewDays ?? null,
