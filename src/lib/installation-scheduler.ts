@@ -187,13 +187,44 @@ export function scheduleInstallation(
         madeProgress = true;
         continue;
       }
-      const team = phase.assignedTeamId
-        ? teams.find((row) => row.id === phase.assignedTeamId && row.active && row.disciplines.includes(phase.discipline)) ?? null
-        : teamForPhase(phase, teams);
-      if (!team) {
+      const eligibleTeams = phase.assignedTeamId
+        ? teams.filter((row) => row.id === phase.assignedTeamId && row.active && row.disciplines.includes(phase.discipline))
+        : teams.filter((row) => row.active && row.disciplines.includes(phase.discipline));
+      if (!eligibleTeams.length) {
         scheduled.set(phase.id, { ...phase, plannedStart: null, plannedEnd: null, scheduleState: 'blocked', blocker: 'No active team qualified for this discipline.' });
         conflicts.push({ code: 'no_qualified_team', message: `No active team is available for ${phase.discipline} work.`, phaseId: phase.id });
         remaining.delete(phase.id);
+        madeProgress = true;
+        continue;
+      }
+
+      let candidateStart = dependencyEnd;
+      let placed: InstallationBooking | null = null;
+      for (let attempts = 0; attempts < 730 && !placed; attempts += 1) {
+        while (!isWorkingDay(candidateStart, calendar)) candidateStart = addCalendarDays(candidateStart, 1);
+        const candidateEnd = addWorkingDays(candidateStart, phase.crewDays, calendar);
+        // Try every qualified team on the same date before pushing the phase
+        // into the future. This avoids a busy first team hiding a free second one.
+        for (const team of eligibleTeams) {
+          const candidate: InstallationBooking = {
+            id: `auto:${phase.id}`, projectId: 'schedule-preview', phaseId: phase.id,
+            resourceType: 'team', resourceId: team.id, resourceName: team.name,
+            memberIds: team.memberIds, discipline: phase.discipline,
+            startDate: candidateStart, endDate: candidateEnd, allocationBps: 10000, status: 'tentative',
+          };
+          const collisions = detectBookingConflicts(candidate, [...existingBookings, ...generated]);
+          if (!collisions.length) { placed = candidate; break; }
+        }
+        if (!placed) candidateStart = addCalendarDays(candidateStart, 1);
+      }
+      if (!placed) {
+        scheduled.set(phase.id, { ...phase, plannedStart: null, plannedEnd: null, scheduleState: 'blocked', blocker: 'No conflict-free team slot found within two years.' });
+        conflicts.push({ code: 'team_overlap', message: `No conflict-free slot found for ${phase.name}.`, phaseId: phase.id });
+      } else {
+        generated.push(placed);
+        scheduled.set(phase.id, { ...phase, plannedStart: placed.startDate, plannedEnd: placed.endDate, assignedTeamId: placed.resourceId, scheduleState: 'scheduled', blocker: null });
+      }
+            remaining.delete(phase.id);
         madeProgress = true;
         continue;
       }
