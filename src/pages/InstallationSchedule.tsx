@@ -119,7 +119,10 @@ export function InstallationSchedule() {
     setSaving(true); setMessage('');
     try {
       const legacyBookings: InstallationBooking[] = legacyAssignments.rows.filter((a) => a.projectId !== selected.id).map((a) => ({ id: `legacy:${a.id}`, projectId: a.projectId, phaseId: 'existing-assignment', resourceType: 'technician', resourceId: a.technicianId, resourceName: a.technicianName, memberIds: [a.technicianId], discipline: 'mechanical', startDate: iso(a.startDate.at.toDate()), endDate: a.endDate ? iso(a.endDate.at.toDate()) : '9999-12-31', allocationBps: a.allocationBps, status: 'confirmed' }));
-      const result = scheduleInstallation(phasePlans, teams.rows, [...bookings.rows.filter((b) => b.projectId !== selected.id), ...legacyBookings], startDate, { ...calendar, holidays: holidayText.split(',').map((x) => x.trim()).filter(Boolean) });
+      const protectedPhaseIds = new Set(phases.rows.filter((p) => p.status === 'completed' || p.status === 'in_progress').map((p) => p.id));
+      const retainedBookings = bookings.rows.filter((b) => b.projectId === selected.id && protectedPhaseIds.has(b.phaseId));
+      const otherBookings = bookings.rows.filter((b) => b.projectId !== selected.id);
+      const result = scheduleInstallation(phasePlans, teams.rows, [...otherBookings, ...retainedBookings, ...legacyBookings], startDate, { ...calendar, holidays: holidayText.split(',').map((x) => x.trim()).filter(Boolean) });
       const batch = writeBatch(db);
 
       for (const row of result.phases) {
@@ -144,7 +147,7 @@ export function InstallationSchedule() {
           batch.update(phaseRef, { status: 'blocked', installation: planMeta, ...stampUpdate(user.uid) });
         }
       }
-      for (const row of bookings.rows.filter((b) => b.projectId === selected.id && b.status !== 'cancelled')) {
+      for (const row of bookings.rows.filter((b) => b.projectId === selected.id && b.status !== 'cancelled' && !protectedPhaseIds.has(b.phaseId))) {
         batch.update(doc(db, 'installationBookings', row.id), { status: 'cancelled', ...stampUpdate(user.uid) });
       }
       for (const row of result.bookings) {
