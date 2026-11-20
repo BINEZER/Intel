@@ -2764,3 +2764,40 @@ button.primary:hover, .button-link.primary:hover { background:#236EB9; }
  .project-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .project-table-wrap { overflow-x:auto; }
 }
+
+/* Dashboard: a visual portfolio summary, not a second project register. */
+.dashboard-charts { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1rem; align-items:stretch; }
+.dashboard-chart-card { min-width:0; }
+.dashboard-chart-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1.1rem; }
+.dashboard-chart-heading h2 { margin-bottom:.2rem; }
+.dashboard-chart-heading p { margin:0; font-size:.84rem; }
+.dashboard-chart-heading > strong { white-space:nowrap; font-size:.88rem; }
+.status-chart-layout { display:flex; align-items:center; justify-content:center; gap:clamp(1rem,3vw,2.5rem); min-height:210px; }
+.status-donut { width:180px; height:180px; position:relative; flex:0 0 180px; }
+.status-donut svg { width:100%; height:100%; overflow:visible; }
+.status-donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; }
+.status-donut-center strong { font-size:1.7rem; line-height:1.2; }
+.status-donut-center span { color:var(--muted); font-size:.78rem; }
+.chart-legend { list-style:none; padding:0; margin:0; display:grid; gap:.48rem; min-width:130px; }
+.chart-legend li { display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:.55rem; font-size:.84rem; }
+.chart-legend li strong { font-variant-numeric:tabular-nums; }
+.chart-legend-dot { width:9px; height:9px; border-radius:50%; }
+.phase-chart-list { display:grid; gap:1rem; padding:.3rem 0; }
+.phase-chart-row > div:first-child { display:flex; justify-content:space-between; gap:1rem; font-size:.86rem; margin-bottom:.35rem; }
+.phase-chart-row strong { font-variant-numeric:tabular-nums; }
+.phase-chart-track { height:9px; border-radius:99px; background:var(--surface-2); overflow:hidden; }
+.phase-chart-track span { display:block; height:100%; border-radius:inherit; background:var(--brand-blue); min-width:0; }
+.project-progress-status { display:grid; gap:.32rem; min-width:112px; }
+.project-progress-status > div:last-child { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
+.project-progress-status .mini-progress { width:100%; }
+.project-overview-table th, .project-overview-table td { vertical-align:middle; }
+.project-overview-table td:nth-child(3) { min-width:130px; }
+.project-overview-table td:nth-child(5) { min-width:135px; }
+@media(max-width:900px) { .dashboard-charts { grid-template-columns:1fr; } }
+@media(max-width:560px) {
+ .status-chart-layout { justify-content:space-between; gap:.6rem; }
+ .status-donut { width:145px; height:145px; flex-basis:145px; }
+ .chart-legend { min-width:115px; gap:.35rem; }
+ .chart-legend li { font-size:.78rem; }
+}
+@media print { .dashboard-charts { grid-template-columns:1fr 1fr; break-inside:avoid; } }
