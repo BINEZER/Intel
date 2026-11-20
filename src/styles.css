@@ -2715,3 +2715,7 @@ button.primary:hover, .button-link.primary:hover { background:#236EB9; }
   .team-period { margin-left:50px; }
   .team-add { display:grid; grid-template-columns:1fr 1fr; }
 }
+
+.phase-row-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.phase-row-actions .quiet-button { white-space:nowrap; }
+@media (max-width:540px) { .phase-row-actions { flex-wrap:wrap; justify-content:flex-end; } }
