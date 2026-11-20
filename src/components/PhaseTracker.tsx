@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
-import { addProjectStage, renameProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updateProjectStage, updatePhaseProgress } from '../data/projects.js';
+import { addProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updateProjectStage, updatePhaseProgress } from '../data/projects.js';
 import { describeCheckpoints, isTracked, phaseProgressBps as getPhaseProgressBps } from '../lib/checkpoints.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
@@ -28,6 +28,7 @@ export function PhaseTracker({
 }) {
   const { user, role } = useAuth();
   const editable = can(role, 'updatePhaseProgress');
+  const canManageStages = can(role, 'manageProjects');
   const { busy, error, run } = useAsyncAction('update this phase');
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
@@ -41,7 +42,7 @@ export function PhaseTracker({
     <section className="card">
       <div className="phase-section-head">
         <div><h2>Phases</h2><p className="muted">Phase weights determine each phase’s contribution to overall project progress. Total: 100%.</p></div>
-        {editable && user !== null && <button type="button" className="quiet-button" disabled={busy} onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : 'Add phase'}</button>}
+        {canManageStages && user !== null && <button type="button" className="quiet-button" disabled={busy} onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : 'Add phase'}</button>}
         {editable && user !== null && (
           <label className="collective-phase-check">
             <input
@@ -60,7 +61,7 @@ export function PhaseTracker({
         </p>
       )}
       {error && <p className="error" role="alert">{error}</p>}
-      {adding && editable && user !== null && <div className="phase-add-form">
+      {adding && canManageStages && user !== null && <div className="phase-add-form">
         <label>Phase name<input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Shaft modification" /></label>
         <label>Weight (% of project)<input type="number" min="0.01" max="99.99" step="0.01" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} /></label>
         <button type="button" className="primary" disabled={busy || !newName.trim() || !Number.isFinite(Number(newWeight)) || Number(newWeight) <= 0 || Number(newWeight) >= 100} onClick={() => void run(async () => { await addProjectStage(projectId, { name: newName.trim(), weightBps: Math.round(Number(newWeight) * 100), afterId: phases[phases.length - 1]?.id ?? null }, user.uid); setNewName(''); setAdding(false); return true; })}>Add phase</button>
