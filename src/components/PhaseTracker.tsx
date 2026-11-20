@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
-import { renameProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updatePhaseProgress } from '../data/projects.js';
+import { addProjectStage, renameProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, setProjectStageWeight, updatePhaseProgress } from '../data/projects.js';
 import { describeCheckpoints, isTracked, phaseProgressBps as getPhaseProgressBps } from '../lib/checkpoints.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
@@ -29,6 +29,9 @@ export function PhaseTracker({
   const { user, role } = useAuth();
   const editable = can(role, 'updatePhaseProgress');
   const { busy, error, run } = useAsyncAction('update this phase');
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newWeight, setNewWeight] = useState('5');
 
   const withDeps = phases.map((p) => ({ key: p.key, weightBps: p.weightBps, progressBps: p.progressBps, status: p.status, dependsOn: [] as string[] }));
   const next = nextActionablePhase(withDeps);
@@ -37,7 +40,8 @@ export function PhaseTracker({
   return (
     <section className="card">
       <div className="phase-section-head">
-        <h2>Phases</h2>
+        <div><h2>Phases</h2><p className="muted">Phase weights determine each phase’s contribution to overall project progress. Total: 100%.</p></div>
+        {editable && user !== null && <button type="button" className="quiet-button" disabled={busy} onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : 'Add phase'}</button>}
         {editable && user !== null && (
           <label className="collective-phase-check">
             <input
@@ -56,6 +60,11 @@ export function PhaseTracker({
         </p>
       )}
       {error && <p className="error" role="alert">{error}</p>}
+      {adding && editable && user !== null && <div className="phase-add-form">
+        <label>Phase name<input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Shaft modification" /></label>
+        <label>Weight (% of project)<input type="number" min="0.01" max="99.99" step="0.01" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} /></label>
+        <button type="button" className="primary" disabled={busy || !newName.trim() || !Number.isFinite(Number(newWeight)) || Number(newWeight) <= 0 || Number(newWeight) >= 100} onClick={() => void run(async () => { await addProjectStage(projectId, { name: newName.trim(), weightBps: Math.round(Number(newWeight) * 100), afterId: phases[phases.length - 1]?.id ?? null }, user.uid); setNewName(''); setAdding(false); return true; })}>Add phase</button>
+      </div>}
 
       <ul className="phase-list">
         {phases.map((phase) => (
@@ -97,6 +106,7 @@ function PhaseRow({
   const [draft, setDraft] = useState(phase.progressBps);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(phase.name);
+  const [weightDraft, setWeightDraft] = useState((phase.weightBps / 100).toString());
   const dirty = draft !== phase.progressBps;
   const tracked = isTracked(phase);
 
@@ -124,16 +134,18 @@ function PhaseRow({
           <span className="muted"> · {formatBps(phase.weightBps, 0)} of the project</span>
         </div>
         <div className="phase-row-actions">
-          {editable && <button type="button" className="quiet-button" disabled={busy} onClick={() => { setNameDraft(phase.name); setEditingName((v) => !v); }}>Edit phase</button>}
+          {editable && <button type="button" className="quiet-button" disabled={busy} onClick={() => { setNameDraft(phase.name); setWeightDraft((phase.weightBps / 100).toString()); setEditingName((v) => !v); }}>Edit phase</button>}
           <span className={statusClass[phase.status]}>{phase.status.replace(/_/g, ' ')}</span>
         </div>
       </div>
 
 
-      {editingName && editable && <div className="phase-progress">
-        <input aria-label={`Phase ${phase.seq} name`} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
-        <button type="button" className="primary" disabled={busy || !nameDraft.trim()} onClick={() => void run(async () => { await renameProjectStage(projectId, phase.id, nameDraft.trim(), uid); setEditingName(false); return true; })}>Save name</button>
+      {editingName && editable && <div className="phase-edit-form">
+        <label>Phase name<input aria-label={`Phase ${phase.seq} name`} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} /></label>
+        <label>Weight (% of project)<input aria-label={`Phase ${phase.seq} weight`} type="number" min="0.01" max="99.99" step="0.01" value={weightDraft} onChange={(e) => setWeightDraft(e.target.value)} /></label>
+        <button type="button" className="primary" disabled={busy || !nameDraft.trim() || !Number.isFinite(Number(weightDraft)) || Number(weightDraft) <= 0 || Number(weightDraft) >= 100} onClick={() => void run(async () => { await renameProjectStage(projectId, phase.id, nameDraft.trim(), uid); await setProjectStageWeight(projectId, phase.id, Math.round(Number(weightDraft) * 100), uid); setEditingName(false); return true; })}>Save phase</button>
         <button type="button" disabled={busy} onClick={() => setEditingName(false)}>Cancel</button>
+        <p className="muted">Changing this weight automatically adjusts the other phases so all phase weights remain exactly 100%.</p>
       </div>}
 
       {tracked ? (
