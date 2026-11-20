@@ -12,6 +12,7 @@ import { useAuth } from '../auth/AuthProvider.js';
 import { renameProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updatePhaseProgress } from '../data/projects.js';
 import { describeCheckpoints, isTracked, phaseProgressBps as getPhaseProgressBps } from '../lib/checkpoints.js';
 import { useAsyncAction } from '../data/useCollection.js';
+import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
 import { formatBps } from '../lib/kpi.js';
 import { nextActionablePhase, type PhaseStatus } from '../lib/phases.js';
 import { DualDateText } from './DualDateInput.js';
