@@ -559,7 +559,7 @@ export async function updateProjectStatus(
   const current = await getProject(id);
   await updateDoc(doc(db, PATH, id), {
     status,
-    ...(status === 'completed' && current?.actualEnd === null
+    ...(status === 'completed' && current?.actualEnd == null
       ? { actualEnd: dualDateFromGregorian(new Date(), toTimestamp, 'GC') }
       : {}),
     ...stampUpdate(uid),
