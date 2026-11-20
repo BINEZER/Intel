@@ -18,7 +18,7 @@ export function Dashboard() {
     );
   }, [projects.rows, search]);
   const active = projects.rows.filter((p) => !['completed', 'cancelled'].includes(p.status));
-  const delayed = active.filter((p) => p.plannedEnd?.at?.toDate() < new Date());
+  const delayed = active.filter((p) => !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < Date.now());
   const awaitingHandover = active.filter((p) =>
     p.currentStage?.key === 'authority_inspection' || p.status === 'awaiting_handover',
   );
@@ -58,7 +58,7 @@ export function Dashboard() {
                 <thead><tr><th>Project</th><th>Client / site</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned end</th></tr></thead>
                 <tbody>
                   {rows.map((p: WithId<Project>) => {
-                    const overdue = !['completed', 'cancelled'].includes(p.status) && p.plannedEnd?.at?.toDate() < new Date();
+                    const overdue = !['completed', 'cancelled'].includes(p.status) && !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < Date.now();
                     return <tr key={p.id}>
                       <td><Link to={`/projects/${p.id}`} className="project-name-link"><strong>{p.title}</strong><small>{p.projectNo}</small></Link></td>
                       <td>{p.clientName}<small>{p.site?.name}{p.site?.city ? ` · ${p.site.city}` : ''}</small></td>
