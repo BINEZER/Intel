@@ -6,7 +6,7 @@ import { Dashboard } from './pages/Dashboard.js';
 import { SignIn } from './pages/SignIn.js';
 import { Projects } from './pages/Projects.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
-import { Reports } from './pages/Reports.js';
+import { Settings } from './pages/Settings.js';
 
 export function App() {
   return <AuthProvider><BrowserRouter><Routes>
@@ -14,7 +14,7 @@ export function App() {
     <Route element={<RequireAuth><AppShell /></RequireAuth>}>
       <Route index element={<Dashboard />} />
       <Route path="projects" element={<RequireCapability capability="read"><Projects /></RequireCapability>} />
-      <Route path="reports" element={<RequireCapability capability="read"><Reports /></RequireCapability>} />
+      <Route path="settings" element={<Settings />} />
       <Route path="projects/:projectId" element={<RequireCapability capability="read"><ProjectDetail /></RequireCapability>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
