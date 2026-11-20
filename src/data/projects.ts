@@ -444,12 +444,21 @@ export function addProjectStage(
  * Delete a stage. `lockedBy` names payment milestones tied to it — the caller
  * looks those up, because the repository has no business querying contracts.
  */
-export function removeProjectStage(
+export async function removeProjectStage(
   projectId: string,
   phaseId: string,
   uid: string,
-  lockedBy: readonly string[] = [],
 ) {
+  // A payment milestone can depend on this phase. Never orphan that commercial trigger.
+  const project = await getProject(projectId);
+  const lockedBy: string[] = [];
+  if (project?.contractId) {
+    const milestones = await getDocs(collectionRef(`contracts/${project.contractId}/milestones`));
+    for (const milestone of milestones.docs) {
+      const data = milestone.data();
+      if (data.phaseId === phaseId) lockedBy.push(String(data.name ?? milestone.id));
+    }
+  }
   return commitStageEdit(projectId, uid, (stages) => removeStage(stages, phaseId, lockedBy));
 }
 
