@@ -459,10 +459,11 @@ export async function removeProjectStage(
   projectId: string,
   phaseId: string,
   uid: string,
+  lockedByFromUi: readonly string[] = [],
 ) {
-  // A payment milestone can depend on this phase. Never orphan that commercial trigger.
+  // Check both the current UI snapshot and Firestore. Never orphan a commercial trigger.
   const project = await getProject(projectId);
-  const lockedBy: string[] = [];
+  const lockedBy: string[] = [...lockedByFromUi];
   if (project?.contractId) {
     const milestones = await getDocs(collectionRef(`contracts/${project.contractId}/milestones`));
     for (const milestone of milestones.docs) {

@@ -5,7 +5,7 @@
   "description": "Project, Contract & Task Management for an Ethiopian elevator company (ETB, 15% VAT, WHT, dual GC/EC calendar).",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "vite",
