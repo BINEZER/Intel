@@ -34,7 +34,7 @@ export function Projects() {
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const rows = projects.rows.filter((p) => {
     const q = search.trim().toLowerCase();
-    return !q || [p.projectNo, p.title, p.clientName, p.site?.name, p.site?.city]
+    return !q || [p.projectNo, p.title, p.clientName, p.site?.address]
       .some((v) => String(v ?? '').toLowerCase().includes(q));
   });
 
@@ -57,7 +57,7 @@ export function Projects() {
           <thead><tr><th>Project</th><th>Client / site</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned completion</th></tr></thead>
           <tbody>{rows.map((p) => <tr key={p.id}>
             <td><Link to={`/projects/${p.id}`} className="project-name-link"><strong>{p.title}</strong><small>{p.projectNo}</small></Link></td>
-            <td>{p.clientName}<small>{p.site?.name}{p.site?.city ? ` · ${p.site.city}` : ''}</small></td>
+            <td>{p.clientName}<small>{p.site?.address ?? '—'}</small></td>
             <td>{p.currentStage?.name ?? 'Not started'}</td>
             <td><div className="mini-progress"><span style={{width:`${Math.max(0,Math.min(100,p.progressBps/100))}%`}} /></div><small>{Math.round(p.progressBps/100)}%</small></td>
             <td><span className={`project-status status-${p.status}`}>{p.status.replace(/_/g,' ')}</span></td>
