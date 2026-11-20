@@ -267,7 +267,7 @@ export function ContractDetail() {
             />
           )}
           {editing.kind === 'project' && (
-            <ProjectForm initial={editing.row} clients={clients.rows} uid={user.uid} onDone={() => setEditing(null)} />
+            <ProjectForm initial={editing.row} uid={user.uid} onDone={() => setEditing(null)} />
           )}
           {editing.kind === 'unit' && <UnitForm initial={editing.row} uid={user.uid} onDone={() => setEditing(null)} />}
         </>
