@@ -2719,3 +2719,23 @@ button.primary:hover, .button-link.primary:hover { background:#236EB9; }
 .phase-row-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 .phase-row-actions .quiet-button { white-space:nowrap; }
 @media (max-width:540px) { .phase-row-actions { flex-wrap:wrap; justify-content:flex-end; } }
+
+
+.report-actions { display:flex; gap:10px; align-items:center; }
+.report-print-heading, .print-only { display:none; }
+@media print {
+  @page { size:landscape; margin:12mm; }
+  body, #root, .shell, .main, .content { background:#fff !important; color:#172B3D !important; }
+  .sidebar, .topbar, .no-print, .page-head, .report-actions { display:none !important; }
+  .content { padding:0 !important; margin:0 !important; }
+  .report-print-heading, .print-only { display:block !important; }
+  .project-report-page .card { border:0 !important; box-shadow:none !important; padding:0 !important; }
+  .project-report-page .project-metrics { grid-template-columns:repeat(4,1fr) !important; }
+  .project-report-page .project-metric { border:1px solid #dce6ef !important; break-inside:avoid; }
+  .project-report-page .project-table-wrap { overflow:visible !important; }
+  .project-report-page table { width:100% !important; font-size:9pt !important; }
+  .project-report-page th, .project-report-page td { padding:6px !important; }
+  .project-report-page .project-name-link { display:none !important; }
+  .project-report-page .print-only { display:block !important; }
+  .project-report-page a { color:inherit !important; text-decoration:none !important; }
+}
