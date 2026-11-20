@@ -120,6 +120,18 @@ export function subscribeAssignments(
   );
 }
 
+/** Active crew across the project register, used for the assignment column and filters. */
+export function subscribeActiveProjectAssignments(
+  onData: (rows: WithId<ProjectAssignment>[]) => void,
+  onError: (error: Error) => void,
+) {
+  return subscribe<ProjectAssignment>(
+    query(collectionRef(ASSIGNMENTS), where('active', '==', true)),
+    onData,
+    onError,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Writes
 // ---------------------------------------------------------------------------
@@ -395,6 +407,17 @@ async function commitStageEdit(
     });
   }
 
+  const nextStage = after.find((stage) => stage.progressBps < 10_000);
+  const currentStage = nextStage === undefined ? null : {
+    key: nextStage.key,
+    name: nextStage.name,
+    plannedEnd: nextStage.source?.plannedEnd ?? window?.plannedEnd,
+    nextCheckpoint: nextStage.source?.checkpoints?.find((checkpoint) => checkpoint.doneAt === null)?.label ?? null,
+  };
+  if (currentStage !== null && currentStage.plannedEnd === undefined) {
+    throw new Error('The next phase has no planned completion date.');
+  }
+
   for (const id of diff.removedIds) batch.delete(doc(db, path, id));
 
   for (const patch of diff.changed) {
@@ -402,7 +425,7 @@ async function commitStageEdit(
     batch.update(doc(db, path, id), { ...fields, ...stampUpdate(uid) });
   }
 
-  batch.update(doc(db, PATH, projectId), { progressBps: projectProgressBps, ...stampUpdate(uid) });
+  batch.update(doc(db, PATH, projectId), { progressBps: projectProgressBps, currentStage, ...stampUpdate(uid) });
 
   await batch.commit();
   return { note: result.note, projectProgressBps };
@@ -432,12 +455,21 @@ export function addProjectStage(
  * Delete a stage. `lockedBy` names payment milestones tied to it — the caller
  * looks those up, because the repository has no business querying contracts.
  */
-export function removeProjectStage(
+export async function removeProjectStage(
   projectId: string,
   phaseId: string,
   uid: string,
-  lockedBy: readonly string[] = [],
 ) {
+  // A payment milestone can depend on this phase. Never orphan that commercial trigger.
+  const project = await getProject(projectId);
+  const lockedBy: string[] = [];
+  if (project?.contractId) {
+    const milestones = await getDocs(collectionRef(`contracts/${project.contractId}/milestones`));
+    for (const milestone of milestones.docs) {
+      const data = milestone.data();
+      if (data.phaseId === phaseId) lockedBy.push(String(data.name ?? milestone.id));
+    }
+  }
   return commitStageEdit(projectId, uid, (stages) => removeStage(stages, phaseId, lockedBy));
 }
 
@@ -716,6 +748,57 @@ export async function updatePhaseCheckpoints(
     ...stampUpdate(uid),
   });
   await batch.commit();
+}
+
+
+/** Replace the editable checkpoint list while retaining completion history for unchanged keys. */
+export async function replacePhaseCheckpoints(
+  projectId: string,
+  phaseId: string,
+  input: Array<{ key?: string; label: string }>,
+  uid: string,
+): Promise<{ phaseProgressBps: number; projectProgressBps: number }> {
+  const labels = input.map((item) => item.label.trim());
+  if (labels.some((label) => !label)) throw new Error('Checkpoint names cannot be empty.');
+  if (new Set(labels.map((label) => label.toLowerCase())).size !== labels.length) {
+    throw new Error('Checkpoint names must be unique within a phase.');
+  }
+  const phases = await getPhases(projectId);
+  const current = phases.find((p) => p.id === phaseId);
+  if (!current) throw new Error('That phase no longer exists.');
+  const previous = new Map((current.checkpoints ?? []).map((item) => [item.key, item]));
+  const checkpoints = input.map((item) => {
+    const old = item.key ? previous.get(item.key) : undefined;
+    return old
+      ? { ...old, label: item.label.trim() }
+      : { key: newId(`${phasePath(projectId)}/${phaseId}/checkpointKeys`), label: item.label.trim(), doneAt: null };
+  });
+  const phaseProgress = checkpoints.length ? checkpointProgressBps(checkpoints) : 0;
+  const status = derivePhaseStatus(phaseProgress, current.status);
+  const projectProgressBps = rollUpProgress(phases.map((p) => ({
+    key: p.key,
+    weightBps: p.weightBps,
+    progressBps: p.id === phaseId ? phaseProgress : phaseProgressBps(p),
+    status: p.id === phaseId ? status : p.status,
+  })));
+  const batch = writeBatch(db);
+  const today = dualDateFromGregorian(new Date(), toTimestamp, 'GC');
+  batch.update(doc(db, phasePath(projectId), phaseId), {
+    checkpoints,
+    progressBps: phaseProgress,
+    status,
+    ...(current.actualStart === null && phaseProgress > 0 ? { actualStart: today } : {}),
+    ...(status === 'completed' && current.actualEnd === null ? { actualEnd: today } : {}),
+    ...(status !== 'completed' && current.actualEnd !== null ? { actualEnd: null } : {}),
+    ...stampUpdate(uid),
+  });
+  batch.update(doc(db, PATH, projectId), {
+    progressBps: projectProgressBps,
+    currentStage: currentStageOf(phases, { id: phaseId, progressBps: phaseProgress, checkpoints }),
+    ...stampUpdate(uid),
+  });
+  await batch.commit();
+  return { phaseProgressBps: phaseProgress, projectProgressBps };
 }
 
 export async function setCheckpoint(

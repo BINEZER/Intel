@@ -1159,7 +1159,7 @@ export interface ProjectAssignment extends AuditFields {
   projectId: string;
   technicianId: string;
   technicianName: string;
-  role: 'lead' | 'technician' | 'helper' | 'supervisor';
+  role: 'lead' | 'technician' | 'helper' | 'supervisor' | 'subcontractor';
   /** Dedicated for this project, shared across projects, or temporary for a defined window. */
   assignmentType?: 'dedicated' | 'shared' | 'temporary';
   /** Share of the technician's capacity on this project, 0-10000. */

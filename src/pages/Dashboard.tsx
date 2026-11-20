@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { subscribeProjects } from '../data/projects.js';
+import { subscribeActiveProjectAssignments, subscribeProjects } from '../data/projects.js';
 import { useCollection } from '../data/useCollection.js';
 import { downloadCsv, reportFilename, toCsv } from '../lib/csv.js';
 import { PROJECT_STATUSES } from '../lib/status.js';
-import type { Project } from '../lib/schema.js';
+import type { Project, ProjectAssignment } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 const pct = (value: number) => Math.round(Math.max(0, Math.min(10000, value)) / 100);
@@ -13,6 +13,17 @@ const dateText = (value: Project['plannedStart'] | Project['plannedEnd'] | Proje
 
 export function Dashboard() {
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
+  const assignments = useCollection<ProjectAssignment>((d, e) => subscribeActiveProjectAssignments(d, e), [], 'load project assignments');
+  const peopleByProject = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const row of assignments.rows) {
+      const names = map.get(row.projectId) ?? [];
+      const label = row.role === 'subcontractor' ? `${row.technicianName} (Subcontractor)` : `${row.technicianName} (${row.role})`;
+      if (!names.includes(label)) names.push(label);
+      map.set(row.projectId, names);
+    }
+    return map;
+  }, [assignments.rows]);
   const [search, setSearch] = useState('');
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -36,6 +47,7 @@ export function Dashboard() {
       { header: 'Project', value: (p: WithId<Project>) => p.title },
       { header: 'Client', value: (p: WithId<Project>) => p.clientName },
       { header: 'Site address', value: (p: WithId<Project>) => p.site?.address ?? '' },
+      { header: 'Assigned personnel', value: (p: WithId<Project>) => (peopleByProject.get(p.id) ?? []).join('; ') },
       { header: 'Current phase', value: (p: WithId<Project>) => p.currentStage?.name ?? '' },
       { header: 'Progress (%)', value: (p: WithId<Project>) => pct(p.progressBps) },
       { header: 'Status', value: (p: WithId<Project>) => PROJECT_STATUSES.find((s) => s.value === p.status)?.label ?? p.status },
@@ -63,6 +75,7 @@ export function Dashboard() {
 
       <div className="report-print-heading"><h1>IntelMotion — Project Report</h1><p>Generated {now.toLocaleString()}</p></div>
       {projects.error && <p className="error no-print" role="alert">{projects.error}</p>}
+      {assignments.error && <p className="error no-print" role="alert">{assignments.error}</p>}
 
       <div className="project-metrics">
         <article className="project-metric"><span>Total projects</span><strong>{projects.rows.length}</strong></article>
@@ -80,17 +93,18 @@ export function Dashboard() {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search project, client, site or phase…" />
           </label>
         </div>
-        {projects.loading ? <p className="muted">Loading projects…</p> :
+        {projects.loading || assignments.loading ? <p className="muted">Loading projects…</p> :
           rows.length === 0 ? <p className="muted">{projects.rows.length === 0 ? 'No projects have been added yet.' : 'No matching projects.'}</p> : (
             <div className="project-table-wrap">
               <table className="data-table project-overview-table">
-                <thead><tr><th>Project</th><th>Client / site</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned end</th></tr></thead>
+                <thead><tr><th>Project</th><th>Client / site</th><th>Assigned technician / subcontractor</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned end</th></tr></thead>
                 <tbody>
                   {rows.map((p: WithId<Project>) => {
                     const overdue = !['completed', 'cancelled', 'terminated'].includes(p.status) && !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < now.getTime();
                     return <tr key={p.id}>
                       <td><Link to={`/projects/${p.id}`} className="project-name-link no-print"><strong>{p.title}</strong><small>{p.projectNo}</small></Link><span className="print-only"><strong>{p.title}</strong><small>{p.projectNo}</small></span></td>
                       <td>{p.clientName}<small>{p.site?.address ?? '—'}</small></td>
+                      <td>{(peopleByProject.get(p.id) ?? []).length ? (peopleByProject.get(p.id) ?? []).join(', ') : '—'}</td>
                       <td>{p.currentStage?.name ?? 'Not started'}</td>
                       <td><div className="mini-progress"><span style={{width:`${pct(p.progressBps)}%`}} /></div><small>{pct(p.progressBps)}%</small></td>
                       <td><span className={`project-status status-${p.status}`}>{PROJECT_STATUSES.find((s) => s.value === p.status)?.label ?? p.status}</span>{overdue && <small className="overdue-label">Past planned end</small>}</td>

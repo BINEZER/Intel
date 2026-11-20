@@ -52,7 +52,7 @@ export function ProjectTeam({ projectId }: { projectId: string }) {
     {editable && <div className="team-add">
       <label className="field"><span>Technician / assigned person</span><input value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} placeholder="Type full name" /></label>
       <label className="field"><span>Role</span><select value={assignmentRole} onChange={(e) => setAssignmentRole(e.target.value as ProjectAssignment['role'])}>
-        <option value="lead">Lead</option><option value="supervisor">Supervisor</option><option value="technician">Technician</option><option value="helper">Helper</option>
+        <option value="lead">Lead</option><option value="supervisor">Supervisor</option><option value="technician">Technician</option><option value="subcontractor">Subcontractor</option><option value="helper">Helper</option>
       </select></label>
       <label className="field"><span>Start date</span><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>
       <label className="field"><span>End date (optional)</span><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></label>
