@@ -2739,3 +2739,10 @@ button.primary:hover, .button-link.primary:hover { background:#236EB9; }
   .project-report-page .print-only { display:block !important; }
   .project-report-page a { color:inherit !important; text-decoration:none !important; }
 }
+
+.phase-add-form, .phase-edit-form { display:flex; flex-wrap:wrap; align-items:end; gap:.75rem; padding:.85rem; margin:.75rem 0; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); }
+.phase-add-form label, .phase-edit-form label { display:grid; gap:.3rem; min-width:170px; flex:1; font-size:.85rem; font-weight:600; }
+.phase-add-form input, .phase-edit-form input { width:100%; min-width:0; }
+.phase-edit-form p { flex-basis:100%; margin:0; font-size:.82rem; }
+.phase-section-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.phase-section-head h2, .phase-section-head p { margin-top:0; margin-bottom:.25rem; }
