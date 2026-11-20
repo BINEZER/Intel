@@ -449,6 +449,20 @@ export function setProjectStageWeight(projectId: string, phaseId: string, weight
   return commitStageEdit(projectId, uid, (stages) => setStageWeight(stages, phaseId, weightBps));
 }
 
+/** Rename and reweight a phase together, in one atomic project update. */
+export function updateProjectStage(
+  projectId: string,
+  phaseId: string,
+  input: { name: string; weightBps: number },
+  uid: string,
+) {
+  return commitStageEdit(projectId, uid, (stages) => {
+    const renamed = renameStage(stages, phaseId, input.name);
+    if (!renamed.ok) return renamed;
+    return setStageWeight(renamed.stages, phaseId, input.weightBps);
+  });
+}
+
 export function moveProjectStage(projectId: string, phaseId: string, direction: 'up' | 'down', uid: string) {
   return commitStageEdit(projectId, uid, (stages) => moveStage(stages, phaseId, direction));
 }

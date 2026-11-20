@@ -35,7 +35,7 @@ const NAV: NavGroup[] = [
     items: [
       { to: '/', label: 'Dashboard', capability: 'read' },
       { to: '/projects', label: 'Projects', capability: 'read' },
-      { to: '/reports', label: 'Reporting', capability: 'read' },
+      { to: '/settings', label: 'Settings', capability: 'read' },
     ],
   },
 ];
