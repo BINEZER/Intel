@@ -31,30 +31,13 @@ interface NavGroup {
  */
 const NAV: NavGroup[] = [
   {
-    label: 'Work',
+    label: 'Projects',
     items: [
       { to: '/', label: 'Dashboard', capability: 'read' },
-      { to: '/priority', label: 'Priority', capability: 'read' },
       { to: '/projects', label: 'Projects', capability: 'read' },
-      { to: '/installation-planner', label: 'Installation planner', capability: 'read' },
-      { to: '/installation-schedule', label: 'Installation schedule', capability: 'read' },
-      { to: '/units', label: 'Lifts', capability: 'read' },
     ],
   },
-  {
-    label: 'Commercial',
-    items: [
-      { to: '/collections', label: 'Receivables', capability: 'viewFinancials' },
-    ],
-  },
-  {
-    label: 'Administration',
-    items: [
-      { to: '/tools', label: 'More tools', capability: 'read' },
-      { to: '/settings', label: 'Settings', capability: 'manageConfig' },
-    ],
-  },
- ];
+];
 
 /** Today in both calendars, for the header. */
 export function TodayBadge() {
