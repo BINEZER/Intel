@@ -370,6 +370,8 @@ export interface Project extends AuditFields {
    * many side. See `lib/scope.ts`.
    */
   contractId: string | null;
+  /** Agreement/reference written as entered on the project record. */
+  agreementReference?: string;
   /**
    * The project this one sits under.
    *

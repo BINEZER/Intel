@@ -5,39 +5,35 @@ import { assignTechnician, endAssignment, subscribeAssignments } from '../data/p
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { toTimestamp } from '../firebase.js';
-import type { ProjectAssignment, Technician } from '../lib/schema.js';
+import type { ProjectAssignment } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
-export function ProjectTeam({ projectId, technicians }: {
-  projectId: string;
-  technicians: readonly WithId<Technician>[];
-}) {
+export function ProjectTeam({ projectId }: { projectId: string }) {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects');
   const { rows, loading, error } = useCollection<ProjectAssignment>(
     (d, e) => subscribeAssignments(projectId, d, e), [projectId], 'load assigned personnel',
   );
   const action = useAsyncAction('update assigned personnel');
-  const [technicianId, setTechnicianId] = useState('');
+  const [technicianName, setTechnicianName] = useState('');
   const [assignmentRole, setAssignmentRole] = useState<ProjectAssignment['role']>('technician');
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState('');
-  const assigned = new Set(rows.map((row) => row.technicianId));
-  const available = technicians.filter((t) => !assigned.has(t.id) && t.status === 'active');
 
   async function add() {
-    const person = technicians.find((t) => t.id === technicianId);
-    if (!person || !user) return;
+    const name = technicianName.trim();
+    if (!name || !user) return;
+    const technicianId = `manual-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
     const start = new Date(startDate + 'T00:00:00');
     const end = endDate ? new Date(endDate + 'T00:00:00') : null;
     if (Number.isNaN(start.getTime()) || (end && (Number.isNaN(end.getTime()) || end < start))) return;
     const saved = await action.run(() => assignTechnician({
-      projectId, technicianId, technicianName: person.name, role: assignmentRole,
+      projectId, technicianId, technicianName: name, role: assignmentRole,
       assignmentType: 'shared', allocationBps: 10000, phaseIds: [],
       startDate: dualDateFromGregorian(start, toTimestamp, 'GC'),
       endDate: end ? dualDateFromGregorian(end, toTimestamp, 'GC') : null, active: true,
     }, user.uid));
-    if (saved !== null) setTechnicianId('');
+    if (saved !== null) setTechnicianName('');
   }
 
   return <section className="card team-card">
@@ -54,16 +50,13 @@ export function ProjectTeam({ projectId, technicians }: {
           onClick={() => user && void action.run(() => endAssignment(row.id, user.uid))}>Remove</button>}
       </div>)}</div>}
     {editable && <div className="team-add">
-      <label className="field"><span>Technician</span><select value={technicianId} onChange={(e) => setTechnicianId(e.target.value)}>
-        <option value="">Select personnel…</option>{available.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-      </select></label>
+      <label className="field"><span>Technician / assigned person</span><input value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} placeholder="Type full name" /></label>
       <label className="field"><span>Role</span><select value={assignmentRole} onChange={(e) => setAssignmentRole(e.target.value as ProjectAssignment['role'])}>
         <option value="lead">Lead</option><option value="supervisor">Supervisor</option><option value="technician">Technician</option><option value="helper">Helper</option>
       </select></label>
       <label className="field"><span>Start date</span><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>
       <label className="field"><span>End date (optional)</span><input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></label>
-      <button type="button" className="primary team-add-button" disabled={!technicianId || action.busy || !user} onClick={() => void add()}>Assign</button>
-      {available.length === 0 && <small className="muted">All active technicians are already assigned.</small>}
+      <button type="button" className="primary team-add-button" disabled={!technicianName.trim() || action.busy || !user} onClick={() => void add()}>Assign</button>
     </div>}
   </section>;
 }

@@ -5,7 +5,7 @@
     shows any transparency as black, and Android's "maskable" crop keeps only the
     middle 80%, so the glyph sits well inside that.
   -->
-  <rect width="512" height="512" fill="#0F1826"/>
+  <rect width="512" height="512" fill="#FFFFFF"/>
   <g transform="translate(95 106) scale(4.35)">
     <circle cx="17" cy="53" r="11" fill="#F9A825"/>
     <rect x="30" y="17" width="14" height="44" rx="7" fill="#22BFC4"/>
