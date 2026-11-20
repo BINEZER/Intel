@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 
 export function Settings() {
@@ -37,4 +38,9 @@ export function Settings() {
     </section>
     <p className="muted settings-note">User roles and account activation are managed by an administrator. Project phases and progress weights are edited within each project.</p>
   </div>;
+}
+
+// Legacy finance navigation still references this route; project reporting now lives on the Dashboard.
+export function Reports() {
+  return <Navigate to="/" replace />;
 }
