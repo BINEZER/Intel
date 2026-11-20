@@ -508,7 +508,14 @@ export async function recordInspectionResult(
 }
 
 export async function updateProject(id: string, input: Partial<ProjectInput>, uid: string): Promise<void> {
-  await updateDoc(doc(db, PATH, id), { ...stripReserved(input), ...stampUpdate(uid) });
+  const current = await getProject(id);
+  await updateDoc(doc(db, PATH, id), {
+    ...stripReserved(input),
+    ...(input.status === 'completed' && current?.actualEnd == null
+      ? { actualEnd: dualDateFromGregorian(new Date(), toTimestamp, 'GC') }
+      : {}),
+    ...stampUpdate(uid),
+  });
 }
 
 // ---------------------------------------------------------------------------
