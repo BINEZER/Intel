@@ -156,16 +156,17 @@ function PhaseRow({
         <p className="muted">Changing this weight automatically adjusts the other phases so all phase weights remain exactly 100%.</p>
       </div>}
 
-      {tracked ? (
+      {(tracked || canManageStages) && (
         <CheckpointList
           projectId={projectId}
           phase={phase}
-          editable={editable}
+          editable={editable || canManageStages}
           uid={uid}
           busy={busy}
           run={run}
         />
-      ) : (
+      )}
+      {!tracked && (
         <div className="phase-progress">
           {/* Only a stage somebody added by hand gets here. Everything on an
               elevator project is ticked off rather than estimated. */}
