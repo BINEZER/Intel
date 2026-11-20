@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { subscribeActiveProjectAssignments, subscribeProjects } from '../data/projects.js';
 import { useCollection } from '../data/useCollection.js';
@@ -24,14 +24,6 @@ export function Dashboard() {
     }
     return map;
   }, [assignments.rows]);
-  const [search, setSearch] = useState('');
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return projects.rows.filter((p) =>
-      !q || [p.projectNo, p.title, p.clientName, p.site?.address, p.currentStage?.name, p.status]
-        .some((v) => String(v ?? '').toLowerCase().includes(q)),
-    );
-  }, [projects.rows, search]);
   const active = projects.rows.filter((p) => !['completed', 'cancelled', 'terminated'].includes(p.status));
   const now = new Date();
   const completedThisMonth = projects.rows.filter((p) => {
@@ -39,6 +31,14 @@ export function Dashboard() {
     return p.status === 'completed' && completedAt !== undefined && completedAt.getFullYear() === now.getFullYear() && completedAt.getMonth() === now.getMonth();
   }).length;
   const delayed = active.filter((p) => !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < now.getTime());
+  const phaseCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const project of projects.rows) {
+      const name = project.currentStage?.name ?? 'Not started';
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [projects.rows]);
   const awaitingHandover = active.filter((p) => p.currentStage?.key === 'authority_inspection');
 
   function exportCsv() {
@@ -55,7 +55,7 @@ export function Dashboard() {
       { header: 'Planned end', value: (p: WithId<Project>) => dateText(p.plannedEnd) },
       { header: 'Actual completion', value: (p: WithId<Project>) => dateText(p.actualEnd) },
     ];
-    downloadCsv(reportFilename('project-report', now.toISOString().slice(0, 10)), toCsv(columns, rows));
+    downloadCsv(reportFilename('project-report', now.toISOString().slice(0, 10)), toCsv(columns, projects.rows));
   }
 
   return (
@@ -68,7 +68,7 @@ export function Dashboard() {
         </div>
         <div className="report-actions">
           <button type="button" onClick={() => window.print()}>Print report</button>
-          <button type="button" className="primary" onClick={exportCsv} disabled={projects.loading || rows.length === 0}>Export CSV</button>
+          <button type="button" className="primary" onClick={exportCsv} disabled={projects.loading || projects.rows.length === 0}>Export CSV</button>
           <Link className="button-link primary" to="/projects">View projects</Link>
         </div>
       </div>
@@ -85,37 +85,47 @@ export function Dashboard() {
         <article className="project-metric"><span>Completed this month</span><strong>{completedThisMonth}</strong></article>
       </div>
 
-      <section className="card project-list-card">
-        <div className="section-heading no-print">
-          <div><h2>Project register</h2><p className="muted">{rows.length} of {projects.rows.length} projects · Open a project for phases and assigned personnel.</p></div>
-          <label className="project-search">
-            <span className="visually-hidden">Search projects</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search project, client, site or phase…" />
-          </label>
-        </div>
-        {projects.loading || assignments.loading ? <p className="muted">Loading projects…</p> :
-          rows.length === 0 ? <p className="muted">{projects.rows.length === 0 ? 'No projects have been added yet.' : 'No matching projects.'}</p> : (
-            <div className="project-table-wrap">
-              <table className="data-table project-overview-table">
-                <thead><tr><th>Project</th><th>Client / site</th><th>Assigned technician / subcontractor</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned end</th></tr></thead>
-                <tbody>
-                  {rows.map((p: WithId<Project>) => {
-                    const overdue = !['completed', 'cancelled', 'terminated'].includes(p.status) && !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < now.getTime();
-                    return <tr key={p.id}>
-                      <td><Link to={`/projects/${p.id}`} className="project-name-link no-print"><strong>{p.title}</strong><small>{p.projectNo}</small></Link><span className="print-only"><strong>{p.title}</strong><small>{p.projectNo}</small></span></td>
-                      <td>{p.clientName}<small>{p.site?.address ?? '—'}</small></td>
-                      <td>{(peopleByProject.get(p.id) ?? []).length ? (peopleByProject.get(p.id) ?? []).join(', ') : '—'}</td>
-                      <td>{p.currentStage?.name ?? 'Not started'}</td>
-                      <td><div className="mini-progress"><span style={{width:`${pct(p.progressBps)}%`}} /></div><small>{pct(p.progressBps)}%</small></td>
-                      <td><span className={`project-status status-${p.status}`}>{PROJECT_STATUSES.find((s) => s.value === p.status)?.label ?? p.status}</span>{overdue && <small className="overdue-label">Past planned end</small>}</td>
-                      <td>{dateText(p.plannedEnd) || '—'}</td>
-                    </tr>;
+      <div className="dashboard-charts">
+        <section className="card dashboard-chart-card">
+          <div className="dashboard-chart-heading"><div><h2>Projects by status</h2><p className="muted">Current portfolio distribution</p></div><strong>{projects.rows.length} total</strong></div>
+          {projects.loading ? <p className="muted">Loading chart…</p> : projects.rows.length === 0 ? <p className="muted">No project data yet.</p> : (
+            <div className="status-chart-layout">
+              <div className="status-donut" role="img" aria-label={PROJECT_STATUSES.map((s) => `${s.label}: ${projects.rows.filter((p) => p.status === s.value).length}`).join(', ')}>
+                <svg viewBox="0 0 160 160" aria-hidden="true">
+                  <circle cx="80" cy="80" r="59" fill="none" stroke="var(--surface-2)" strokeWidth="20" />
+                  {PROJECT_STATUSES.map((status, index) => {
+                    const count = projects.rows.filter((p) => p.status === status.value).length;
+                    const circumference = 2 * Math.PI * 59;
+                    const length = projects.rows.length ? count / projects.rows.length * circumference : 0;
+                    const offset = PROJECT_STATUSES.slice(0, index).reduce((sum, prior) => sum + projects.rows.filter((p) => p.status === prior.value).length / projects.rows.length * circumference, 0);
+                    const colors = ['#8A9BB2','#2D8A65','#D69B35','#2877C7','#A0A8B5','#B85B58'];
+                    return count ? <circle key={status.value} cx="80" cy="80" r="59" fill="none" stroke={colors[index % colors.length]} strokeWidth="20" strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-offset} transform="rotate(-90 80 80)" /> : null;
                   })}
-                </tbody>
-              </table>
+                </svg>
+                <div className="status-donut-center"><strong>{projects.rows.length}</strong><span>Projects</span></div>
+              </div>
+              <ul className="chart-legend">
+                {PROJECT_STATUSES.map((status, index) => {
+                  const count = projects.rows.filter((p) => p.status === status.value).length;
+                  const colors = ['#8A9BB2','#2D8A65','#D69B35','#2877C7','#A0A8B5','#B85B58'];
+                  return <li key={status.value}><span className="chart-legend-dot" style={{background:colors[index % colors.length]}} /><span>{status.label}</span><strong>{count}</strong></li>;
+                })}
+              </ul>
             </div>
           )}
-      </section>
+        </section>
+        <section className="card dashboard-chart-card">
+          <div className="dashboard-chart-heading"><div><h2>Projects by current phase</h2><p className="muted">Where active work is concentrated</p></div></div>
+          {projects.loading ? <p className="muted">Loading chart…</p> : phaseCounts.length === 0 ? <p className="muted">No phase information available yet.</p> : (
+            <div className="phase-chart-list">
+              {phaseCounts.map((phase) => <div className="phase-chart-row" key={phase.name}>
+                <div><span>{phase.name}</span><strong>{phase.count}</strong></div>
+                <div className="phase-chart-track"><span style={{width:`${phase.count / Math.max(1, projects.rows.length) * 100}%`}} /></div>
+              </div>)}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
