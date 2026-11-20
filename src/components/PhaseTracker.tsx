@@ -242,7 +242,7 @@ function CheckpointList({
 }) {
   const checkpoints = phase.checkpoints ?? [];
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(() => checkpoints.map((item) => ({ key: item.key, label: item.label })));
+  const [draft, setDraft] = useState<Array<{ key?: string; label: string }>>(() => checkpoints.map((item) => ({ key: item.key, label: item.label })));
   const [newLabel, setNewLabel] = useState('');
   const done = checkpoints.filter((c) => c.doneAt !== null).length;
 
