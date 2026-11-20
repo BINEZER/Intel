@@ -13,11 +13,16 @@ export function Dashboard() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return projects.rows.filter((p) =>
-      !q || [p.projectNo, p.title, p.clientName, p.site?.name, p.site?.city]
+      !q || [p.projectNo, p.title, p.clientName, p.site?.address]
         .some((v) => String(v ?? '').toLowerCase().includes(q)),
     );
   }, [projects.rows, search]);
   const active = projects.rows.filter((p) => !['completed', 'cancelled', 'terminated'].includes(p.status));
+  const now = new Date();
+  const completedThisMonth = projects.rows.filter((p) => {
+    const completedAt = p.actualEnd?.at?.toDate();
+    return p.status === 'completed' && completedAt !== undefined && completedAt.getFullYear() === now.getFullYear() && completedAt.getMonth() === now.getMonth();
+  }).length;
   const delayed = active.filter((p) => !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < Date.now());
   const awaitingHandover = active.filter((p) =>
     p.currentStage?.key === 'authority_inspection',
@@ -41,6 +46,7 @@ export function Dashboard() {
         <article className="project-metric"><span>Active projects</span><strong>{active.length}</strong></article>
         <article className="project-metric"><span>Past planned end</span><strong>{delayed.length}</strong></article>
         <article className="project-metric"><span>Inspection / handover</span><strong>{awaitingHandover.length}</strong></article>
+        <article className="project-metric"><span>Completed this month</span><strong>{completedThisMonth}</strong></article>
       </div>
 
       <section className="card project-list-card">
@@ -58,10 +64,10 @@ export function Dashboard() {
                 <thead><tr><th>Project</th><th>Client / site</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned end</th></tr></thead>
                 <tbody>
                   {rows.map((p: WithId<Project>) => {
-                    const overdue = !['completed', 'cancelled'].includes(p.status) && !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < Date.now();
+                    const overdue = !['completed', 'cancelled', 'terminated'].includes(p.status) && !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < Date.now();
                     return <tr key={p.id}>
                       <td><Link to={`/projects/${p.id}`} className="project-name-link"><strong>{p.title}</strong><small>{p.projectNo}</small></Link></td>
-                      <td>{p.clientName}<small>{p.site?.name}{p.site?.city ? ` · ${p.site.city}` : ''}</small></td>
+                      <td>{p.clientName}<small>{p.site?.address}</small></td>
                       <td>{p.currentStage?.name ?? 'Not started'}</td>
                       <td><div className="mini-progress"><span style={{width:`${pct(p.progressBps)}%`}} /></div><small>{pct(p.progressBps)}%</small></td>
                       <td><span className={`project-status status-${p.status}`}>{p.status.replace(/_/g,' ')}</span>{overdue && <small className="overdue-label">Past planned end</small>}</td>
