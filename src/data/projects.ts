@@ -407,6 +407,17 @@ async function commitStageEdit(
     });
   }
 
+  const nextStage = after.find((stage) => stage.progressBps < 10_000);
+  const currentStage = nextStage === undefined ? null : {
+    key: nextStage.key,
+    name: nextStage.name,
+    plannedEnd: nextStage.source?.plannedEnd ?? window?.plannedEnd,
+    nextCheckpoint: nextStage.source?.checkpoints?.find((checkpoint) => checkpoint.doneAt === null)?.label ?? null,
+  };
+  if (currentStage !== null && currentStage.plannedEnd === undefined) {
+    throw new Error('The next phase has no planned completion date.');
+  }
+
   for (const id of diff.removedIds) batch.delete(doc(db, path, id));
 
   for (const patch of diff.changed) {
@@ -414,7 +425,7 @@ async function commitStageEdit(
     batch.update(doc(db, path, id), { ...fields, ...stampUpdate(uid) });
   }
 
-  batch.update(doc(db, PATH, projectId), { progressBps: projectProgressBps, ...stampUpdate(uid) });
+  batch.update(doc(db, PATH, projectId), { progressBps: projectProgressBps, currentStage, ...stampUpdate(uid) });
 
   await batch.commit();
   return { note: result.note, projectProgressBps };
