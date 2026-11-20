@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
-import { addProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updateProjectStage, updatePhaseProgress } from '../data/projects.js';
+import { addProjectStage, removeProjectStage, replacePhaseCheckpoints, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updateProjectStage, updatePhaseProgress } from '../data/projects.js';
 import { describeCheckpoints, isTracked, phaseProgressBps as getPhaseProgressBps } from '../lib/checkpoints.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
@@ -74,10 +74,12 @@ export function PhaseTracker({
             projectId={projectId}
             phase={phase}
             editable={editable && user !== null}
+            canManageStages={canManageStages && user !== null}
             uid={user?.uid ?? ''}
             busy={busy}
             run={run}
             onToggleComplete={(done) => setPhasesCompletion(projectId, [phase.id], done, user?.uid ?? '')}
+            onDelete={() => user && void run(() => removeProjectStage(projectId, phase.id, user.uid))}
           />
         ))}
       </ul>
@@ -89,18 +91,22 @@ function PhaseRow({
   projectId,
   phase,
   editable,
+  canManageStages,
   uid,
   busy,
   run,
   onToggleComplete,
+  onDelete,
 }: {
   projectId: string;
   phase: WithId<ProjectPhase>;
   editable: boolean;
+  canManageStages: boolean;
   uid: string;
   busy: boolean;
   run: <T>(fn: () => Promise<T>) => Promise<T | null>;
   onToggleComplete: (done: boolean) => Promise<unknown>;
+  onDelete: () => void;
 }) {
   // Local draft so dragging the slider does not fire a write per pixel. Only a
   // hand-made stage still has a slider; see below.
@@ -136,6 +142,7 @@ function PhaseRow({
         </div>
         <div className="phase-row-actions">
           {editable && <button type="button" className="quiet-button" disabled={busy} onClick={() => { setNameDraft(phase.name); setWeightDraft((phase.weightBps / 100).toString()); setEditingName((v) => !v); }}>Edit phase</button>}
+          {canManageStages && <button type="button" className="quiet-button danger-text" disabled={busy} onClick={() => { if (window.confirm(`Delete phase “${phase.name}”? Its recorded progress will be removed and its weight redistributed across the remaining phases.`)) onDelete(); }}>Delete phase</button>}
           <span className={statusClass[phase.status]}>{phase.status.replace(/_/g, ' ')}</span>
         </div>
       </div>
@@ -233,48 +240,70 @@ function CheckpointList({
   run: <T>(fn: () => Promise<T>) => Promise<T | null>;
 }) {
   const checkpoints = phase.checkpoints ?? [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(() => checkpoints.map((item) => ({ key: item.key, label: item.label })));
+  const [newLabel, setNewLabel] = useState('');
   const done = checkpoints.filter((c) => c.doneAt !== null).length;
+
+  function beginEdit() {
+    setDraft(checkpoints.map((item) => ({ key: item.key, label: item.label })));
+    setEditing(true);
+  }
+
+  function save() {
+    void run(async () => {
+      await replacePhaseCheckpoints(projectId, phase.id, draft, uid);
+      setEditing(false);
+      setNewLabel('');
+      return true;
+    });
+  }
 
   return (
     <div className="checkpoints">
       <div className="checkpoint-head">
         <span className="muted">{describeCheckpoints(checkpoints)}</span>
         <span className="phase-pct">{formatBps(phase.progressBps, 0)}</span>
+        {editable && !editing && <button type="button" className="quiet-button" disabled={busy} onClick={beginEdit}>Edit checkpoints</button>}
       </div>
-      <div
-        className="checkpoint-bar"
-        role="img"
-        aria-label={`${done} of ${checkpoints.length} checkpoints complete`}
-      >
+      <div className="checkpoint-bar" role="img" aria-label={`${done} of ${checkpoints.length} checkpoints complete`}>
         <span style={{ width: `${(done / Math.max(1, checkpoints.length)) * 100}%` }} />
       </div>
-      <ul className="checkpoint-list">
-        {checkpoints.map((checkpoint) => (
-          <li key={checkpoint.key}>
-            <label className={checkpoint.doneAt === null ? undefined : 'is-done'}>
-              <input
-                type="checkbox"
-                checked={checkpoint.doneAt !== null}
-                disabled={!editable || busy}
-                onChange={(event) =>
-                  void run(() =>
-                    setCheckpoint(projectId, phase.id, checkpoint.key, event.target.checked, uid),
-                  )
-                }
-              />
-              <span>{checkpoint.label}</span>
-              {/* A tick that came from the spreadsheet is not a sign-off. It
-                  says so, so nobody reads a back-filled job as one somebody
-                  walked round and checked. */}
-              {checkpoint.doneBy === WORKBOOK_SOURCE && (
-                <span className="chip from-workbook" title="Marked from the imported workbook, not signed off on site">
-                  from the workbook
-                </span>
-              )}
-            </label>
-          </li>
-        ))}
-      </ul>
+      {editing ? (
+        <div className="checkpoint-editor">
+          <ul className="checkpoint-list">
+            {draft.map((checkpoint, index) => (
+              <li key={checkpoint.key ?? `new-${index}`}>
+                <input aria-label={`Checkpoint ${index + 1} name`} value={checkpoint.label}
+                  onChange={(event) => setDraft((items) => items.map((item, i) => i === index ? { ...item, label: event.target.value } : item))} />
+                <button type="button" className="quiet-button danger-text" disabled={busy} onClick={() => setDraft((items) => items.filter((_, i) => i !== index))}>Delete</button>
+              </li>
+            ))}
+          </ul>
+          <div className="checkpoint-add">
+            <input value={newLabel} onChange={(event) => setNewLabel(event.target.value)} placeholder="New checkpoint name" aria-label="New checkpoint name" />
+            <button type="button" disabled={busy || !newLabel.trim()} onClick={() => { setDraft((items) => [...items, { label: newLabel.trim() }]); setNewLabel(''); }}>Add checkpoint</button>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="primary" disabled={busy || draft.some((item) => !item.label.trim()) || new Set(draft.map((item) => item.label.trim().toLowerCase())).size !== draft.length} onClick={save}>Save checkpoints</button>
+            <button type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+          <p className="muted">Unchanged checkpoints keep their completion history. New checkpoints start incomplete. Removed checkpoints are removed from the phase progress calculation.</p>
+        </div>
+      ) : (
+        <ul className="checkpoint-list">
+          {checkpoints.map((checkpoint) => (
+            <li key={checkpoint.key}>
+              <label className={checkpoint.doneAt === null ? undefined : 'is-done'}>
+                <input type="checkbox" checked={checkpoint.doneAt !== null} disabled={!editable || busy}
+                  onChange={(event) => void run(() => setCheckpoint(projectId, phase.id, checkpoint.key, event.target.checked, uid))} />
+                <span>{checkpoint.label}</span>
+                {checkpoint.doneBy === WORKBOOK_SOURCE && <span className="chip from-workbook" title="Marked from the imported workbook, not signed off on site">from the workbook</span>}
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
