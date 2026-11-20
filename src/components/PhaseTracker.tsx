@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
-import { addProjectStage, renameProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, setProjectStageWeight, updatePhaseProgress } from '../data/projects.js';
+import { addProjectStage, renameProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updateProjectStage, updatePhaseProgress } from '../data/projects.js';
 import { describeCheckpoints, isTracked, phaseProgressBps as getPhaseProgressBps } from '../lib/checkpoints.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
@@ -143,7 +143,7 @@ function PhaseRow({
       {editingName && editable && <div className="phase-edit-form">
         <label>Phase name<input aria-label={`Phase ${phase.seq} name`} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} /></label>
         <label>Weight (% of project)<input aria-label={`Phase ${phase.seq} weight`} type="number" min="0.01" max="99.99" step="0.01" value={weightDraft} onChange={(e) => setWeightDraft(e.target.value)} /></label>
-        <button type="button" className="primary" disabled={busy || !nameDraft.trim() || !Number.isFinite(Number(weightDraft)) || Number(weightDraft) <= 0 || Number(weightDraft) >= 100} onClick={() => void run(async () => { await renameProjectStage(projectId, phase.id, nameDraft.trim(), uid); await setProjectStageWeight(projectId, phase.id, Math.round(Number(weightDraft) * 100), uid); setEditingName(false); return true; })}>Save phase</button>
+        <button type="button" className="primary" disabled={busy || !nameDraft.trim() || !Number.isFinite(Number(weightDraft)) || Number(weightDraft) <= 0 || Number(weightDraft) >= 100} onClick={() => void run(async () => { await updateProjectStage(projectId, phase.id, { name: nameDraft.trim(), weightBps: Math.round(Number(weightDraft) * 100) }, uid); setEditingName(false); return true; })}>Save phase</button>
         <button type="button" disabled={busy} onClick={() => setEditingName(false)}>Cancel</button>
         <p className="muted">Changing this weight automatically adjusts the other phases so all phase weights remain exactly 100%.</p>
       </div>}
@@ -161,16 +161,13 @@ function PhaseRow({
         <div className="phase-progress">
           {/* Only a stage somebody added by hand gets here. Everything on an
               elevator project is ticked off rather than estimated. */}
-          <input
-            type="range"
-            min={0}
-            max={10_000}
-            step={500}
-            value={draft}
-            disabled={!editable || busy}
-            aria-label={`${phase.name} progress`}
-            onChange={(e) => setDraft(Number(e.target.value))}
-          />
+          <label className="phase-manual-progress">Completion (%)
+            <input type="number" min="0" max="100" step="1" value={draft / 100}
+              disabled={!editable || busy} aria-label={`${phase.name} completion percentage`}
+              onChange={(e) => setDraft(Math.min(10_000, Math.max(0, Math.round(Number(e.target.value || 0) * 100))))} />
+          </label>
+          <input type="range" min={0} max={10_000} step={100} value={draft} disabled={!editable || busy}
+            aria-label={`${phase.name} progress slider`} onChange={(e) => setDraft(Number(e.target.value))} />
           <span className="phase-pct">{formatBps(draft, 0)}</span>
           {dirty && editable && (
             <button
