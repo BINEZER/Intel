@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getProject, subscribePhases, updateProjectStatus } from '../data/projects.js';
-import { subscribeTechnicians } from '../data/technicians.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
@@ -10,7 +9,7 @@ import { CertificationPanel } from '../components/CertificationPanel.js';
 import { ProjectTeam } from '../components/ProjectTeam.js';
 import { StatusSelect } from '../components/StatusSelect.js';
 import { DualDateText } from '../components/DualDateInput.js';
-import type { Project, ProjectPhase, Technician } from '../lib/schema.js';
+import type { Project, ProjectPhase } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 
 export function ProjectDetail() {
@@ -23,9 +22,6 @@ export function ProjectDetail() {
   const { busy, error, run } = useAsyncAction('update project status');
   const phases = useCollection<ProjectPhase>(
     (d, e) => subscribePhases(projectId ?? '', d, e), [projectId], 'load project phases',
-  );
-  const technicians = useCollection<Technician>(
-    (d, e) => subscribeTechnicians(d, e, { activeOnly: true }), [], 'load technicians',
   );
 
   useEffect(() => {
@@ -43,7 +39,7 @@ export function ProjectDetail() {
   if (!project) return <p className="muted">Loading project…</p>;
 
   const inspection = phases.rows.find((phase) => phase.certification !== undefined);
-  const address = [project.site?.address, project.site?.subCity, project.site?.city].filter(Boolean).join(', ');
+  const address = project.site?.address ?? '';
 
   return (
     <div className="project-detail-page">
@@ -52,7 +48,7 @@ export function ProjectDetail() {
         <div>
           <p className="eyebrow">{project.projectNo}</p>
           <h1>{project.title}</h1>
-          <p className="muted">{project.clientName} · {project.site?.name}{project.site?.city ? ` · ${project.site.city}` : ''}</p>
+          <p className="muted">{project.clientName} · {project.site?.address ?? 'Site address not entered'}</p>
         </div>
         {editable && user && <div className="field inline-field">
           <label htmlFor="project-status">Project status</label>
@@ -68,7 +64,7 @@ export function ProjectDetail() {
 
       <section className="project-facts-grid">
         <article className="project-fact"><span>Client</span><strong>{project.clientName}</strong></article>
-        <article className="project-fact"><span>Site</span><strong>{project.site?.name || '—'}</strong><small>{address || 'Location not recorded'}</small></article>
+        <article className="project-fact"><span>Site</span><strong>{address || '—'}</strong></article>
         <article className="project-fact"><span>Planned start</span><strong><DualDateText value={project.plannedStart} /></strong></article>
         <article className="project-fact"><span>Planned completion</span><strong><DualDateText value={project.plannedEnd} /></strong></article>
         <article className="project-fact"><span>Elevators</span><strong>{project.units?.length ?? 0}</strong><small>{(project.units ?? []).map((unit) => unit.tag).join(', ')}</small></article>
@@ -78,7 +74,7 @@ export function ProjectDetail() {
       {phases.error && <p className="error" role="alert">{phases.error}</p>}
       {phases.rows.length > 0 && <PhaseTracker projectId={project.id} phases={phases.rows} />}
       {inspection && <CertificationPanel projectId={project.id} phase={inspection} />}
-      <ProjectTeam projectId={project.id} technicians={technicians.rows} />
+      <ProjectTeam projectId={project.id} />
     </div>
   );
 }
