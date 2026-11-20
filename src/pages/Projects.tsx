@@ -60,7 +60,7 @@ export function Projects() {
   </>;
 }
 
-function ProjectForm({ initial, uid, onDone }: {
+export function ProjectForm({ initial, uid, onDone }: {
   initial: WithId<Project> | null;
   uid: string;
   onDone: () => void;
