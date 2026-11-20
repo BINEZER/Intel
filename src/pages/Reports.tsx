@@ -13,7 +13,7 @@ export function Settings() {
     const result = await requestPasswordReset(user.email);
     setBusy(false);
     setMessage(result.kind === 'requested'
-      ? `A password reset link has been requested for ${user.email}. Check your inbox.`
+      ? `If an account exists for ${user.email}, a reset link is on its way. Check your inbox and spam folder.`
       : result.message);
   }
 
