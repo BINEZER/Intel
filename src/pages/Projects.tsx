@@ -81,7 +81,7 @@ export function ProjectForm({
   const [clientName, setClientName] = useState(initial?.clientName ?? '');
   const [units, setUnits] = useState(initial?.units?.length ?? 1);
   const templateKey = initial?.templateKey ?? DEFAULT_TEMPLATE_KEY;
-  const type: ProjectType = initial?.type ?? 'elevator_installation';
+  const type: ProjectType = initial?.type ?? 'elevator';
   const [projectNo, setProjectNo] = useState(initial?.projectNo ?? `P-${Date.now()}`);
   const [parentProjectId, setParentProjectId] = useState(initial?.parentProjectId ?? '');
   const [agreementReference, setAgreementReference] = useState(initial?.agreementReference ?? '');
