@@ -57,278 +57,43 @@ export function Projects() {
   const { user, role } = useAuth();
   const editable = can(role, 'manageProjects');
   const [editing, setEditing] = useState<WithId<Project> | 'new' | null>(null);
-  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
-  const [sort, setSort] = useState<SortState>({ key: null, direction: 'asc' });
-  const [plannedRange, setPlannedRange] = useState<DateRange>(EMPTY_DATE_RANGE);
-
+  const [search, setSearch] = useState('');
   const projects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects');
   const clients = useCollection<Client>((d, e) => subscribeClients(d, e, { activeOnly: true }), [], 'load clients');
-  // Resolved here rather than denormalised onto the project: a contract number
-  // copied onto 163 projects goes stale the day one contract is renumbered.
-  const contracts = useCollection<Contract>((d, e) => subscribeContracts(d, e), [], 'load contracts');
-  const contractById = useMemo(
-    () => new Map(contracts.rows.map((k) => [k.id, k])),
-    [contracts.rows],
-  );
+  const rows = projects.rows.filter((p) => {
+    const q = search.trim().toLowerCase();
+    return !q || [p.projectNo, p.title, p.clientName, p.site?.name, p.site?.city]
+      .some((v) => String(v ?? '').toLowerCase().includes(q));
+  });
 
-  const asOf = useMemo(() => new Date(), []);
-
-  /**
-   * Parents with their sub-projects nested under them.
-   *
-   * A tower is one job commercially and several operationally. Flattened, the
-   * page shows five unrelated projects where there is one commitment.
-   */
-  const columns: ColumnSpec<WithId<Project>>[] = useMemo(
-    () => [
-      { key: 'title', label: 'Name', value: (p) => p.title },
-      { key: 'projectNo', label: 'Number', value: (p) => p.projectNo },
-      { key: 'client', label: 'Client', value: (p) => p.clientName, filterable: true },
-      // Filterable, so the lift business and the rest can each be looked at
-      // alone. Without it a company doing both can only ever see the total.
-      {
-        key: 'kind',
-        label: 'Kind',
-        value: (p) => projectTypeShort(p.type),
-        filterable: true,
-      },
-      { key: 'status', label: 'Status', value: (p) => p.status, filterable: true },
-      { key: 'city', label: 'City', value: (p) => p.site?.city ?? '', filterable: true },
-      { key: 'progress', label: 'Progress', value: (p) => p.progressBps },
-      { key: 'plannedEnd', label: 'Planned end', value: (p) => p.plannedEnd.at.toDate() },
-      {
-        key: 'value',
-        label: 'Contract value',
-        value: (p) => p.financials?.contractNetSantim ?? 0,
-      },
-    ],
-    [],
-  );
-
-  /**
-   * Narrowed and ordered BEFORE the tree is built.
-   *
-   * Filtering afterwards would leave a sub-project whose parent was filtered
-   * out floating at the top level, which reads as a separate job.
-   */
-  const visible = useMemo(() => {
-    const narrowed = filterRows(projects.rows, columns, filter, (row, column) =>
-      column.key === 'status' ? statusLabel('project', row.status) : String(column.value(row) ?? ''),
-    );
-    return sortRows(narrowed.filter((p) => inDateRange(p.plannedStart?.at.toDate(), plannedRange)), columns, sort);
-  }, [projects.rows, columns, filter, sort, plannedRange]);
-
-  const tree = useMemo(
-    () =>
-      sortTree(
-        buildTree(
-          visible.map<TreeProject & { source: typeof projects.rows[number] }>((p) => ({
-            id: p.id,
-            projectNo: p.projectNo,
-            title: p.title,
-            clientName: p.clientName,
-            parentProjectId: p.parentProjectId ?? null,
-            status: p.status,
-            progressBps: p.progressBps,
-            contractNetSantim: p.financials?.contractNetSantim ?? 0,
-            plannedEnd: p.plannedEnd.at.toDate(),
-            inDanger: false,
-            source: p,
-          })),
-          asOf,
-        ),
-      ),
-    [visible, asOf],
-  );
-
-  return (
-    <>
-      <div className="page-head">
-        <h1>Projects</h1>
-        <div className="page-actions">
-          <PrintButton label="Print list" />
-          {editable && editing === null && (
-            <button type="button" className="primary" onClick={() => setEditing('new')}>New project</button>
-          )}
-        </div>
-      </div>
-
-      <PrintHeader title="Projects" subtitle={`${projects.rows.length} on the books`} />
-
-      {projects.error && <p className="error" role="alert">{projects.error}</p>}
-
-      {editing !== null && user !== null && (
-        <ProjectForm
-          initial={editing === 'new' ? null : editing}
-          clients={clients.rows}
-          uid={user.uid}
-          onDone={() => setEditing(null)}
-        />
-      )}
-
-      <DateRangeFilter range={plannedRange} onChange={setPlannedRange} label="planned start date" />
-
-      {projects.rows.length > 0 && (
-        <ListControls
-          rows={projects.rows}
-          shown={visible.length}
-          columns={columns}
-          filter={filter}
-          onFilter={setFilter}
-          sort={sort}
-          onSort={setSort}
-          noun="projects"
-        />
-      )}
-
-      {projects.loading && <p className="muted">Loading…</p>}
-      {!projects.loading && projects.rows.length === 0 && !projects.error && (
-        <p className="muted">No projects yet.</p>
-      )}
-
-      <div className="project-cards">
-        {tree.map(({ project: node, children, rolled, hasChildren }) => {
-          const project = node.source;
-          const expected = expectedProgressBps(
-            project.plannedStart.at.toDate(),
-            project.plannedEnd.at.toDate(),
-            asOf,
-          );
-          const behind = project.progressBps < expected;
-          return (
-            <article key={project.id} className="card project-card">
-              <div className="page-head">
-                <div>
-                  <h2><Link to={`/projects/${project.id}`}>{project.title}</Link></h2>
-                  <p className="muted">
-                    {project.clientName} ·{' '}
-                    {projectTypeShort(project.type)}
-                    {/* A lift count belongs on lift work. "0 units" on an
-                        office renovation is not a fact about the job, it is
-                        the shape of a different job showing through. */}
-                    {isElevatorWork(project.type) && (
-                      <>
-                        {' · '}
-                        {project.units?.length ?? 0} unit{project.units?.length === 1 ? '' : 's'}
-                      </>
-                    )}
-                  </p>
-                  {/* Which agreement pays for this. A project with no contract
-                      is a real state — variations and warranty work — and it
-                      says so rather than showing a blank. */}
-                  <p className="muted project-contract">
-                    {project.contractId === null ? (
-                      <span className="chip chip-status-idle">No contract</span>
-                    ) : (
-                      <>
-                        Under{' '}
-                        <Link to={`/contracts/${project.contractId}`}>
-                          {contractById.get(project.contractId)?.contractNo ?? 'a contract'}
-                        </Link>
-                      </>
-                    )}
-                  </p>
-                </div>
-                {editable && user !== null ? <ProjectStatusControl project={project} uid={user.uid} /> : <StatusChip kind="project" value={project.status} />}
-              </div>
-
-              <ProgressBar progressBps={project.progressBps} expectedBps={expected} />
-              <p className="muted">
-                {formatBps(project.progressBps, 0)} built · plan says {formatBps(expected, 0)} by now
-                {behind && <span className="warn-text"> · behind schedule</span>}
-              </p>
-
-              <dl className="kv compact">
-                <dt>Planned end</dt>
-                <dd><DualDateText value={project.plannedEnd} /></dd>
-                <dt>Contract value</dt>
-                <dd>{formatETB(project.financials?.contractGrossSantim ?? 0)}</dd>
-              </dl>
-
-              {hasChildren && (
-                <div className="subprojects">
-                  <p className="family-figures">
-                    {children.length} sub-project{children.length === 1 ? '' : 's'} ·{' '}
-                    {formatBps(rolled.progressBps, 0)} across the family
-                    {rolled.weightedBy === 'value' ? ' weighted by value' : ''} ·{' '}
-                    {formatETB(rolled.contractNetSantim)} contracted
-                    {rolled.overdue > 0 && (
-                      <span className="warn-text"> · {rolled.overdue} past planned end</span>
-                    )}
-                  </p>
-                  <ul className="subproject-list">
-                    {children.map((child) => (
-                      <li key={child.id}>
-                        <Link to={`/projects/${child.id}`}>{child.projectNo} {child.title}</Link>
-                        <span className="muted">
-                          {formatBps(child.progressBps, 0)} · {formatETB(child.contractNetSantim)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {editable && user !== null && (
-                <div className="card-actions">
-                  <button type="button" onClick={() => setEditing(project)}>Edit</button>
-                  <DeleteButton
-                    target={{ kind: 'project', id: project.id, name: project.projectNo }}
-                  />
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-
-/**
- * A status change is a small, frequent action, so it should save in place
- * without opening the full project form and clearly report failure.
- */
-function ProjectStatusControl({ project, uid }: { project: WithId<Project>; uid: string }) {
-  const [selected, setSelected] = useState<Project['status']>(project.status);
-  const [saved, setSaved] = useState(false);
-  const { busy, error, run } = useAsyncAction('update project status');
-
-  // Keep the picker aligned with the live Firestore record, including changes
-  // made by another manager.
-  useEffect(() => {
-    setSelected(project.status);
-    setSaved(false);
-  }, [project.status]);
-
-  async function saveStatus(value: string) {
-    const next = value as Project['status'];
-    setSelected(next);
-    setSaved(false);
-    const result = await run(async () => {
-      await updateProjectStatus(project.id, next, uid);
-      return true;
-    });
-    if (result !== null) setSaved(true);
-  }
-
-  return (
-    <div className="field inline project-status-control">
-      <label htmlFor={`p-status-${project.id}`}>Status</label>
-      <StatusSelect
-        compact
-        kind="project"
-        id={`p-status-${project.id}`}
-        value={selected}
-        disabled={busy}
-        onChange={(value) => void saveStatus(value)}
-      />
-      {busy && <span className="muted" role="status">Saving…</span>}
-      {!busy && saved && <span className="success-text" role="status">Saved</span>}
-      {error && <span className="error" role="alert">{error}</span>}
+  return <>
+    <div className="page-head">
+      <div><h1>Projects</h1><p className="muted">All elevator installation projects in one place.</p></div>
+      {editable && user && editing === null && <button type="button" className="primary" onClick={() => setEditing('new')}>New project</button>}
     </div>
-  );
+    {projects.error && <p className="error" role="alert">{projects.error}</p>}
+    {editing !== null && user && <ProjectForm initial={editing === 'new' ? null : editing} clients={clients.rows} uid={user.uid} onDone={() => setEditing(null)} />}
+    <section className="card project-list-card">
+      <div className="section-heading"><div><h2>Project register</h2><p className="muted">{projects.rows.length} projects</p></div>
+        <label className="project-search"><span className="visually-hidden">Search projects</span>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by project, client or site…" />
+        </label>
+      </div>
+      {projects.loading ? <p className="muted">Loading projects…</p> : rows.length === 0 ?
+        <p className="muted">{projects.rows.length === 0 ? 'No projects yet. Add the first project when ready.' : 'No matching projects.'}</p> :
+        <div className="project-table-wrap"><table className="data-table project-overview-table">
+          <thead><tr><th>Project</th><th>Client / site</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned completion</th></tr></thead>
+          <tbody>{rows.map((p) => <tr key={p.id}>
+            <td><Link to={`/projects/${p.id}`} className="project-name-link"><strong>{p.title}</strong><small>{p.projectNo}</small></Link></td>
+            <td>{p.clientName}<small>{p.site?.name}{p.site?.city ? ` · ${p.site.city}` : ''}</small></td>
+            <td>{p.currentStage?.name ?? 'Not started'}</td>
+            <td><div className="mini-progress"><span style={{width:`${Math.max(0,Math.min(100,p.progressBps/100))}%`}} /></div><small>{Math.round(p.progressBps/100)}%</small></td>
+            <td><span className={`project-status status-${p.status}`}>{p.status.replace(/_/g,' ')}</span></td>
+            <td>{p.plannedEnd?.at?.toDate().toLocaleDateString() ?? '—'}</td>
+          </tr>)}</tbody>
+        </table></div>}
+    </section>
+  </>;
 }
 
 export function ProjectForm({
