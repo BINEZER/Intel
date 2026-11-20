@@ -39,16 +39,6 @@ export function Projects() {
     }
     return map;
   }, [assignments.rows]);
-  const displayPeopleByProject = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const row of assignments.rows) {
-      const list = map.get(row.projectId) ?? [];
-      const label = row.role === 'subcontractor' ? `${row.technicianName} (Subcontractor)` : `${row.technicianName} (${row.role})`;
-      if (!list.includes(label)) list.push(label);
-      map.set(row.projectId, list);
-    }
-    return map;
-  }, [assignments.rows]);
   const phases = useMemo(() => [...new Set(projects.rows.map((p) => p.currentStage?.name).filter((v): v is string => Boolean(v)))].sort(), [projects.rows]);
   const assignees = useMemo(() => [...new Set(assignments.rows.map((a) => a.technicianName))].sort((a,b) => a.localeCompare(b)), [assignments.rows]);
   const rows = useMemo(() => {
@@ -105,14 +95,13 @@ export function Projects() {
       {projects.loading || assignments.loading ? <p className="muted">Loading projects…</p> : rows.length === 0 ?
         <p className="muted">{projects.rows.length === 0 ? 'No projects yet. Add the first project when ready.' : 'No projects match these filters.'}</p> :
         <div className="project-table-wrap"><table className="data-table project-overview-table">
-          <thead><tr><th>Project</th><th>Client / site address</th><th>Assigned technician / subcontractor</th><th>Current phase</th><th>Progress</th><th>Status</th><th>Planned completion</th></tr></thead>
+          <thead><tr><th>Project</th><th>Client</th><th>Assigned to</th><th>Phase</th><th>Progress / status</th><th>Planned completion</th></tr></thead>
           <tbody>{rows.map((p) => <tr key={p.id}>
             <td><Link to={`/projects/${p.id}`} className="project-name-link"><strong>{p.title}</strong><small>{p.projectNo}</small></Link></td>
-            <td>{p.clientName}<small>{p.site?.address ?? '—'}</small></td>
-            <td>{(displayPeopleByProject.get(p.id) ?? []).length ? (displayPeopleByProject.get(p.id) ?? []).join(', ') : '—'}</td>
+            <td>{p.clientName}</td>
+            <td>{(peopleByProject.get(p.id) ?? []).length ? (peopleByProject.get(p.id) ?? []).join(', ') : '—'}</td>
             <td>{p.currentStage?.name ?? 'Not started'}</td>
-            <td><div className="mini-progress"><span style={{width:`${Math.max(0,Math.min(100,p.progressBps/100))}%`}} /></div><small>{Math.round(p.progressBps/100)}%</small></td>
-            <td><span className={`project-status status-${p.status}`}>{PROJECT_STATUSES.find((s) => s.value === p.status)?.label ?? p.status}</span></td>
+            <td><div className="project-progress-status"><div className="mini-progress"><span style={{width:`${Math.max(0,Math.min(100,p.progressBps/100))}%`}} /></div><div><small>{Math.round(p.progressBps/100)}%</small><span className={`project-status status-${p.status}`}>{PROJECT_STATUSES.find((s) => s.value === p.status)?.label ?? p.status}</span></div></div></td>
             <td>{p.plannedEnd?.at?.toDate().toLocaleDateString() ?? '—'}</td>
           </tr>)}</tbody>
         </table></div>}
