@@ -2749,3 +2749,18 @@ button.primary:hover, .button-link.primary:hover { background:#236EB9; }
 
 .phase-manual-progress { display:grid; gap:.25rem; min-width:120px; font-size:.82rem; font-weight:600; }
 .phase-manual-progress input { width:100%; }
+
+.project-filters { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:.75rem; align-items:end; padding:0 0 1rem; }
+.project-filters label { display:grid; gap:.3rem; min-width:0; font-size:.82rem; font-weight:600; }
+.project-filters select { width:100%; min-width:0; }
+.project-filters .quiet-button { min-height:40px; }
+.checkpoint-editor { display:grid; gap:.65rem; padding:.75rem; border:1px solid var(--border); border-radius:10px; margin-top:.65rem; }
+.checkpoint-editor .checkpoint-list li { display:flex; align-items:center; gap:.5rem; }
+.checkpoint-editor .checkpoint-list li input { flex:1; min-width:0; }
+.checkpoint-add { display:flex; gap:.5rem; flex-wrap:wrap; }
+.checkpoint-add input { flex:1; min-width:180px; }
+.danger-text { color:var(--danger,#b42318) !important; }
+@media(max-width:700px) {
+ .project-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .project-table-wrap { overflow-x:auto; }
+}
