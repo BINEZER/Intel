@@ -6,7 +6,7 @@ import { Dashboard } from './pages/Dashboard.js';
 import { SignIn } from './pages/SignIn.js';
 import { Projects } from './pages/Projects.js';
 import { ProjectDetail } from './pages/ProjectDetail.js';
-import { Settings } from './pages/Settings.js';
+import { Settings } from './pages/Reports.js';
 
 export function App() {
   return <AuthProvider><BrowserRouter><Routes>
