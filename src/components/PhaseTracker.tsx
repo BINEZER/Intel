@@ -9,23 +9,14 @@
 import { useState } from 'react';
 import { can } from '../auth/roles.js';
 import { useAuth } from '../auth/AuthProvider.js';
-import { setCheckpoint, setPhaseBlocked, setPhasesCompletion, updatePhaseProgress } from '../data/projects.js';
+import { renameProjectStage, setCheckpoint, setPhaseBlocked, setPhasesCompletion, updatePhaseProgress } from '../data/projects.js';
 import { describeCheckpoints, isTracked, phaseProgressBps as getPhaseProgressBps } from '../lib/checkpoints.js';
-import { WORKBOOK_SOURCE } from '../lib/stage-backfill.js';
 import { useAsyncAction } from '../data/useCollection.js';
 import { formatBps } from '../lib/kpi.js';
-import { nextActionablePhase, sequenceWarnings, type PhaseStatus } from '../lib/phases.js';
-import { ELEVATOR_STAGE_TEMPLATE } from '../lib/stages.js';
+import { nextActionablePhase, type PhaseStatus } from '../lib/phases.js';
 import { DualDateText } from './DualDateInput.js';
 import type { ProjectPhase } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
-
-// Dependencies come from the FOURTEEN-stage template, which is what projects are
-// actually seeded with. Reading them from the old five-phase template meant the
-// keys never matched and out-of-sequence work was silently never flagged.
-// Stages a manager added by hand have no dependencies — nothing knows where
-// they sit in the chain, and guessing would produce warnings nobody can act on.
-const DEPENDS_ON = new Map(ELEVATOR_STAGE_TEMPLATE.map((s) => [s.key as string, s.dependsOn as readonly string[]]));
 
 export function PhaseTracker({
   projectId,
@@ -38,14 +29,7 @@ export function PhaseTracker({
   const editable = can(role, 'updatePhaseProgress');
   const { busy, error, run } = useAsyncAction('update this phase');
 
-  const withDeps = phases.map((p) => ({
-    key: p.key,
-    weightBps: p.weightBps,
-    progressBps: p.progressBps,
-    status: p.status,
-    dependsOn: DEPENDS_ON.get(p.key) ?? [],
-  }));
-  const warnings = new Map(sequenceWarnings(withDeps).map((w) => [w.key, w]));
+  const withDeps = phases.map((p) => ({ key: p.key, weightBps: p.weightBps, progressBps: p.progressBps, status: p.status, dependsOn: [] as string[] }));
   const next = nextActionablePhase(withDeps);
   const allComplete = phases.length > 0 && phases.every((phase) => getPhaseProgressBps(phase) === 10_000);
 
@@ -78,7 +62,6 @@ export function PhaseTracker({
             key={phase.id}
             projectId={projectId}
             phase={phase}
-            warning={warnings.get(phase.key)?.message ?? null}
             editable={editable && user !== null}
             uid={user?.uid ?? ''}
             busy={busy}
@@ -94,7 +77,6 @@ export function PhaseTracker({
 function PhaseRow({
   projectId,
   phase,
-  warning,
   editable,
   uid,
   busy,
@@ -103,7 +85,6 @@ function PhaseRow({
 }: {
   projectId: string;
   phase: WithId<ProjectPhase>;
-  warning: string | null;
   editable: boolean;
   uid: string;
   busy: boolean;
@@ -113,6 +94,8 @@ function PhaseRow({
   // Local draft so dragging the slider does not fire a write per pixel. Only a
   // hand-made stage still has a slider; see below.
   const [draft, setDraft] = useState(phase.progressBps);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(phase.name);
   const dirty = draft !== phase.progressBps;
   const tracked = isTracked(phase);
 
@@ -139,10 +122,18 @@ function PhaseRow({
           </label>
           <span className="muted"> · {formatBps(phase.weightBps, 0)} of the project</span>
         </div>
-        <span className={statusClass[phase.status]}>{phase.status.replace(/_/g, ' ')}</span>
+        <div className="phase-row-actions">
+          {editable && <button type="button" className="quiet-button" disabled={busy} onClick={() => { setNameDraft(phase.name); setEditingName((v) => !v); }}>Edit phase</button>}
+          <span className={statusClass[phase.status]}>{phase.status.replace(/_/g, ' ')}</span>
+        </div>
       </div>
 
-      {warning !== null && <p className="warn-text">⚠ {warning}</p>}
+
+      {editingName && editable && <div className="phase-progress">
+        <input aria-label={`Phase ${phase.seq} name`} value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
+        <button type="button" className="primary" disabled={busy || !nameDraft.trim()} onClick={() => void run(async () => { await renameProjectStage(projectId, phase.id, nameDraft.trim(), uid); setEditingName(false); return true; })}>Save name</button>
+        <button type="button" disabled={busy} onClick={() => setEditingName(false)}>Cancel</button>
+      </div>}
 
       {tracked ? (
         <CheckpointList
