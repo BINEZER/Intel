@@ -7,24 +7,20 @@ import {
   type ProjectType,
 } from '../lib/project-kind.js';
 import { Link } from 'react-router-dom';
-import { toTimestamp } from '../firebase.js';
-import { dualDateFromGregorian } from '../lib/dual-date.js';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
 import {
   createProject,
   subscribeProjects,
   updateProject,
-  updateProjectStatus,
 } from '../data/projects.js';
 import { useAsyncAction, useCollection } from '../data/useCollection.js';
 import { DualDateInput } from '../components/DualDateInput.js';
-import { DEFAULT_TEMPLATE_KEY, projectTemplate } from '../lib/project-templates.js';
+import { DEFAULT_TEMPLATE_KEY } from '../lib/project-templates.js';
 import { FormPanel } from '../components/FormPanel.js';
 import type { DualDate, Project } from '../lib/schema.js';
 import type { WithId } from '../data/repository.js';
 import { StatusSelect } from '../components/StatusSelect.js';
-import { ListControls } from '../components/ListControls.js';
 
 export function Projects() {
   const { user, role } = useAuth();
@@ -96,7 +92,6 @@ export function ProjectForm({
   );
 
   const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'load projects').rows;
-  const template = projectTemplate(templateKey);
 
   /**
    * Projects can nest under other projects. Exclude the current project and
@@ -123,7 +118,7 @@ export function ProjectForm({
     event.preventDefault();
     if (!ready) return;
     const normalizedClient = clientName.trim();
-    const normalizedClientId = initial?.clientId || `manual-${normalizedClient.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const normalizedClientId = initial?.clientId || `manual-${Date.now()}`;
 
     const normalizedProjectNo = projectNo.trim();
     if (allProjects.some((project) => project.id !== initial?.id && project.projectNo.trim().toLocaleLowerCase() === normalizedProjectNo.toLocaleLowerCase())) {
@@ -320,19 +315,3 @@ export function ProjectForm({
       </form>
     </FormPanel>
   );
-}          <div className="field">
-            <label htmlFor="p-client">Client <span className="req" aria-hidden="true">*</span></label>
-            <input id="p-client" required value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Enter client name" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="p-agreement">Agreement / reference</label>
-            <input id="p-agreement" value={agreementReference} onChange={(e) => setAgreementReference(e.target.value)} placeholder="Enter agreement number or reference" />
-          </div>
-
-          <div className="field">
-            <label htmlFor="p-address">Site address</label>
-            <input id="p-address" value={address} placeholder="Street, building, area or landmark" onChange={(e) => setAddress(e.target.value)} />
-          </div>
-
-
