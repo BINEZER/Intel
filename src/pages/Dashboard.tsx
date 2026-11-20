@@ -17,10 +17,10 @@ export function Dashboard() {
         .some((v) => String(v ?? '').toLowerCase().includes(q)),
     );
   }, [projects.rows, search]);
-  const active = projects.rows.filter((p) => !['completed', 'cancelled'].includes(p.status));
+  const active = projects.rows.filter((p) => !['completed', 'cancelled', 'terminated'].includes(p.status));
   const delayed = active.filter((p) => !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < Date.now());
   const awaitingHandover = active.filter((p) =>
-    p.currentStage?.key === 'authority_inspection' || p.status === 'awaiting_handover',
+    p.currentStage?.key === 'authority_inspection',
   );
 
   return (
