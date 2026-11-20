@@ -39,6 +39,16 @@ export function Projects() {
     }
     return map;
   }, [assignments.rows]);
+  const displayPeopleByProject = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const row of assignments.rows) {
+      const list = map.get(row.projectId) ?? [];
+      const label = row.role === 'subcontractor' ? `${row.technicianName} (Subcontractor)` : `${row.technicianName} (${row.role})`;
+      if (!list.includes(label)) list.push(label);
+      map.set(row.projectId, list);
+    }
+    return map;
+  }, [assignments.rows]);
   const phases = useMemo(() => [...new Set(projects.rows.map((p) => p.currentStage?.name).filter((v): v is string => Boolean(v)))].sort(), [projects.rows]);
   const assignees = useMemo(() => [...new Set(assignments.rows.map((a) => a.technicianName))].sort((a,b) => a.localeCompare(b)), [assignments.rows]);
   const rows = useMemo(() => {
@@ -99,7 +109,7 @@ export function Projects() {
           <tbody>{rows.map((p) => <tr key={p.id}>
             <td><Link to={`/projects/${p.id}`} className="project-name-link"><strong>{p.title}</strong><small>{p.projectNo}</small></Link></td>
             <td>{p.clientName}<small>{p.site?.address ?? '—'}</small></td>
-            <td>{(peopleByProject.get(p.id) ?? []).length ? (peopleByProject.get(p.id) ?? []).join(', ') : '—'}</td>
+            <td>{(displayPeopleByProject.get(p.id) ?? []).length ? (displayPeopleByProject.get(p.id) ?? []).join(', ') : '—'}</td>
             <td>{p.currentStage?.name ?? 'Not started'}</td>
             <td><div className="mini-progress"><span style={{width:`${Math.max(0,Math.min(100,p.progressBps/100))}%`}} /></div><small>{Math.round(p.progressBps/100)}%</small></td>
             <td><span className={`project-status status-${p.status}`}>{PROJECT_STATUSES.find((s) => s.value === p.status)?.label ?? p.status}</span></td>
