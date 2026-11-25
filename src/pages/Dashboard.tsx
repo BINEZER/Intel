@@ -28,7 +28,7 @@ export function Dashboard() {
   const now = new Date();
   const completedThisMonth = projects.rows.filter((p) => {
     const completedAt = p.actualEnd?.at?.toDate();
-    return p.status === 'completed' && completedAt !== undefined && completedAt.getFullYear() === now.getFullYear() && completedAt.getMonth() === now.getMonth();
+    return ['awaiting_handover', 'completed'].includes(p.status) && completedAt !== undefined && completedAt.getFullYear() === now.getFullYear() && completedAt.getMonth() === now.getMonth();
   }).length;
   const delayed = active.filter((p) => !!p.plannedEnd?.at && p.plannedEnd.at.toDate().getTime() < now.getTime());
   const phaseCounts = useMemo(() => {
@@ -39,7 +39,7 @@ export function Dashboard() {
     }
     return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [projects.rows]);
-  const awaitingHandover = active.filter((p) => p.currentStage?.key === 'authority_inspection');
+  const awaitingHandover = projects.rows.filter((p) => p.status === 'awaiting_handover' || p.currentStage?.key === 'authority_inspection');
 
   function exportCsv() {
     const columns = [
