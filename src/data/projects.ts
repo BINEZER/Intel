@@ -558,7 +558,7 @@ export async function updateProject(id: string, input: Partial<ProjectInput>, ui
   const current = await getProject(id);
   await updateDoc(doc(db, PATH, id), {
     ...stripReserved(input),
-    ...(input.status === 'completed' && current?.actualEnd == null
+    ...((input.status === 'completed' || input.status === 'awaiting_handover') && current?.actualEnd == null
       ? { actualEnd: dualDateFromGregorian(new Date(), toTimestamp, 'GC') }
       : {}),
     ...stampUpdate(uid),
@@ -613,7 +613,7 @@ export async function updateProjectStatus(
   const current = await getProject(id);
   await updateDoc(doc(db, PATH, id), {
     status,
-    ...(status === 'completed' && current?.actualEnd == null
+    ...((status === 'completed' || status === 'awaiting_handover') && current?.actualEnd == null
       ? { actualEnd: dualDateFromGregorian(new Date(), toTimestamp, 'GC') }
       : {}),
     ...stampUpdate(uid),
