@@ -132,14 +132,14 @@ export function ProjectForm({ initial, uid, onDone }: {
     while (next <= 999 && used.has(`IM${String(next).padStart(3, '0')}`)) next += 1;
     if (next <= 999) setProjectNo(`IM${String(next).padStart(3, '0')}`);
   }, [initial, allProjectsState.loading, allProjects, projectNo]);
-  const validProjectNo = /^IM\\d{1,3}$/i.test(projectNo.trim());
+  const validProjectNo = /^IM\d{1,3}$/i.test(projectNo.trim());
   const ready = title.trim() !== '' && clientName.trim() !== '' && validProjectNo && plannedStart !== null && plannedEnd !== null;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!ready) return;
     const normalizedProjectNo = projectNo.trim().toUpperCase();
-    if (!/^IM\\d{1,3}$/.test(normalizedProjectNo)) {
+    if (!/^IM\d{1,3}$/.test(normalizedProjectNo)) {
       await run(async () => { throw new Error('Use IM followed by no more than three digits (for example, IM001).'); });
       return;
     }
