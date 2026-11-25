@@ -119,6 +119,7 @@ export type ProjectStatusValue =
   | 'planned'
   | 'in_progress'
   | 'on_hold'
+  | 'awaiting_handover'
   | 'completed'
   | 'cancelled'
   | 'terminated';
@@ -143,9 +144,15 @@ export const PROJECT_STATUSES: StatusOption<ProjectStatusValue>[] = [
     tone: 'warn',
   },
   {
+    value: 'awaiting_handover',
+    label: 'Completed – Awaiting Handover',
+    hint: 'Installation and required works are complete, but formal transfer to the client is still pending.',
+    tone: 'warn',
+  },
+  {
     value: 'completed',
-    label: 'Completed',
-    hint: 'Handed over. Stops raising alerts.',
+    label: 'Handed Over',
+    hint: 'Formally transferred to the client. The project is closed.',
     tone: 'good',
   },
   {
