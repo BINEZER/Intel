@@ -1,7 +1,7 @@
 /**
  * Minimal project register and project entry form.
  */
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { can } from '../auth/roles.js';
@@ -116,21 +116,33 @@ export function ProjectForm({ initial, uid, onDone }: {
 }) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [clientName, setClientName] = useState(initial?.clientName ?? '');
-  const [agreementReference, setAgreementReference] = useState(initial?.agreementReference ?? '');
-  const [projectNo, setProjectNo] = useState(initial?.projectNo ?? `P-${Date.now()}`);
+  const [projectNo, setProjectNo] = useState(initial?.projectNo ?? '');
   const [address, setAddress] = useState(initial?.site?.address ?? '');
   const [units, setUnits] = useState(initial?.units?.length ?? 1);
   const [plannedStart, setPlannedStart] = useState<DualDate | null>(initial?.plannedStart ?? null);
   const [plannedEnd, setPlannedEnd] = useState<DualDate | null>(initial?.plannedEnd ?? null);
   const [status, setStatus] = useState<Project['status']>(initial?.status ?? 'planned');
   const { busy, error, run } = useAsyncAction(initial === null ? 'create this project' : 'save this project');
-  const allProjects = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'check project numbers').rows;
-  const ready = title.trim() !== '' && clientName.trim() !== '' && projectNo.trim() !== '' && plannedStart !== null && plannedEnd !== null;
+  const allProjectsState = useCollection<Project>((d, e) => subscribeProjects(d, e), [], 'check project numbers');
+  const allProjects = allProjectsState.rows;
+  useEffect(() => {
+    if (initial !== null || allProjectsState.loading || projectNo !== '') return;
+    const used = new Set(allProjects.map((project) => project.projectNo.trim().toUpperCase()));
+    let next = 1;
+    while (next <= 999 && used.has(`IM${String(next).padStart(3, '0')}`)) next += 1;
+    if (next <= 999) setProjectNo(`IM${String(next).padStart(3, '0')}`);
+  }, [initial, allProjectsState.loading, allProjects, projectNo]);
+  const validProjectNo = /^IM\\d{1,3}$/i.test(projectNo.trim());
+  const ready = title.trim() !== '' && clientName.trim() !== '' && validProjectNo && plannedStart !== null && plannedEnd !== null;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!ready) return;
-    const normalizedProjectNo = projectNo.trim();
+    const normalizedProjectNo = projectNo.trim().toUpperCase();
+    if (!/^IM\\d{1,3}$/.test(normalizedProjectNo)) {
+      await run(async () => { throw new Error('Use IM followed by no more than three digits (for example, IM001).'); });
+      return;
+    }
     if (allProjects.some((p) => p.id !== initial?.id && p.projectNo.trim().toLowerCase() === normalizedProjectNo.toLowerCase())) {
       await run(async () => { throw new Error('That project number is already in use. Choose a unique number.'); });
       return;
@@ -143,7 +155,6 @@ export function ProjectForm({ initial, uid, onDone }: {
       clientId: initial?.clientId ?? `manual-${Date.now()}`,
       clientName: normalizedClient,
       contractId: null,
-      agreementReference: agreementReference.trim(),
       site: { name: title.trim(), city: '', ...(address.trim() ? { address: address.trim() } : {}) },
       parentProjectId: initial?.parentProjectId ?? null,
       units: initial === null
@@ -175,12 +186,9 @@ export function ProjectForm({ initial, uid, onDone }: {
           <input id="p-client" required value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Type client name" />
         </div>
         <div className="field">
-          <label htmlFor="p-agreement">Agreement / reference</label>
-          <input id="p-agreement" value={agreementReference} onChange={(e) => setAgreementReference(e.target.value)} placeholder="Type agreement number or reference" />
-        </div>
-        <div className="field">
-          <label htmlFor="p-number">Project number / code <span className="req" aria-hidden="true">*</span></label>
-          <input id="p-number" required value={projectNo} onChange={(e) => setProjectNo(e.target.value)} placeholder="P-2026-001" />
+          <label htmlFor="p-number">Project reference <span className="req" aria-hidden="true">*</span></label>
+          <input id="p-number" required maxLength={5} value={projectNo} onChange={(e) => setProjectNo(e.target.value.toUpperCase().replace(/[^IM0-9]/g, ''))} placeholder="IM001" />
+          <small className="muted">Automatically generated; editable. Format: IM + up to 3 digits.</small>
         </div>
         <div className="field">
           <label htmlFor="p-title">Project name <span className="req" aria-hidden="true">*</span></label>
